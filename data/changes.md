@@ -295,3 +295,12 @@
   feed. Not a bug (reviewer refuted by payload): the venue's open-order field is quantityFilled.
   Post-deploy watch (deploy/watch_deploy.py: every 30 s for 10 min, stops the bot on a 150 settlement drop, >3 unwinds,
   >40 exits, a traceback or kill) running. A fake-venue pipeline simulation of every sleeve is being built (tests/).
+- 21:55 The post-deploy watcher stopped the bot at 21:47 on a false alarm (my bug: untimestamped old log lines were counted as new, and correct recycles at +4.5% gain were counted as churn). Watcher fixed (lines take the preceding timestamp; recycles only alarm above 12 per 10 min; offload unwinds above 3), bot restarted, watch rerun. The recycles it flagged were good: MN-02 and CA-22 sets at 2.75-3.1% closed to fund Idaho Governor and Virginia Senate at 7.53%.
+- 21:50 POST-DEPLOY WATCH STOPPED THE BOT: traceback or kill switch after the deploy (start value 102565.5, now 103444.8; {'unwinds': 0, 'recycles': 5, 'exits': 0, 'failed_baskets': 0, 'kill': 1, 'traceback': 0, 'arb_fills': 6}).
+- 21:58 The watch stopped the bot at 21:49 for (a) a KILL SWITCH that was an artifact: marked drawdown 936 while the
+  settlement value ROSE +879 (profitable recycling closes sets at the asks and buys better ones at the bids; marked
+  value counts sets at mid); and (b) a real scanner crash: fast_requote_pass read params/mm_overrides.json while the
+  analytics step was rewriting it (JSONDecodeError). Fixes: the kill switch's drawdown is now measured on the
+  settlement-basis value (real arb sets at their locked payout; thresholds unchanged; trailing-hour peak kept in memory);
+  the overrides file is written atomically (tmp + os.replace) and a half-written file keeps the previous overrides.
+  Tests added to tests/test_guards.py; deployed via botctl deploy (precheck passed). Settlement value 103,446 at 21:52.

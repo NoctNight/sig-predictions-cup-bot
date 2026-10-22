@@ -35,11 +35,19 @@ def settlement_value() -> float | None:
         return None
 
 
+TS = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d")
+
+
 def log_since(ts0: str) -> list[str]:
-    out = []
+    """Lines logged at or after ts0. Lines without their own timestamp (traceback frames, wrapped output) belong to the
+    last timestamped line before them; they used to be compared as text and counted as new (false alarm, 22 Oct 21:47)."""
+    out, last = [], ""
     with open(LOG, errors="replace") as f:
         for line in f:
-            if line[:19] >= ts0:
+            m = TS.match(line)
+            if m:
+                last = m.group(0)
+            if last >= ts0:
                 out.append(line)
     return out
 
@@ -65,7 +73,7 @@ def main():
         tick += 1
         lines = log_since(ts0)
         c = {k: sum(1 for l in lines if p.search(l)) for k, p in {
-            "unwinds": re.compile(r"UNWIND \(|RECYCLE "), "exits": re.compile(r"ZERO-EV EXIT|OFFLOAD: exit \d"),
+            "unwinds": re.compile(r"UNWIND \("), "recycles": re.compile(r"RECYCLE "), "exits": re.compile(r"ZERO-EV EXIT|OFFLOAD: exit \d"),
             "failed_baskets": re.compile(r"not filled atomically"), "kill": re.compile(r"KILL SWITCH"),
             "traceback": re.compile(r"Traceback"), "arb_fills": re.compile(r"INFO sigbot.arb: ARB ")}.items()}
         if tick % 2 == 0:
@@ -77,7 +85,9 @@ def main():
         if drop > a.max_drop:
             reason = f"settlement value fell {drop:.0f} since the deploy"
         elif c["unwinds"] > 3:
-            reason = f"{c['unwinds']} unwinds/recycles in {tick * a.every:.0f} s"
+            reason = f"{c['unwinds']} offload unwinds in {tick * a.every:.0f} s"
+        elif c["recycles"] > 12:
+            reason = f"{c['recycles']} recycles in {tick * a.every:.0f} s (each must beat the set it closes; this many suggests a loop)"
         elif c["exits"] > 40:
             reason = f"{c['exits']} exits in {tick * a.every:.0f} s"
         elif c["traceback"] or c["kill"]:

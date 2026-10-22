@@ -99,6 +99,8 @@ class MarketMaker:
                 log.info("loaded mm overrides for %d exchanges", len(self.overrides.get("exchanges", {})))
         except FileNotFoundError:
             self.overrides = {}
+        except ValueError as e:                      # half-written file: keep the previous overrides, retry next time
+            log.warning("mm overrides unreadable (%s); keeping the previous set", e)
 
     # --------------------------------------------------------------- pricing
     @staticmethod

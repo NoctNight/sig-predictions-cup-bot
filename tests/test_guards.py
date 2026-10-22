@@ -147,5 +147,38 @@ bot.open_orders_cache = {}
 R.Bot.zero_ev_exits(bot, {"1068": 1203.0}, [row])
 check("exits: one exit for exactly the held quantity once nothing rests", sent == [("1068", "no", 1203)], str(sent))
 
+# ---------------------------------------------------------------- kill switch on settlement basis (21:49 false trip on recycling)
+rs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("health: the drawdown peak no longer comes from the marked cycles table", "SELECT MAX(total_value) m FROM cycles" not in rs)
+check("health: the kill switch is fed the settlement-basis value", "pos_value + getattr(self, \"settle_adj\", 0.0), cycle_id)" in rs)
+# behaviour: a recycle lowers the marked value by 900 but raises locked profit; settlement-basis value must not drop
+hb = types.SimpleNamespace()
+vals = [(0, 102000.0), (60, 102000.0 + 879.0)]           # settlement basis after the recycle: higher
+hb.settle_hist = []
+for t, v in vals:
+    hb.settle_hist.append((t, v))
+peak = max(v for _, v in hb.settle_hist)
+check("health: a profitable recycle gives zero settlement drawdown", peak - vals[-1][1] <= 0.0)
+
+# ---------------------------------------------------------------- overrides file: half-written JSON must not crash the scanner
+import json as _json, tempfile  # noqa: E402
+from sigbot.mm import MarketMaker  # noqa: E402
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "params"), exist_ok=True)
+fp = os.path.join(d, "params", "mm_overrides.json")
+open(fp, "w").write('{"exchanges": {"1": {"pressure": 0.1}}}')
+mm = MarketMaker.__new__(MarketMaker)
+mm.root, mm.cfg, mm.overrides, mm.overrides_mtime = d, types.SimpleNamespace(overrides_file="params/mm_overrides.json"), {}, None
+mm.load_overrides()
+good = dict(mm.overrides)
+open(fp, "w").write('{"exchanges": {"1": {"pres')                # half-written
+os.utime(fp, (time.time() + 5, time.time() + 5))
+try:
+    mm.load_overrides()
+    check("mm: a half-written overrides file keeps the previous overrides", mm.overrides == good)
+except Exception as e:
+    check("mm: a half-written overrides file keeps the previous overrides", False, repr(e))
+check("analytics: the overrides file is written atomically", "os.replace(tmp, path)" in rs and "os.replace(path + \".tmp\", path)" in open(os.path.join(ROOT, "sigbot", "analytics.py")).read())
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

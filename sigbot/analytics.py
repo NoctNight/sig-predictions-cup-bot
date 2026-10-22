@@ -156,8 +156,9 @@ def main():
     out = compute(store, cfg, args.lookback_hours)
     path = os.path.join(HERE, cfg.mm.overrides_file)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
+    with open(path + ".tmp", "w") as f:
         json.dump(out, f, indent=1)
+    os.replace(path + ".tmp", path)
     store.set_param("mm_overrides", out)
     print(f"wrote {path}: {len(out['exchanges'])} exchanges")
     if args.print:

@@ -555,8 +555,15 @@ class Bot:
                 vals.append(((q["mid"] - f["price"]) if f["side"] == "yes" else (f["price"] - q["mid"])) / 0.005)
         if vals:
             h["markout30"] = sum(vals) / len(vals); h["n_markout"] = len(vals)
-        peak = self.store.one("SELECT MAX(total_value) m FROM cycles WHERE ts>=?", (now - 3600,))
-        self.peak_value = max(float(peak["m"] or 0.0), total_value)
+        # trailing-hour peak of the SETTLEMENT-basis value (arb sets at their locked payout), kept in memory: the cycles
+        # table stores marked values, which fall when sets are recycled at the asks even as locked profit rises
+        hist = getattr(self, "settle_hist", None)
+        if hist is None:
+            hist = self.settle_hist = []
+        hist.append((now, total_value))
+        while hist and now - hist[0][0] > 3600:
+            hist.pop(0)
+        self.peak_value = max(v for _, v in hist)
         h["drawdown"] = self.peak_value - total_value
         return h
 
@@ -637,6 +644,27 @@ class Bot:
             if qs and all(q < 0 for q in qs):           # a held set: NO on every leg
                 committed[race.name] = sum(self.cost_basis.get(l.exchange_id, 0.0) for l in race.legs.values())
         self.arb.committed = committed
+        # settlement adjustment: real arb sets valued at their locked payout instead of their marks (the kill switch's
+        # drawdown must not count profitable recycling, which closes sets at the asks, as a loss; 22 Oct 21:49)
+        mv = {str(x["exchangeId"]): float(x.get("marketValue") or 0.0) for x in p.get("positions", []) if not x.get("settled")}
+        adj = 0.0
+        real = getattr(self, "_real_sets", None)
+        if real is None or time.time() - getattr(self, "_real_sets_ts", 0) > 300:
+            real = {r["race"] for r in self.store.rows("SELECT DISTINCT race FROM arb_trades WHERE ok=1 AND kind IN ('sell_set','buy_set')")}
+            self._real_sets, self._real_sets_ts = real, time.time()
+        for race in self.universe.races.values():
+            if race.name not in real:
+                continue
+            legs = [l.exchange_id for l in race.legs.values()]
+            qs = [m.get(e, 0.0) for e in legs]
+            if qs and all(q < 0 for q in qs):
+                k, payout = min(-q for q in qs), len(legs) - 1
+            elif qs and all(q > 0 for q in qs):
+                k, payout = min(qs), 1
+            else:
+                continue
+            adj += payout * k - sum(mv.get(e, 0.0) * k / abs(m[e]) for e in legs)
+        self.settle_adj = adj
         return m, float(p.get("summary", {}).get("totalMarketValue", 0.0)), len(m)
 
     def open_orders_map(self) -> dict[str, list]:
@@ -1186,7 +1214,7 @@ class Bot:
         self.update_bars(prices)
         self.mm.meanrev_pred = self.meanrev_predictions(self.mm.quoted)
         self.mm.prices = prices
-        hl = self.health(cycle_cash + pos_value, cycle_id)
+        hl = self.health(cycle_cash + pos_value + getattr(self, "settle_adj", 0.0), cycle_id)
         killed = time.time() < self.killed_until
         if not killed and (hl["drawdown"] > self.cfg.kill_drawdown or (hl["n_markout"] >= 20 and hl["markout30"] is not None and hl["markout30"] < self.cfg.kill_markout_ticks)):
             self.killed_until = time.time() + self.cfg.kill_pause_sec
@@ -1301,8 +1329,10 @@ class Bot:
                 out = compute_overrides(self.store, self.cfg)
                 path = os.path.join(HERE, self.cfg.mm.overrides_file)
                 os.makedirs(os.path.dirname(path), exist_ok=True)
-                with open(path, "w") as f:
+                tmp = path + ".tmp"
+                with open(tmp, "w") as f:          # atomic: the scanner thread may read it at any moment
                     json.dump(out, f, indent=1)
+                os.replace(tmp, path)
                 self.last_analytics = time.time()
             except Exception as e:  # analytics must never kill the loop
                 log.exception("analytics failed: %s", e)
