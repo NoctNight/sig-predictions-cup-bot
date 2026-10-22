@@ -1,0 +1,6451 @@
+{
+ "built_at": 1792626321.798087,
+ "races": {
+  "AL-02 House race": {
+   "office": "house",
+   "state": "Alabama",
+   "district": 2,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "190872",
+    "slug": "al-02-house-election-winner",
+    "title": "AL-02 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1280800",
+       "token": "110498646838643141699770234895735915394620065036723874056548571888067488950164",
+       "title": "Rhett Marques (R)",
+       "liquidity": 79194.805
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1280801",
+       "token": "13189761649035136014216228195645475511361901020555722779072382901094466765019",
+       "title": "Shomari Figures (D)",
+       "liquidity": 87206.5424
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-AL02-26",
+    "title": "Will Republican win the House race for AL-02?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-AL02-26-R",
+       "title": "Will Republican win the House race for AL-02?",
+       "candidate": "Rhett Marques"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-AL02-26-D",
+       "title": "Will Democratic win the House race for AL-02?",
+       "candidate": "Shomari Figures"
+      }
+     ]
+    }
+   }
+  },
+  "AZ-01 House race": {
+   "office": "house",
+   "state": "Arizona",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106050",
+    "slug": "az-01-house-election-winner",
+    "title": "AZ-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942082",
+       "token": "32591940863680290675071972744258239275874735179355360323845750782366119048535",
+       "title": "Jay Feely (R)",
+       "liquidity": 74326.0868
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942084",
+       "token": "67501795419284092111663134279812910460154992630407078593989658098590262577673",
+       "title": "Amish Shah (D)",
+       "liquidity": 75533.2686
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEAZ1",
+    "event": "HOUSEAZ1-26",
+    "title": "Will Republican win the House race for AZ-1?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEAZ1-26-R",
+       "title": "Will Republican win the House race for AZ-1?",
+       "candidate": "Jay Feely"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEAZ1-26-D",
+       "title": "Will Democratic win the House race for AZ-1?",
+       "candidate": "Amish Shah"
+      }
+     ]
+    }
+   }
+  },
+  "AZ-06 House race": {
+   "office": "house",
+   "state": "Arizona",
+   "district": 6,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106056",
+    "slug": "az-06-house-election-winner",
+    "title": "AZ-06 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942159",
+       "token": "91134056361940201893494305153220998213627095877115808251230716593928688430751",
+       "title": "Juan Ciscomani (R)",
+       "liquidity": 64869.0271
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942162",
+       "token": "92489819804290368443943803966220296254525527906989333620579684623025259387169",
+       "title": "JoAnna Mendoza (D)",
+       "liquidity": 58021.096
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEAZ6",
+    "event": "HOUSEAZ6-26",
+    "title": "Will Republican win the House race for AZ-6?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEAZ6-26-R",
+       "title": "Will Republican win the House race for AZ-6?",
+       "candidate": "Juan Ciscomani"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEAZ6-26-D",
+       "title": "Will Democratic win the House race for AZ-6?",
+       "candidate": "JoAnna Mendoza"
+      }
+     ]
+    }
+   }
+  },
+  "Alabama Governor": {
+   "office": "governor",
+   "state": "Alabama",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57154",
+    "slug": "alabama-governor-winner-2026",
+    "title": "Alabama Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629270",
+       "token": "66799540193763442273153807390120946960260027428359861674134091731050086258652",
+       "title": "Doug Jones (D)",
+       "liquidity": 43489.89401
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629271",
+       "token": "109054998942213692077271472955675949350077711784792442998941210738471587356514",
+       "title": "Tommy Tuberville (R)",
+       "liquidity": 23245.84071
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYAL",
+    "event": "GOVPARTYAL-26",
+    "title": "Will the Republican party win the governorship in Alabama",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYAL-26-R",
+       "title": "Will the Republican party win the governorship in Alabama",
+       "candidate": "Tommy Tuberville"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYAL-26-D",
+       "title": "Will the Democratic party win the governorship in Alabama",
+       "candidate": "Doug Jones"
+      }
+     ]
+    },
+    "volume": 164808.2
+   }
+  },
+  "Alabama Senate": {
+   "office": "senate",
+   "state": "Alabama",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57637",
+    "slug": "alabama-senate-election-winner-154",
+    "title": "Alabama Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630627",
+       "token": "77232568388576878990477542833081311975859328857370439688711702313039178600550",
+       "title": "Everett Wess (D)",
+       "liquidity": 44589.26392
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630628",
+       "token": "95119856323193627993348587708417756152568014985721929036628780323821873817569",
+       "title": "Barry Moore (R)",
+       "liquidity": 27113.61944
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEAL",
+    "event": "SENATEAL-26",
+    "title": "Will Republicans win the Senate race in Alabama?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEAL-26-R",
+       "title": "Will Republicans win the Senate race in Alabama?",
+       "candidate": "Barry Moore"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEAL-26-D",
+       "title": "Will Democratics win the Senate race in Alabama?",
+       "candidate": "Everett Wess"
+      }
+     ]
+    },
+    "volume": 14453.21
+   }
+  },
+  "Alaska Governor": {
+   "office": "governor",
+   "state": "Alaska",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "59234",
+    "slug": "alaska-governor-election-winner",
+    "title": "Alaska Governor Election Winner  ",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "635003",
+       "token": "39154002125405197763794707136923968604358387984246909531145654626829957893230",
+       "title": "Click Bishop",
+       "liquidity": 58399.45344
+      },
+      {
+       "market_id": "635004",
+       "token": "23047817297095829703205789623007814925017477005361786493221231421140774736099",
+       "title": "David Bronson",
+       "liquidity": 66339.1609
+      },
+      {
+       "market_id": "635005",
+       "token": "112101678667388918252758604047145833695065509511438805706635695881082938013669",
+       "title": "Adam Crum",
+       "liquidity": 54119.40132
+      },
+      {
+       "market_id": "635006",
+       "token": "59674642039945632434991200982713662256203307690119588561924436416775168289415",
+       "title": "Nancy Dahlstrom",
+       "liquidity": 54992.95788
+      },
+      {
+       "market_id": "635009",
+       "token": "29296582863501339972029548154128549466562842084431320516838210161873614946088",
+       "title": "Shelley Hughes",
+       "liquidity": 53458.84017
+      },
+      {
+       "market_id": "635011",
+       "token": "93969985011170776056000925561172416309286101442856109696106983204369499012978",
+       "title": "Treg Taylor",
+       "liquidity": 56235.49285
+      },
+      {
+       "market_id": "635012",
+       "token": "64751505184958139146196081658481476813866015817972108997333100399972093820939",
+       "title": "Bernadette Wilson",
+       "liquidity": 73035.1392
+      },
+      {
+       "market_id": "635013",
+       "token": "27870085196735337387089467371194098802406160667325183183674887905666301487196",
+       "title": "Lisa Murkowski",
+       "liquidity": 52969.72096
+      }
+     ],
+     "D": [
+      {
+       "market_id": "635014",
+       "token": "88923835626751439335001852098823598444201043849577093630790185644778054232354",
+       "title": "Tom Begich",
+       "liquidity": 52045.71885
+      },
+      {
+       "market_id": "635015",
+       "token": "115303242217186990312218497459537227886423425931711349439197270624601721951066",
+       "title": "Mary Peltola",
+       "liquidity": 57205.97116
+      },
+      {
+       "market_id": "635016",
+       "token": "20244362049417025533374049121400436676833898969884666612361039499958684857530",
+       "title": "Jonathan Kreiss-Tomkins",
+       "liquidity": 80726.11829
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXGOVAK",
+    "event": "KXGOVAK-26",
+    "title": "Who will win the governorship in Alaska?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXGOVAK-26-LCMG",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Lesil McGuire"
+      },
+      {
+       "ticker": "KXGOVAK-26-LMUR",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Lisa Murkowski"
+      },
+      {
+       "ticker": "KXGOVAK-26-SHUG",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Shelley Hughes"
+      },
+      {
+       "ticker": "KXGOVAK-26-MHEI",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Matt Heilala"
+      },
+      {
+       "ticker": "KXGOVAK-26-DBRO",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Dave Bronson"
+      },
+      {
+       "ticker": "KXGOVAK-26-TTAY",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Treg Taylor"
+      },
+      {
+       "ticker": "KXGOVAK-26-NDAH",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Nancy Dahlstrom"
+      },
+      {
+       "ticker": "KXGOVAK-26-EDEV",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Edna DeVries"
+      },
+      {
+       "ticker": "KXGOVAK-26-CBIS",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Click Bishop"
+      },
+      {
+       "ticker": "KXGOVAK-26-BWIL",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Bernadette Wilson"
+      },
+      {
+       "ticker": "KXGOVAK-26-ACRU",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Adam Crum"
+      }
+     ],
+     "I": [
+      {
+       "ticker": "KXGOVAK-26-BWAL",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Bill Walker"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXGOVAK-26-JKRE",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Jonathan Kreiss-Tomkins"
+      },
+      {
+       "ticker": "KXGOVAK-26-MCLA",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Matthew Claman"
+      },
+      {
+       "ticker": "KXGOVAK-26-MPEL",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Mary Peltola"
+      },
+      {
+       "ticker": "KXGOVAK-26-TBEG",
+       "title": "Who will win the governorship in Alaska?",
+       "candidate": "Tom Begich"
+      }
+     ]
+    },
+    "volume": 847654.29
+   }
+  },
+  "Alaska Senate": {
+   "office": "senate",
+   "state": "Alaska",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "59233",
+    "slug": "alaska-senate-election-winner",
+    "title": "Alaska Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "634974",
+       "token": "2618138322856109565904469085316346602627882727483900432328802655317079880335",
+       "title": "Sen. Dan Sullivan",
+       "liquidity": 261820.679
+      },
+      {
+       "market_id": "634979",
+       "token": "31278241752941344554610792783012172134444604028259739462416674476234786013273",
+       "title": "Daniel J. Sullivan Jr.",
+       "liquidity": 66763.64744
+      }
+     ],
+     "D": [
+      {
+       "market_id": "634976",
+       "token": "72139607190315861034411702195742538105117960260100800877125381826122747504258",
+       "title": "Mary Peltola",
+       "liquidity": 252214.8255
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEAK",
+    "event": "SENATEAK-26",
+    "title": "Will Democratics win the Senate race in Alaska?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATEAK-26-D",
+       "title": "Will Democratics win the Senate race in Alaska?",
+       "candidate": "Democratic party"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATEAK-26-R",
+       "title": "Will Republicans win the Senate race in Alaska?",
+       "candidate": "Republican party"
+      }
+     ]
+    },
+    "volume": 2898139.0300000003
+   }
+  },
+  "Arizona Governor": {
+   "office": "governor",
+   "state": "Arizona",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57141",
+    "slug": "arizona-governor-winner-2026",
+    "title": "Arizona Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629183",
+       "token": "48368039124533504674394545622809320495392482760644292167644042386014017726777",
+       "title": "Katie Hobbs (D)",
+       "liquidity": 98167.0408
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629184",
+       "token": "18859933834391393264997730047904836599784455493762567366530805521273388590339",
+       "title": "Andy Biggs (R)",
+       "liquidity": 148641.2538
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYAZ",
+    "event": "GOVPARTYAZ-26",
+    "title": "Will the Republican party win the governorship in Arizona",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYAZ-26-R",
+       "title": "Will the Republican party win the governorship in Arizona",
+       "candidate": "Andy Biggs"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYAZ-26-D",
+       "title": "Will the Democratic party win the governorship in Arizona",
+       "candidate": "Katie Hobbs"
+      }
+     ]
+    },
+    "volume": 898571.61
+   }
+  },
+  "Arkansas Governor": {
+   "office": "governor",
+   "state": "Arkansas",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57155",
+    "slug": "arkansas-governor-winner-2026",
+    "title": "Arkansas Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629283",
+       "token": "40899822988489523883534886021948522261134770684960257613447444387617827489093",
+       "title": "Fredrick Love (D)",
+       "liquidity": 38062.45533
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629284",
+       "token": "102338577209265315381870206199608266895858545057511455426333199851251620807909",
+       "title": "Sarah Huckabee Sanders (R)",
+       "liquidity": 37681.43854
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYAR",
+    "event": "GOVPARTYAR-26",
+    "title": "Will the Republican party win the governorship in Arkansas",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYAR-26-R",
+       "title": "Will the Republican party win the governorship in Arkansas",
+       "candidate": "Sarah Huckabee Sanders"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYAR-26-D",
+       "title": "Will the Democratic party win the governorship in Arkansas",
+       "candidate": "Fred Love"
+      }
+     ]
+    },
+    "volume": 7834.93
+   }
+  },
+  "Arkansas Senate": {
+   "office": "senate",
+   "state": "Arkansas",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57639",
+    "slug": "arkansas-senate-election-winner",
+    "title": "Arkansas Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630653",
+       "token": "68370995073141964079913803663665941780115677360430806954011390499916208708512",
+       "title": "Hallie Shoffner (D)",
+       "liquidity": 58380.41398
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630654",
+       "token": "48125407658537781630126353551882211313520827583468729408685633955919030034320",
+       "title": "Tom Cotton (R) ",
+       "liquidity": 48349.49094
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEAR",
+    "event": "SENATEAR-26",
+    "title": "Will Republicans win the Senate race in Arkansas?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEAR-26-R",
+       "title": "Will Republicans win the Senate race in Arkansas?",
+       "candidate": "Tom Cotton"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEAR-26-D",
+       "title": "Will Democratics win the Senate race in Arkansas?",
+       "candidate": "Hallie Shoffner"
+      }
+     ]
+    },
+    "volume": 279083.8
+   }
+  },
+  "CA-22 House race": {
+   "office": "house",
+   "state": "California",
+   "district": 22,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "90270",
+    "slug": "which-party-will-win-the-house-race-for-the-ca-22-seat",
+    "title": "CA-22 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "703685",
+       "token": "83305180123434328264942831061332161630642073183329159190029603770999556008804",
+       "title": "David Valadao (R)",
+       "liquidity": 49995.1392
+      }
+     ],
+     "D": [
+      {
+       "market_id": "703686",
+       "token": "14880392203916951367210594044346675783187280368615720213876603794661640957466",
+       "title": "Randy Villegas (D)",
+       "liquidity": 33102.2197
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSECA22",
+    "event": "HOUSECA22-26",
+    "title": "Will Republican win the House race for CA-22?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSECA22-26-R",
+       "title": "Will Republican win the House race for CA-22?",
+       "candidate": "David Valadao"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSECA22-26-D",
+       "title": "Will Democratic win the House race for CA-22?",
+       "candidate": "Randy Villegas"
+      }
+     ]
+    }
+   }
+  },
+  "CA-48 House race": {
+   "office": "house",
+   "state": "California",
+   "district": 48,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191383",
+    "slug": "ca-48-house-election-winner",
+    "title": "CA-48 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1282824",
+       "token": "74883630455715593214751459772360468028930271344780030243472846680635150664331",
+       "title": "Jim Desmond (R)",
+       "liquidity": 64316.9628
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1282825",
+       "token": "59802490472036913873496121286677427483662122509187681183126522612013504797043",
+       "title": "Marni von Wilpert (D)",
+       "liquidity": 40309.1219
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-CA48-26",
+    "title": "Will Republican win the House race for CA-48?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-CA48-26-R",
+       "title": "Will Republican win the House race for CA-48?",
+       "candidate": "Jim Desmond"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-CA48-26-D",
+       "title": "Will Democratic win the House race for CA-48?",
+       "candidate": "Marni von Wilpert"
+      }
+     ]
+    }
+   }
+  },
+  "CO-03 House race": {
+   "office": "house",
+   "state": "Colorado",
+   "district": 3,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106058",
+    "slug": "co-03-house-election-winner",
+    "title": "CO-03 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942301",
+       "token": "50051241364929222895693566081605692346197807854055532008099278772035698770870",
+       "title": "Jeff Hurd (R)",
+       "liquidity": 80427.2914
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942304",
+       "token": "24395104702642353411948925889097630568855366590528757185881735998149149192479",
+       "title": "Dwayne Romero (D)",
+       "liquidity": 78462.6829
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSECO3",
+    "event": "HOUSECO3-26",
+    "title": "Will Republican win the House race for CO-3?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSECO3-26-R",
+       "title": "Will Republican win the House race for CO-3?",
+       "candidate": "Jeff Hurd"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSECO3-26-D",
+       "title": "Will Democratic win the House race for CO-3?",
+       "candidate": "Dwayne Romero"
+      }
+     ]
+    }
+   }
+  },
+  "CO-04 House race": {
+   "office": "house",
+   "state": "Colorado",
+   "district": 4,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191390",
+    "slug": "co-04-house-election-winner",
+    "title": "CO-04 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1282880",
+       "token": "93912560256245525429984546771927493927155759286650495356669416323669943507847",
+       "title": "Lauren Boebert (R)",
+       "liquidity": 68684.0494
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1282881",
+       "token": "21114904170244249083059864962815455303156569744726868991298626905734505722454",
+       "title": "Eileen Laubacher (D)",
+       "liquidity": 103267.2618
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-CO04-26",
+    "title": "Will Republican win the House race for CO-04?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-CO04-26-R",
+       "title": "Will Republican win the House race for CO-04?",
+       "candidate": "Lauren Boebert"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-CO04-26-D",
+       "title": "Will Democratic win the House race for CO-04?",
+       "candidate": "Eileen Laubacher"
+      }
+     ]
+    }
+   }
+  },
+  "CO-08 House race": {
+   "office": "house",
+   "state": "Colorado",
+   "district": 8,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106059",
+    "slug": "co-08-house-election-winner",
+    "title": "CO-08 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942324",
+       "token": "68021205636604056509276509067526372089338487160185591169779941190006739682906",
+       "title": "Gabe Evans (R)",
+       "liquidity": 62093.3996
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942325",
+       "token": "111540362553565728751187438925859908575427409891112173540802616759607897153785",
+       "title": "Manny Rutinel (D)",
+       "liquidity": 54481.6784
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSECO8",
+    "event": "HOUSECO8-26",
+    "title": "Will Republican win the House race for CO-8?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSECO8-26-R",
+       "title": "Will Republican win the House race for CO-8?",
+       "candidate": "Gabe Evans"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSECO8-26-D",
+       "title": "Will Democratic win the House race for CO-8?",
+       "candidate": "Manny Rutinel"
+      }
+     ]
+    }
+   }
+  },
+  "California Governor": {
+   "office": "governor",
+   "state": "California",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57096",
+    "slug": "california-governor-election-2026",
+    "title": "California Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "628936",
+       "token": "97079880955117270083666806029014143818118511996487378321036003805764596740938",
+       "title": "Rick Caruso",
+       "liquidity": 388590.98438
+      },
+      {
+       "market_id": "628937",
+       "token": "27917044669327306061079144978831477036721566699378308758417293047296113420189",
+       "title": "Alex Padilla",
+       "liquidity": 367834.33543
+      },
+      {
+       "market_id": "628938",
+       "token": "59961507866677494040607532131294205317570935112758647200306330458606615546543",
+       "title": "Katie Porter",
+       "liquidity": 320328.08268
+      },
+      {
+       "market_id": "628939",
+       "token": "36414954588752207538819032120216717092589056211565128836805997597026535658896",
+       "title": "Antonio Villaraigosa",
+       "liquidity": 324037.12726
+      },
+      {
+       "market_id": "628941",
+       "token": "60977129292396881848833910361112107174416489010090570432106122538120602786646",
+       "title": "Xavier Becerra",
+       "liquidity": 151039.68266
+      },
+      {
+       "market_id": "628942",
+       "token": "56625712760763435913938435276890711697397809531508832909291686351381221361003",
+       "title": "Stephen Cloobeck",
+       "liquidity": 343372.64702
+      },
+      {
+       "market_id": "628944",
+       "token": "70281793907385086211847388621294479535878334441733358377933099446528752678794",
+       "title": "Betty Yee",
+       "liquidity": 373682.51587
+      },
+      {
+       "market_id": "628945",
+       "token": "46795587673242136909437201632973334679982713622973285707845177101454063819719",
+       "title": "Toni Atkins",
+       "liquidity": 366504.41196
+      },
+      {
+       "market_id": "628950",
+       "token": "97702334451352897001337910972309092345221725844052357364009019821657345731021",
+       "title": "Tony Thurmond",
+       "liquidity": 329715.8608
+      },
+      {
+       "market_id": "628954",
+       "token": "53108492762804322790881187287769990850666506477078895895702280937595932013486",
+       "title": "Eric Swalwell",
+       "liquidity": 328370.97232
+      },
+      {
+       "market_id": "628955",
+       "token": "20705956847651355292903061592334315186019059728484478747049630947764308652621",
+       "title": "Tom Steyer",
+       "liquidity": 131769.8568
+      },
+      {
+       "market_id": "628956",
+       "token": "73345090003108666594794151475505970950770375486703004280822578392488185094987",
+       "title": "Kamala Harris",
+       "liquidity": 316579.49796
+      }
+     ],
+     "R": [
+      {
+       "market_id": "628940",
+       "token": "82742036522262670996662794097029680950132682539859985097974842241612036171395",
+       "title": "Steve Hilton",
+       "liquidity": 171217.61573
+      },
+      {
+       "market_id": "628947",
+       "token": "89694314427486889897766629507723742460669068230376416068996390119126818537632",
+       "title": "Chad Bianco",
+       "liquidity": 112429.74847
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXGOVCA",
+    "event": "KXGOVCA-26",
+    "title": "Who will win the governorship in California?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "KXGOVCA-26-XBEC",
+       "title": "Who will win the governorship in California?",
+       "candidate": "Xavier Becerra"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "KXGOVCA-26-SHIL",
+       "title": "Who will win the governorship in California?",
+       "candidate": "Steve Hilton"
+      }
+     ]
+    },
+    "volume": 20652596.72
+   }
+  },
+  "Colorado Governor": {
+   "office": "governor",
+   "state": "Colorado",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57156",
+    "slug": "colorado-governor-winner-2026",
+    "title": "Colorado Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629296",
+       "token": "13561110222018578357785114619723468880952494576477687978085608584743809891728",
+       "title": "Phil Weiser (D)",
+       "liquidity": 22909.19266
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629297",
+       "token": "17546916569546560082654809047780534438941220653259855302022567325162996913878",
+       "title": "Victor Marx (R)",
+       "liquidity": 45191.47794
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYCO",
+    "event": "GOVPARTYCO-26",
+    "title": "Will the Republican party win the governorship in Colorado",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYCO-26-R",
+       "title": "Will the Republican party win the governorship in Colorado",
+       "candidate": "Victor Marx"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYCO-26-D",
+       "title": "Will the Democratic party win the governorship in Colorado",
+       "candidate": "Phil Weiser"
+      }
+     ]
+    },
+    "volume": 198131.96999999997
+   }
+  },
+  "Colorado Senate": {
+   "office": "senate",
+   "state": "Colorado",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57640",
+    "slug": "colorado-senate-election-winner",
+    "title": "Colorado Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630666",
+       "token": "68194463917260305435439145066031544476540679280823247532132832363696000101185",
+       "title": "John Hickenlooper (D)",
+       "liquidity": 26778.6203
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630667",
+       "token": "94387913280398317052582281843978069916338462525042652614881277797162415545237",
+       "title": "Mark Baisley (R)",
+       "liquidity": 52610.35564
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATECO",
+    "event": "SENATECO-26",
+    "title": "Will Democratics win the Senate race in Colorado?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATECO-26-D",
+       "title": "Will Democratics win the Senate race in Colorado?",
+       "candidate": "John Hickenlooper"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATECO-26-R",
+       "title": "Will Republicans win the Senate race in Colorado?",
+       "candidate": "Mark Baisley"
+      }
+     ]
+    },
+    "volume": 37415.34
+   }
+  },
+  "Connecticut Governor": {
+   "office": "governor",
+   "state": "Connecticut",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57159",
+    "slug": "connecticut-governor-winner-2026",
+    "title": "Connecticut Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629311",
+       "token": "94716743709853585469973889676994451123824166409123282527490222914006156870020",
+       "title": "Ned Lamont (D)",
+       "liquidity": 18166.54069
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629312",
+       "token": "28222949582692352334110457056784683609708218641745397767642367585928375878193",
+       "title": "Ryan Fazio (R)",
+       "liquidity": 34801.46242
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYCT",
+    "event": "GOVPARTYCT-26",
+    "title": "Will the Republican party win the governorship in Connecticut",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYCT-26-R",
+       "title": "Will the Republican party win the governorship in Connecticut",
+       "candidate": "Ryan Fazio"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYCT-26-D",
+       "title": "Will the Democratic party win the governorship in Connecticut",
+       "candidate": "Ned Lamont"
+      }
+     ]
+    },
+    "volume": 62240.53
+   }
+  },
+  "Delaware Senate": {
+   "office": "senate",
+   "state": "Delaware",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57641",
+    "slug": "delaware-senate-election-winner",
+    "title": "Delaware Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630679",
+       "token": "109467029375682717672947466588331781838347232688418556926634334189471462678711",
+       "title": "Democrat",
+       "liquidity": 31188.11923
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630680",
+       "token": "18791277393217683755628516529477058015186638022373024614300661393042993809537",
+       "title": "Republican",
+       "liquidity": 48806.49791
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEDE",
+    "event": "SENATEDE-26",
+    "title": "Will Republicans win the Senate race in Delaware?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEDE-26-R",
+       "title": "Will Republicans win the Senate race in Delaware?",
+       "candidate": "Michael Katz"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEDE-26-D",
+       "title": "Will Democratics win the Senate race in Delaware?",
+       "candidate": "Chris Coons"
+      }
+     ]
+    },
+    "volume": 27843.839999999997
+   }
+  },
+  "FL-07 House race": {
+   "office": "house",
+   "state": "Florida",
+   "district": 7,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191405",
+    "slug": "fl-07-house-election-winner",
+    "title": "FL-07 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283000",
+       "token": "28134558928888227948813381987057565018866784201189850460618625875753502909061",
+       "title": "Ryan Elijah (R)",
+       "liquidity": 67331.3581
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283001",
+       "token": "48595994389294380413605252588038399089739882614541392889205137632817333951567",
+       "title": "Bale Dalton (D)",
+       "liquidity": 92126.1346
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-FL07-26",
+    "title": "Will Republican win the House race for FL-07?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-FL07-26-R",
+       "title": "Will Republican win the House race for FL-07?",
+       "candidate": "Ryan Elijah"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-FL07-26-D",
+       "title": "Will Democratic win the House race for FL-07?",
+       "candidate": "Bale Dalton"
+      }
+     ]
+    }
+   }
+  },
+  "FL-09 House race": {
+   "office": "house",
+   "state": "Florida",
+   "district": 9,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191407",
+    "slug": "fl-09-house-election-winner",
+    "title": "FL-09 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283016",
+       "token": "14535768089815400273847771354088826502078939671987391994275253603566532191654",
+       "title": "Dan Green (R)",
+       "liquidity": 114262.5642
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283017",
+       "token": "79995747672792115054716674475173589172446551682399210610955904338812431765392",
+       "title": "Darren Soto (D)",
+       "liquidity": 123959.9789
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-FL09-26",
+    "title": "Will Republican win the House race for FL-09?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-FL09-26-R",
+       "title": "Will Republican win the House race for FL-09?",
+       "candidate": "Dan Green"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-FL09-26-D",
+       "title": "Will Democratic win the House race for FL-09?",
+       "candidate": "Darren Soto"
+      }
+     ]
+    }
+   }
+  },
+  "FL-13 House race": {
+   "office": "house",
+   "state": "Florida",
+   "district": 13,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106073",
+    "slug": "fl-13-house-election-winner",
+    "title": "FL-13 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942400",
+       "token": "93455992331247261582609314876051620484985877396129230715122967612916153735084",
+       "title": "Anna Paulina Luna (R)",
+       "liquidity": 35496.0339
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942401",
+       "token": "10797071126504743123515085716419360987107478266428470507477377131012323100968",
+       "title": "Leela Gray (D)",
+       "liquidity": 43352.7434
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEFL13",
+    "event": "HOUSEFL13-26",
+    "title": "Will Republican win the House race for FL-13?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEFL13-26-R",
+       "title": "Will Republican win the House race for FL-13?",
+       "candidate": "Anna Paulina Luna"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEFL13-26-D",
+       "title": "Will Democratic win the House race for FL-13?",
+       "candidate": "Leela Gray"
+      }
+     ]
+    }
+   }
+  },
+  "FL-16 House race": {
+   "office": "house",
+   "state": "Florida",
+   "district": 16,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191413",
+    "slug": "fl-16-house-election-winner",
+    "title": "FL-16 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283064",
+       "token": "15056064872112675856476546973246733011825608647719006314444015066456521530341",
+       "title": "Sydney Gruters (R)",
+       "liquidity": 30423.2212
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283065",
+       "token": "106958534192257552731131706251545716690561203965658398267038573027472601603038",
+       "title": "Kelly Kirschner (D)",
+       "liquidity": 44854.2337
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-FL16-26",
+    "title": "Will Republican win the House race for FL-16?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-FL16-26-R",
+       "title": "Will Republican win the House race for FL-16?",
+       "candidate": "Sydney Gruters"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-FL16-26-D",
+       "title": "Will Democratic win the House race for FL-16?",
+       "candidate": "Kelly Kirschner"
+      }
+     ]
+    }
+   }
+  },
+  "FL-20 House race": {
+   "office": "house",
+   "state": "Florida",
+   "district": 20,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191417",
+    "slug": "fl-20-house-election-winner",
+    "title": "FL-20 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283096",
+       "token": "99998409366814058509324978903464760824797071645181220838890227821177183933287",
+       "title": "Brent Andersen (R)",
+       "liquidity": 21647.9378
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283097",
+       "token": "7861599392964570899063295249757924331582887786226297517280676454972508298031",
+       "title": "Debbie Wasserman Schultz (D)",
+       "liquidity": 27641.39786
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-FL20-26",
+    "title": "Will Republican win the House race for FL-20?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-FL20-26-R",
+       "title": "Will Republican win the House race for FL-20?",
+       "candidate": "Brent Andersen"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-FL20-26-D",
+       "title": "Will Democratic win the House race for FL-20?",
+       "candidate": "Debbie Wasserman Schultz"
+      }
+     ]
+    }
+   }
+  },
+  "FL-22 House race": {
+   "office": "house",
+   "state": "Florida",
+   "district": 22,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191419",
+    "slug": "fl-22-house-election-winner",
+    "title": "FL-22 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283112",
+       "token": "12503562961051694670561093522011301968376611490945772097489304120208051360657",
+       "title": "Casey Askar (R)",
+       "liquidity": 78767.6826
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283113",
+       "token": "9888897571794010752121877049436014412394792546592129944638664529404498838517",
+       "title": "Pia Dandiya (D)",
+       "liquidity": 82331.3335
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-FL22-26",
+    "title": "Will Republican win the House race for FL-22?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-FL22-26-R",
+       "title": "Will Republican win the House race for FL-22?",
+       "candidate": "Casey Askar"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-FL22-26-D",
+       "title": "Will Democratic win the House race for FL-22?",
+       "candidate": "Pia Dandiya"
+      }
+     ]
+    }
+   }
+  },
+  "Florida Governor": {
+   "office": "governor",
+   "state": "Florida",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57160",
+    "slug": "florida-governor-winner-2026",
+    "title": "Florida Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629324",
+       "token": "45666577334498374671436529469006420565255125221309505855441517627481607414492",
+       "title": "David Jolly (D)",
+       "liquidity": 149067.0637
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629325",
+       "token": "107409796822153809778143872196236532785178617102787858261374110829112218839748",
+       "title": "Byron Donalds (R) ",
+       "liquidity": 154359.284
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYFL",
+    "event": "GOVPARTYFL-26",
+    "title": "Will the Republican party win the governorship in Florida",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYFL-26-R",
+       "title": "Will the Republican party win the governorship in Florida",
+       "candidate": "Byron Donalds"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYFL-26-D",
+       "title": "Will the Democratic party win the governorship in Florida",
+       "candidate": "David Jolly"
+      }
+     ]
+    },
+    "volume": 3715107.7
+   }
+  },
+  "Florida Senate": {
+   "office": "senate",
+   "state": "Florida",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57681",
+    "slug": "florida-senate-election-winner",
+    "title": "Florida Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "631044",
+       "token": "109815773012907461372639157658293071578555374097742562684476865021743386609433",
+       "title": "Angie Nixon (D)",
+       "liquidity": 97328.0863
+      }
+     ],
+     "R": [
+      {
+       "market_id": "631045",
+       "token": "47848555635748009983462962481545341194026880518141560747711492227563791266566",
+       "title": "Ashley Moody (R)",
+       "liquidity": 80186.806
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEFLS",
+    "event": "SENATEFLS-26",
+    "title": "Will Republicans win the Senate race in Florida?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEFLS-26-R",
+       "title": "Will Republicans win the Senate race in Florida?",
+       "candidate": "Ashley Moody"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEFLS-26-D",
+       "title": "Will Democratics win the Senate race in Florida?",
+       "candidate": "Angie Nixon"
+      }
+     ]
+    },
+    "volume": 1661163.88
+   }
+  },
+  "Georgia Governor": {
+   "office": "governor",
+   "state": "Georgia",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57161",
+    "slug": "georgia-governor-winner-2026",
+    "title": "Georgia Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629337",
+       "token": "59980150909931986777748227027020522224275707387562276219060223816867188565245",
+       "title": "Keisha Lance Bottoms (D)",
+       "liquidity": 83516.8971
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629338",
+       "token": "17555504943162344098534978138053308162738914357892515623100381936995379845407",
+       "title": "Rick Jackson (R)",
+       "liquidity": 82857.8823
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYGA",
+    "event": "GOVPARTYGA-26",
+    "title": "Will the Republican party win the governorship in Georgia",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYGA-26-R",
+       "title": "Will the Republican party win the governorship in Georgia",
+       "candidate": "Rick Jackson"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYGA-26-D",
+       "title": "Will the Democratic party win the governorship in Georgia",
+       "candidate": "Keisha Lance Bottoms"
+      }
+     ]
+    },
+    "volume": 2195372.63
+   }
+  },
+  "Georgia Senate": {
+   "office": "senate",
+   "state": "Georgia",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57642",
+    "slug": "georgia-senate-election-winner",
+    "title": "Georgia Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630692",
+       "token": "21024219148268989748704207701411444044468128261642675917026452687231462203167",
+       "title": "Jon Ossoff (D) ",
+       "liquidity": 81671.68312
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630693",
+       "token": "43777191461245536274027792855557351629362906569064322165760098912770293918104",
+       "title": "Mike Collins (R)",
+       "liquidity": 63311.02194
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEGA",
+    "event": "SENATEGA-26",
+    "title": "Will Democratics win the Senate race in Georgia?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATEGA-26-D",
+       "title": "Will Democratics win the Senate race in Georgia?",
+       "candidate": "Jon Ossoff"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATEGA-26-R",
+       "title": "Will Republicans win the Senate race in Georgia?",
+       "candidate": "Mike Collins"
+      }
+     ]
+    },
+    "volume": 2066907.67
+   }
+  },
+  "Hawaii Governor": {
+   "office": "governor",
+   "state": "Hawaii",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57162",
+    "slug": "hawaii-governor-winner-2026",
+    "title": "Hawaii Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629350",
+       "token": "110136962687751258520353298894226275160632723246908859759371791290370868364654",
+       "title": "Josh Green (D)",
+       "liquidity": 26821.06383
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629351",
+       "token": "6206829575409742132406519993328718521258147411060807019224318077365646262406",
+       "title": "Gary Cordery (R)",
+       "liquidity": 43202.18543
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYHI",
+    "event": "GOVPARTYHI-26",
+    "title": "Will the Republican party win the governorship in Hawaii",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYHI-26-R",
+       "title": "Will the Republican party win the governorship in Hawaii",
+       "candidate": "Gary Cordery"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYHI-26-D",
+       "title": "Will the Democratic party win the governorship in Hawaii",
+       "candidate": "Josh Green"
+      }
+     ]
+    },
+    "volume": 12903.66
+   }
+  },
+  "IA-01 House race": {
+   "office": "house",
+   "state": "Iowa",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106077",
+    "slug": "ia-01-house-election-winner",
+    "title": "IA-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942432",
+       "token": "81505692847657373092454383020575585110499837274340613322588228385158919526454",
+       "title": "Mariannette Miller-Meeks (R)",
+       "liquidity": 61217.5051
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942433",
+       "token": "70626084342654528512319514273738308837103071303735022481383733918592331109261",
+       "title": "Christina Bohannan (D)",
+       "liquidity": 37157.5919
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEIA1",
+    "event": "HOUSEIA1-26",
+    "title": "Will Independent win the House race for IA-1?",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "HOUSEIA1-26-I",
+       "title": "Will Independent win the House race for IA-1?",
+       "candidate": "Michael Bridgford"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "HOUSEIA1-26-R",
+       "title": "Will Republican win the House race for IA-1?",
+       "candidate": "Mariannette Miller-Meeks"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEIA1-26-D",
+       "title": "Will Democratic win the House race for IA-1?",
+       "candidate": "Christina Bohannan"
+      }
+     ]
+    }
+   }
+  },
+  "IA-02 House race": {
+   "office": "house",
+   "state": "Iowa",
+   "district": 2,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191441",
+    "slug": "ia-02-house-election-winner",
+    "title": "IA-02 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283288",
+       "token": "106183024660666533834062502031813793169247762855988914383541855843680035368680",
+       "title": "Joe Mitchell (R)",
+       "liquidity": 71885.7518
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283289",
+       "token": "24808423328362642269928339618535398875519836942812329525201323299850907438220",
+       "title": "Lindsay James (D)",
+       "liquidity": 61436.3394
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-IA02-26",
+    "title": "Will Republican win the House race for IA-02?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-IA02-26-R",
+       "title": "Will Republican win the House race for IA-02?",
+       "candidate": "Joe Mitchell"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-IA02-26-D",
+       "title": "Will Democratic win the House race for IA-02?",
+       "candidate": "Lindsay James"
+      }
+     ]
+    }
+   }
+  },
+  "IA-03 House race": {
+   "office": "house",
+   "state": "Iowa",
+   "district": 3,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106082",
+    "slug": "ia-03-house-election-winner",
+    "title": "IA-03 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942444",
+       "token": "57265565746838221378365038901649729198937414663367899972498812653529682469258",
+       "title": "Zach Nunn (R)",
+       "liquidity": 58957.4414
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942445",
+       "token": "105724155866026243386456609196248574198788679514540436663740641053049222730942",
+       "title": "Sarah Trone Garriott (D)",
+       "liquidity": 59788.6504
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEIA3",
+    "event": "HOUSEIA3-26",
+    "title": "Will Republican win the House race for IA-3?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEIA3-26-R",
+       "title": "Will Republican win the House race for IA-3?",
+       "candidate": "Zach Nunn"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEIA3-26-D",
+       "title": "Will Democratic win the House race for IA-3?",
+       "candidate": "Sarah Trone Garriott"
+      }
+     ]
+    }
+   }
+  },
+  "Idaho Governor": {
+   "office": "governor",
+   "state": "Idaho",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57163",
+    "slug": "idaho-governor-winner-2026",
+    "title": "Idaho Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629363",
+       "token": "33422454484664318134839474897555797731651253833609657227452504228201243908837",
+       "title": "Terri Pickens (D)",
+       "liquidity": 37865.77476
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629364",
+       "token": "87236158376775117473663657833358313384905412589236150240764095508530872387075",
+       "title": "Brad Little (R)",
+       "liquidity": 27903.25245
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYID",
+    "event": "GOVPARTYID-26",
+    "title": "Will the Republican party win the governorship in Idaho",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYID-26-R",
+       "title": "Will the Republican party win the governorship in Idaho",
+       "candidate": "Brad Little"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYID-26-D",
+       "title": "Will the Democratic party win the governorship in Idaho",
+       "candidate": "Terri Pickens"
+      }
+     ]
+    },
+    "volume": 8738.02
+   }
+  },
+  "Idaho Senate": {
+   "office": "senate",
+   "state": "Idaho",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57643",
+    "slug": "idaho-senate-election-winner",
+    "title": "Idaho Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630705",
+       "token": "106941193163110167696426338043140728938381127310653153528096347878604033727123",
+       "title": "Democrat",
+       "liquidity": 41105.74967
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630706",
+       "token": "6756779810577885828704276397389282544084821591107025125954859235939281991675",
+       "title": "Jim Risch (R)",
+       "liquidity": 74686.30035
+      }
+     ],
+     "I": [
+      {
+       "market_id": "630707",
+       "token": "109865291951183941149765892685776097643915392898762342965012269207177841238467",
+       "title": "Todd Achilles (I)",
+       "liquidity": 60657.10416
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEID",
+    "event": "SENATEID-26",
+    "title": "Will Todd Achilless win the Senate race in Idaho?",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "SENATEID-26-TACH",
+       "title": "Will Todd Achilless win the Senate race in Idaho?",
+       "candidate": "Todd Achilles"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATEID-26-R",
+       "title": "Will Republicans win the Senate race in Idaho?",
+       "candidate": "Jim Risch"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEID-26-D",
+       "title": "Will Democratics win the Senate race in Idaho?",
+       "candidate": "David Roth"
+      }
+     ]
+    },
+    "volume": 445703.75
+   }
+  },
+  "Illinois Governor": {
+   "office": "governor",
+   "state": "Illinois",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57164",
+    "slug": "illinois-governor-winner-2026",
+    "title": "Illinois Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629376",
+       "token": "23435178151774440115423538812688705649247609803850018642847000556068202005554",
+       "title": "JB Pritzker (D)",
+       "liquidity": 40958.58742
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629377",
+       "token": "84456939894380206199554748929444222951802944556070526261308395410636849018567",
+       "title": "Darren Bailey (R)",
+       "liquidity": 39043.52867
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYIL",
+    "event": "GOVPARTYIL-26",
+    "title": "Will the Republican party win the governorship in Illinois",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYIL-26-R",
+       "title": "Will the Republican party win the governorship in Illinois",
+       "candidate": "Darren Bailey"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYIL-26-D",
+       "title": "Will the Democratic party win the governorship in Illinois",
+       "candidate": "JB Pritzker"
+      }
+     ]
+    },
+    "volume": 237125.36000000002
+   }
+  },
+  "Illinois Senate": {
+   "office": "senate",
+   "state": "Illinois",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57646",
+    "slug": "illinois-senate-election-winner",
+    "title": "Illinois Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630720",
+       "token": "3015477455071606958014729552697672689898195807324746948280693702257424620276",
+       "title": "Juliana Stratton (D)",
+       "liquidity": 33931.57864
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630721",
+       "token": "28293677056280080359554222049156424637171556977737746792223933800049748849083",
+       "title": "Don Tracy (R)",
+       "liquidity": 40107.69119
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEIL",
+    "event": "SENATEIL-26",
+    "title": "Will Republicans win the Senate race in Illinois?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEIL-26-R",
+       "title": "Will Republicans win the Senate race in Illinois?",
+       "candidate": "Don Tracy"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEIL-26-D",
+       "title": "Will Democratics win the Senate race in Illinois?",
+       "candidate": "Juliana Stratton"
+      }
+     ]
+    },
+    "volume": 21483.07
+   }
+  },
+  "Iowa Governor": {
+   "office": "governor",
+   "state": "Iowa",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57169",
+    "slug": "iowa-governor-winner-2026",
+    "title": "Iowa Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629397",
+       "token": "45621938709469399887344165091123819127263258871102896783851049824656362940868",
+       "title": "Rob Sand (D)",
+       "liquidity": 134113.1105
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629398",
+       "token": "35744753605838865227961720864928711626409257515092566128191701940968999011763",
+       "title": "Zach Lahn (R)",
+       "liquidity": 144179.4507
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYIA",
+    "event": "GOVPARTYIA-26",
+    "title": "Will the Republican party win the governorship in Iowa",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYIA-26-R",
+       "title": "Will the Republican party win the governorship in Iowa",
+       "candidate": "Zach Lahn"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYIA-26-D",
+       "title": "Will the Democratic party win the governorship in Iowa",
+       "candidate": "Rob Sand"
+      }
+     ]
+    },
+    "volume": 2038523.79
+   }
+  },
+  "Iowa Senate": {
+   "office": "senate",
+   "state": "Iowa",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57647",
+    "slug": "iowa-senate-election-winner",
+    "title": "Iowa Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630733",
+       "token": "90689690530039118737607894922148077480097700217322320781526913496162509181445",
+       "title": "Josh Turek (D)",
+       "liquidity": 205347.1304
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630734",
+       "token": "107844449523890311740907586041395758413047559802389895859202256336422357556837",
+       "title": "Ashley Hinson (R)",
+       "liquidity": 202064.7328
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEIA",
+    "event": "SENATEIA-26",
+    "title": "Will Republicans win the Senate race in Iowa?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEIA-26-R",
+       "title": "Will Republicans win the Senate race in Iowa?",
+       "candidate": "Ashley Hinson"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEIA-26-D",
+       "title": "Will Democratics win the Senate race in Iowa?",
+       "candidate": "Josh Turek"
+      }
+     ]
+    },
+    "volume": 5746865.15
+   }
+  },
+  "KY-04 House race": {
+   "office": "house",
+   "state": "Kentucky",
+   "district": 4,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191476",
+    "slug": "ky-04-house-election-winner",
+    "title": "KY-04 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283568",
+       "token": "4360584608318889792359076982751499707146205412289783849766659973245585132129",
+       "title": "Ed Gallrein (R)",
+       "liquidity": 15980.72815
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283569",
+       "token": "42051548638421204218374584975934315188715230248988738148555343950810939155465",
+       "title": "Melissa Strange (D)",
+       "liquidity": 24707.5253
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-KY04-26",
+    "title": "Will Republican win the House race for KY-04?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-KY04-26-R",
+       "title": "Will Republican win the House race for KY-04?",
+       "candidate": "Ed Gallrein"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-KY04-26-D",
+       "title": "Will Democratic win the House race for KY-04?",
+       "candidate": "Melissa Claire Strange"
+      }
+     ]
+    }
+   }
+  },
+  "Kansas Governor": {
+   "office": "governor",
+   "state": "Kansas",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57172",
+    "slug": "kansas-governor-winner-2026",
+    "title": "Kansas Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629412",
+       "token": "79484096963248498578517243733071571984223432387663163312687533493173144145268",
+       "title": "Cindy Holscher (D)",
+       "liquidity": 89493.994
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629413",
+       "token": "63693837389044553718411703128182914158332390182546987000527783026710645197027",
+       "title": "Ty Masterson (R)",
+       "liquidity": 105424.219
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYKS",
+    "event": "GOVPARTYKS-27",
+    "title": "Will the Republican party win the governorship in Kansas",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYKS-27-R",
+       "title": "Will the Republican party win the governorship in Kansas",
+       "candidate": "Ty Masterson"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYKS-27-D",
+       "title": "Will the Democratic party win the governorship in Kansas",
+       "candidate": "Cindy Holscher"
+      }
+     ]
+    },
+    "volume": 172752.96000000002
+   }
+  },
+  "Kansas Senate": {
+   "office": "senate",
+   "state": "Kansas",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57648",
+    "slug": "kansas-senate-election-winner",
+    "title": "Kansas Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630746",
+       "token": "75079868093228966915894372964099062660587490227046756021175661325867722540666",
+       "title": "Adam Hamilton (D)",
+       "liquidity": 233793.2528
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630747",
+       "token": "18131974965869813060047290511060211742274666573066200470724290584768041211203",
+       "title": "Roger Marshall (R)",
+       "liquidity": 183529.2036
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEKS",
+    "event": "SENATEKS-26",
+    "title": "Will Republicans win the Senate race in Kansas?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEKS-26-R",
+       "title": "Will Republicans win the Senate race in Kansas?",
+       "candidate": "Roger Marshall"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEKS-26-D",
+       "title": "Will Democratics win the Senate race in Kansas?",
+       "candidate": "Adam Hamilton"
+      }
+     ]
+    },
+    "volume": 4046135.85
+   }
+  },
+  "Kentucky Senate": {
+   "office": "senate",
+   "state": "Kentucky",
+   "district": null,
+   "unmatched": [
+    "kalshi"
+   ],
+   "polymarket": {
+    "event_id": "57649",
+    "slug": "kentucky-senate-election-winner",
+    "title": "Kentucky Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630759",
+       "token": "37649267567982889592011384409533519112993266261975620703097847510820818713285",
+       "title": "Charles Booker (D)",
+       "liquidity": 48948.75026
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630760",
+       "token": "48498511771232100148522166869811267217315069499419645745771730197179043728388",
+       "title": "Andy Barr (R)",
+       "liquidity": 34192.4442
+      }
+     ]
+    }
+   }
+  },
+  "Louisiana Senate": {
+   "office": "senate",
+   "state": "Louisiana",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "59203",
+    "slug": "louisiana-senate-election-winner",
+    "title": "Louisiana Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "634878",
+       "token": "80536528552003281640741026890878925456783654983296822683495274364289350034456",
+       "title": "Jamie Davis (D)",
+       "liquidity": 63947.9561
+      }
+     ],
+     "R": [
+      {
+       "market_id": "634879",
+       "token": "79597156840177168343562124064866301094619106642263695929345529947536386203124",
+       "title": "Julia Letlow (R)",
+       "liquidity": 54520.6751
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXSENATELA",
+    "event": "KXSENATELA-26NOV",
+    "title": "Will Republicans win the Senate race in Louisiana?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXSENATELA-26NOV-R",
+       "title": "Will Republicans win the Senate race in Louisiana?",
+       "candidate": "Julia Letlow"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXSENATELA-26NOV-D",
+       "title": "Will Democratics win the Senate race in Louisiana?",
+       "candidate": "Jamie Davis"
+      }
+     ]
+    },
+    "volume": 111998.19
+   }
+  },
+  "ME-02 House race": {
+   "office": "house",
+   "state": "Maine",
+   "district": 2,
+   "unmatched": [
+    "polymarket"
+   ],
+   "kalshi": {
+    "series": "HOUSEME2",
+    "event": "HOUSEME2-26",
+    "title": "Will Republican win the House race for ME-2?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEME2-26-R",
+       "title": "Will Republican win the House race for ME-2?",
+       "candidate": "Paul LePage"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEME2-26-D",
+       "title": "Will Democratic win the House race for ME-2?",
+       "candidate": "Matt Dunlap"
+      }
+     ]
+    }
+   }
+  },
+  "MI-07 House race": {
+   "office": "house",
+   "state": "Michigan",
+   "district": 7,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106102",
+    "slug": "mi-07-house-election-winner",
+    "title": "MI-07 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942721",
+       "token": "90239537120799856559379339880905629013239262905922873444067766874892362837014",
+       "title": "Tom Barrett (R)",
+       "liquidity": 76941.3747
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942722",
+       "token": "28428563408232158641020832230598845099279456308678642815367173717175353290703",
+       "title": "William Lawrence (D)",
+       "liquidity": 70095.0558
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEMI7",
+    "event": "HOUSEMI7-26",
+    "title": "Will Republican win the House race for MI-7?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEMI7-26-R",
+       "title": "Will Republican win the House race for MI-7?",
+       "candidate": "Tom Barrett"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEMI7-26-D",
+       "title": "Will Democratic win the House race for MI-7?",
+       "candidate": "William Lawrence"
+      }
+     ]
+    }
+   }
+  },
+  "MI-10 House race": {
+   "office": "house",
+   "state": "Michigan",
+   "district": 10,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106106",
+    "slug": "mi-10-house-election-winner",
+    "title": "MI-10 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942774",
+       "token": "43752127134995564310826939255040140810170663034403700378883950354967468648845",
+       "title": "Mike Bouchard (R)",
+       "liquidity": 75646.5773
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942776",
+       "token": "75685534826787951976275953631896177236439299709473517876953614908104349066066",
+       "title": "Christina Hines (D)",
+       "liquidity": 72206.4111
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEMI10",
+    "event": "HOUSEMI10-26",
+    "title": "Will Republican win the House race for MI-10?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEMI10-26-R",
+       "title": "Will Republican win the House race for MI-10?",
+       "candidate": "Michael Bouchard Jr."
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEMI10-26-D",
+       "title": "Will Democratic win the House race for MI-10?",
+       "candidate": "Christina Hines"
+      }
+     ]
+    }
+   }
+  },
+  "MN-01 House race": {
+   "office": "house",
+   "state": "Minnesota",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191511",
+    "slug": "mn-01-house-election-winner",
+    "title": "MN-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283848",
+       "token": "58414915443056575600546845688231939406497093430617962204950899073959516863962",
+       "title": "Brad Finstad (R)",
+       "liquidity": 36275.5865
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283849",
+       "token": "53556044615407667948482140924138670085564709060050296606327145637179427254399",
+       "title": "Jake Johnson (D)",
+       "liquidity": 56024.462
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-MN01-26",
+    "title": "Will Republican win the House race for MN-01?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-MN01-26-R",
+       "title": "Will Republican win the House race for MN-01?",
+       "candidate": "Brad Finstad"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-MN01-26-D",
+       "title": "Will Democratic win the House race for MN-01?",
+       "candidate": "Jake Johnson"
+      }
+     ]
+    }
+   }
+  },
+  "MN-02 House race": {
+   "office": "house",
+   "state": "Minnesota",
+   "district": 2,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106107",
+    "slug": "mn-02-house-election-winner",
+    "title": "MN-02 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942819",
+       "token": "27227352588644125911835255791745199294766435051633840882741518772610280264133",
+       "title": "Eric Pratt (R)",
+       "liquidity": 26372.73229
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942820",
+       "token": "101761583924149127934699530188897560119595562747749947811419542814081248785009",
+       "title": "Matt Little (D)",
+       "liquidity": 15704.74404
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEMN2",
+    "event": "HOUSEMN2-26",
+    "title": "Will a Republican win the House race for MN-2?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEMN2-26-R",
+       "title": "Will a Republican win the House race for MN-2?",
+       "candidate": "Eric Pratt"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEMN2-26-D",
+       "title": "Will a Democrat win the House race for MN-2?",
+       "candidate": "Matt Little"
+      }
+     ]
+    }
+   }
+  },
+  "MN-05 House race": {
+   "office": "house",
+   "state": "Minnesota",
+   "district": 5,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191514",
+    "slug": "mn-05-house-election-winner",
+    "title": "MN-05 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1283872",
+       "token": "85481834502498043935806386600094738202338314908938508331117373587697666440459",
+       "title": "John Nagel (R)",
+       "liquidity": 51178.16958
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1283873",
+       "token": "20781040640207419108275494852260640607740976077797936236220411009198028862221",
+       "title": "Ilhan Omar (D)",
+       "liquidity": 47713.46925
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-MN05-26",
+    "title": "Will DeVelle Jackson win the House race for MN-05?",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "KXHOUSERACE-MN05-26-DJAC",
+       "title": "Will DeVelle Jackson win the House race for MN-05?",
+       "candidate": "DeVelle Jackson"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-MN05-26-R",
+       "title": "Will Republican win the House race for MN-05?",
+       "candidate": "John Nagel"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-MN05-26-D",
+       "title": "Will Democratic win the House race for MN-05?",
+       "candidate": "Ilhan Omar"
+      }
+     ]
+    }
+   }
+  },
+  "MT-01 House race": {
+   "office": "house",
+   "state": "Montana",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106114",
+    "slug": "mt-01-house-election-winner",
+    "title": "MT-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942841",
+       "token": "70720420928389492978842914190430712299346582376255109200751838945374631181994",
+       "title": "Aaron Flint (R)",
+       "liquidity": 109611.4596
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942843",
+       "token": "94033987553817825990709512567031751048276730850154145976615728913102874968691",
+       "title": "Sam Forstag (D)",
+       "liquidity": 108296.479
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEMT1",
+    "event": "HOUSEMT1-26",
+    "title": "Will Republican win the House race for MT-1?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEMT1-26-R",
+       "title": "Will Republican win the House race for MT-1?",
+       "candidate": "Aaron Flint"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEMT1-26-D",
+       "title": "Will Democratic win the House race for MT-1?",
+       "candidate": "Sam Forstag"
+      }
+     ]
+    }
+   }
+  },
+  "Maine Governor": {
+   "office": "governor",
+   "state": "Maine",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57173",
+    "slug": "maine-governor-winner-2026",
+    "title": "Maine Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629425",
+       "token": "92845243966002494782242842696395378111295494684532387488276103452077216171518",
+       "title": "Hannah Pingree (D)",
+       "liquidity": 27231.0464
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629426",
+       "token": "77900872247159891045693614974240851672235710405168744753050508553885061962390",
+       "title": "Robert Charles (R)",
+       "liquidity": 46134.8216
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYME",
+    "event": "GOVPARTYME-26",
+    "title": "Will Rick Bennett (Independent) win the governorship in Maine",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "GOVPARTYME-26-RBEN",
+       "title": "Will Rick Bennett (Independent) win the governorship in Maine",
+       "candidate": "Rick Bennett"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "GOVPARTYME-26-R",
+       "title": "Will the Republican party win the governorship in Maine",
+       "candidate": "Robert Charles"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYME-26-D",
+       "title": "Will the Democratic party win the governorship in Maine",
+       "candidate": "Hannah Pingree"
+      }
+     ]
+    },
+    "volume": 105593.0
+   }
+  },
+  "Maine Senate": {
+   "office": "senate",
+   "state": "Maine",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57650",
+    "slug": "maine-senate-election-winner",
+    "title": "Maine Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630772",
+       "token": "7589880081658059374445882095611024032084645048848237404312287942463647821549",
+       "title": "Troy Jackson (D)",
+       "liquidity": 229236.8726
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630773",
+       "token": "2142948285506077695096498341598672159464223074468931276310105532825810210121",
+       "title": "Susan Collins (R)",
+       "liquidity": 302474.3887
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEME",
+    "event": "SENATEME-26",
+    "title": "Will Republicans win the Senate race in Maine?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEME-26-R",
+       "title": "Will Republicans win the Senate race in Maine?",
+       "candidate": "Susan Collins"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEME-26-D",
+       "title": "Will Democratics win the Senate race in Maine?",
+       "candidate": "Troy Jackson"
+      }
+     ]
+    },
+    "volume": 9641453.66
+   }
+  },
+  "Maryland Governor": {
+   "office": "governor",
+   "state": "Maryland",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57174",
+    "slug": "maryland-governor-winner-2026",
+    "title": "Maryland Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629438",
+       "token": "21509039698927424303190259436702262868147960450053769072201076877922760800234",
+       "title": "Wes Moore (D)",
+       "liquidity": 38159.29144
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629439",
+       "token": "99454680080858182975916786322594927636228275589135289499749895045005789315019",
+       "title": "Dan Cox (R)",
+       "liquidity": 44453.54533
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYMD",
+    "event": "GOVPARTYMD-26",
+    "title": "Will the Republican party win the governorship in Maryland",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYMD-26-R",
+       "title": "Will the Republican party win the governorship in Maryland",
+       "candidate": "Dan Cox"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYMD-26-D",
+       "title": "Will the Democratic party win the governorship in Maryland",
+       "candidate": "Wes Moore"
+      }
+     ]
+    },
+    "volume": 70439.46
+   }
+  },
+  "Massachusetts Governor": {
+   "office": "governor",
+   "state": "Massachusetts",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57175",
+    "slug": "massachusetts-governor-winner-2026",
+    "title": "Massachusetts Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629451",
+       "token": "86599393407315290835574565918707146460542680358932655202787183319230565551172",
+       "title": "Maura Healey (D)",
+       "liquidity": 44840.73141
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629452",
+       "token": "60883119277247470994582429550632811829505423471772740208057726618094988141160",
+       "title": "Michael Minogue (R)",
+       "liquidity": 61844.56696
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYMA",
+    "event": "GOVPARTYMA-26",
+    "title": "Will the Republican party win the governorship in Massachusetts",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYMA-26-R",
+       "title": "Will the Republican party win the governorship in Massachusetts",
+       "candidate": "Mike Minogue"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYMA-26-D",
+       "title": "Will the Democratic party win the governorship in Massachusetts",
+       "candidate": "Maura Healey"
+      }
+     ]
+    },
+    "volume": 1582338.82
+   }
+  },
+  "Massachusetts Senate": {
+   "office": "senate",
+   "state": "Massachusetts",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57655",
+    "slug": "massachusetts-senate-election-winner",
+    "title": "Massachusetts Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630790",
+       "token": "37806907368043161074949113436745462734936336037202698916361016094424427186209",
+       "title": "Ed Markey (D)",
+       "liquidity": 49314.1949
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630791",
+       "token": "94720102345103978732985991591541449349105398685307981352929740529082927790385",
+       "title": "John Deaton (R)",
+       "liquidity": 53901.16289
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEMA",
+    "event": "SENATEMA-26",
+    "title": "Will Republicans win the Senate race in Massachusetts?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEMA-26-R",
+       "title": "Will Republicans win the Senate race in Massachusetts?",
+       "candidate": "John Deaton"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEMA-26-D",
+       "title": "Will Democratics win the Senate race in Massachusetts?",
+       "candidate": "Ed Markey"
+      }
+     ]
+    },
+    "volume": 79367.36
+   }
+  },
+  "Michigan Governor": {
+   "office": "governor",
+   "state": "Michigan",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57176",
+    "slug": "michigan-governor-winner-2026",
+    "title": "Michigan Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629464",
+       "token": "63517706574758177502492185078056756527324898714284142778693046697324148388357",
+       "title": "Jocelyn Benson (D)",
+       "liquidity": 109704.90418
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629465",
+       "token": "3091929947863726371877226324959784580013579280794631063604653957812689085396",
+       "title": "John James (R)",
+       "liquidity": 104110.59826
+      }
+     ],
+     "I": [
+      {
+       "market_id": "629466",
+       "token": "34943144357771122375283559286014961426824813487508159555960762936802327664238",
+       "title": "Independent",
+       "liquidity": 24453.10538
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYMI",
+    "event": "GOVPARTYMI-26",
+    "title": "Will Mike Duggan (Independent) win the governorship in Michigan",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "GOVPARTYMI-26-MD",
+       "title": "Will Mike Duggan (Independent) win the governorship in Michigan",
+       "candidate": "Mike Duggan"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "GOVPARTYMI-26-R",
+       "title": "Will the Republican party win the governorship in Michigan",
+       "candidate": "John James"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYMI-26-D",
+       "title": "Will the Democratic party win the governorship in Michigan",
+       "candidate": "Jocelyn Benson"
+      }
+     ]
+    },
+    "volume": 479841.26
+   }
+  },
+  "Michigan Senate": {
+   "office": "senate",
+   "state": "Michigan",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57658",
+    "slug": "michigan-senate-election-winner",
+    "title": "Michigan Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630805",
+       "token": "71772627544132140586824126381855151743830987860593343955509593715269534710061",
+       "title": "Abdul El-Sayed (D)",
+       "liquidity": 192003.7297
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630806",
+       "token": "1046980875306043125128331871114794349002409233139736033870402475326170083426",
+       "title": "Mike Rogers (R)",
+       "liquidity": 216413.2002
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEMI",
+    "event": "SENATEMI-26",
+    "title": "Will Republicans win the Senate race in Michigan?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEMI-26-R",
+       "title": "Will Republicans win the Senate race in Michigan?",
+       "candidate": "Mike Rogers"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEMI-26-D",
+       "title": "Will Democratics win the Senate race in Michigan?",
+       "candidate": "Abdul El-Sayed"
+      }
+     ]
+    },
+    "volume": 8408568.04
+   }
+  },
+  "Minnesota Governor": {
+   "office": "governor",
+   "state": "Minnesota",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57177",
+    "slug": "minnesota-governor-winner-2026",
+    "title": "Minnesota Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629477",
+       "token": "9126148503694470083148381233969293708563386203943196700151133094426622508276",
+       "title": "Amy Klobuchar (D)",
+       "liquidity": 51410.8799
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629478",
+       "token": "52147423614804649302719056405435366546705837330765266472799012257146403501281",
+       "title": "Lisa Demuth (R)",
+       "liquidity": 53346.30908
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYMN",
+    "event": "GOVPARTYMN-26",
+    "title": "Will the Republican party win the governorship in Minnesota",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYMN-26-R",
+       "title": "Will the Republican party win the governorship in Minnesota",
+       "candidate": "Lisa Demuth"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYMN-26-D",
+       "title": "Will the Democratic party win the governorship in Minnesota",
+       "candidate": "Amy Klobuchar"
+      }
+     ]
+    },
+    "volume": 530230.95
+   }
+  },
+  "Minnesota Senate": {
+   "office": "senate",
+   "state": "Minnesota",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57659",
+    "slug": "minnesota-senate-election-winner",
+    "title": "Minnesota Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630818",
+       "token": "5210147086444382339849101722545511095151948730486562412029285471203011774407",
+       "title": "Peggy Flanagan (D)",
+       "liquidity": 85400.9772
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630819",
+       "token": "70179930004460104520571721963263381325865077807861641105900318902168490512539",
+       "title": "Michele Tafoya (R)",
+       "liquidity": 115766.1232
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEMN",
+    "event": "SENATEMN-26",
+    "title": "Will Republicans win the Senate race in Minnesota?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEMN-26-R",
+       "title": "Will Republicans win the Senate race in Minnesota?",
+       "candidate": "Michele Tafoya"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEMN-26-D",
+       "title": "Will Democratic (DFL)s win the Senate race in Minnesota?",
+       "candidate": "Peggy Flanagan"
+      }
+     ]
+    },
+    "volume": 3090405.8899999997
+   }
+  },
+  "Mississippi Senate": {
+   "office": "senate",
+   "state": "Mississippi",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57678",
+    "slug": "mississippi-senate-election-winner",
+    "title": "Mississippi Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "631017",
+       "token": "77001639760095266374534198365421436593389036687975321536722226607654949914567",
+       "title": "Scott Colom (D)",
+       "liquidity": 132037.821
+      }
+     ],
+     "R": [
+      {
+       "market_id": "631018",
+       "token": "36589074670521348842786325911391532620430247097981345860356484520500173888573",
+       "title": "Cindy Hyde-Smith (R)",
+       "liquidity": 102742.2602
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEMS",
+    "event": "SENATEMS-26",
+    "title": "Will Republicans win the Senate race in Mississippi?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEMS-26-R",
+       "title": "Will Republicans win the Senate race in Mississippi?",
+       "candidate": "Cindy Hyde-Smith"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEMS-26-D",
+       "title": "Will Democratics win the Senate race in Mississippi?",
+       "candidate": "Scott Colom"
+      }
+     ]
+    },
+    "volume": 655057.5
+   }
+  },
+  "Montana Senate": {
+   "office": "senate",
+   "state": "Montana",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57660",
+    "slug": "montana-senate-election-winner",
+    "title": "Montana Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630831",
+       "token": "88799262678230165893255813616837100962595819984760588859765042402182443138810",
+       "title": "Alani Bankhead (D)",
+       "liquidity": 52140.05568
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630832",
+       "token": "102325039069045369431277041414667266705633344716966967751024692805337688459829",
+       "title": "Kurt Alme (R) ",
+       "liquidity": 109807.0916
+      }
+     ],
+     "I": [
+      {
+       "market_id": "630833",
+       "token": "29340710087203628054916881063653310634997647642374537159652441277893390730162",
+       "title": "Independent",
+       "liquidity": 123910.00819
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEMT",
+    "event": "SENATEMT-26",
+    "title": "Will Independents win the Senate race in Montana?",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "SENATEMT-26-IND",
+       "title": "Will Independents win the Senate race in Montana?",
+       "candidate": "Seth Bodnar"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATEMT-26-R",
+       "title": "Will Republicans win the Senate race in Montana?",
+       "candidate": "Kurt Alme"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEMT-26-D",
+       "title": "Will Democratics win the Senate race in Montana?",
+       "candidate": "Alani Bankhead"
+      }
+     ]
+    },
+    "volume": 954545.49
+   }
+  },
+  "NE-02 House race": {
+   "office": "house",
+   "state": "Nebraska",
+   "district": 2,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106115",
+    "slug": "ne-02-house-election-winner",
+    "title": "NE-02 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942877",
+       "token": "9261962954796206285247745021195981577055668829876152281558354142057545087402",
+       "title": "Brinker Harding (R)",
+       "liquidity": 49361.10528
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942878",
+       "token": "83966667308824872880342632752673759552233526664290166226784097408878282862076",
+       "title": "Denise Powell (D)",
+       "liquidity": 16406.1271
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSENE2",
+    "event": "HOUSENE2-26",
+    "title": "Will Republican win the House race for NE-2?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSENE2-26-R",
+       "title": "Will Republican win the House race for NE-2?",
+       "candidate": "Brinker Harding"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSENE2-26-D",
+       "title": "Will Democratic win the House race for NE-2?",
+       "candidate": "Denise Powell"
+      }
+     ]
+    }
+   }
+  },
+  "NH-01 House race": {
+   "office": "house",
+   "state": "New Hampshire",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106119",
+    "slug": "nh-01-house-election-winner",
+    "title": "NH-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942909",
+       "token": "91186816975424134991471599978287903711550131664584931108307233067509874308550",
+       "title": "Anthony DiLorenzo (R)",
+       "liquidity": 44682.40253
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942910",
+       "token": "15841973896294397863780283211777886833063131427675236235397936182214462263761",
+       "title": "Stefany Shaheen (D)",
+       "liquidity": 23452.93524
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSENH1",
+    "event": "HOUSENH1-26",
+    "title": "Will a Republican win the House race for NH-1?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSENH1-26-R",
+       "title": "Will a Republican win the House race for NH-1?",
+       "candidate": "Anthony DiLorenzo"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSENH1-26-D",
+       "title": "Will a Democrat win the House race for NH-1?",
+       "candidate": "Stefany Shaheen"
+      }
+     ]
+    }
+   }
+  },
+  "NJ-07 House race": {
+   "office": "house",
+   "state": "New Jersey",
+   "district": 7,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106135",
+    "slug": "nj-07-house-election-winner",
+    "title": "NJ-07 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "942978",
+       "token": "89007958027779859965143280233607680085743023530197549682171151954048549979817",
+       "title": "Thomas Kean Jr. (R)",
+       "liquidity": 58164.7522
+      }
+     ],
+     "D": [
+      {
+       "market_id": "942979",
+       "token": "11150104041135923402729603235169264788695551846877266424704836556138704136153",
+       "title": "Rebecca Bennett (D)",
+       "liquidity": 43032.5737
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSENJ7",
+    "event": "HOUSENJ7-26",
+    "title": "Will Republican win the House race for NJ-7?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSENJ7-26-R",
+       "title": "Will Republican win the House race for NJ-7?",
+       "candidate": "Thomas Kean Jr."
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSENJ7-26-D",
+       "title": "Will Democratic win the House race for NJ-7?",
+       "candidate": "Rebecca Bennett"
+      }
+     ]
+    }
+   }
+  },
+  "NY-13 House race": {
+   "office": "house",
+   "state": "New York",
+   "district": 13,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191567",
+    "slug": "ny-13-house-election-winner",
+    "title": "NY-13 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1284298",
+       "token": "81557957224614719909606514321678071196063005584137638675672000952860345431216",
+       "title": "Jomo Williams (R)",
+       "liquidity": 26210.39824
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1284299",
+       "token": "58170582826434624369183137827470621458750832571934268895241793899476487858088",
+       "title": "Darializa Avila Chevalier (D)",
+       "liquidity": 18024.14572
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-NY13-26",
+    "title": "Will Republican win the House race for NY-13?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-NY13-26-R",
+       "title": "Will Republican win the House race for NY-13?",
+       "candidate": "Manual \"Jomo\" Williams"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-NY13-26-D",
+       "title": "Will Democratic win the House race for NY-13?",
+       "candidate": "Darializa Avila Chevalier"
+      }
+     ]
+    }
+   }
+  },
+  "NY-17 House race": {
+   "office": "house",
+   "state": "New York",
+   "district": 17,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106170",
+    "slug": "ny-17-house-election-winner",
+    "title": "NY-17 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "943440",
+       "token": "100483443247041044563874634953278400972311005965822139457018312114391318359850",
+       "title": "Mike Lawler (R)",
+       "liquidity": 92725.2829
+      }
+     ],
+     "D": [
+      {
+       "market_id": "943441",
+       "token": "51139697479054469944236132595348770797766976112763062697989474877845630491882",
+       "title": "Cait Conley (D)",
+       "liquidity": 93410.1321
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSENY17",
+    "event": "HOUSENY17-26",
+    "title": "Will Republican win the House race for NY-17?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSENY17-26-R",
+       "title": "Will Republican win the House race for NY-17?",
+       "candidate": "Mike Lawler"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSENY17-26-D",
+       "title": "Will Democratic win the House race for NY-17?",
+       "candidate": "Cait Conley"
+      }
+     ]
+    }
+   }
+  },
+  "Nebraska Governor": {
+   "office": "governor",
+   "state": "Nebraska",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57178",
+    "slug": "nebraska-governor-winner-2026",
+    "title": "Nebraska Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629490",
+       "token": "3466069051818884243073756614952529401222377791973010490050674378116587529746",
+       "title": "Lynne Walz (D)",
+       "liquidity": 66116.7763
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629491",
+       "token": "73030731922944118546035998309915164095890033874433358499266850532352206183824",
+       "title": "Jim Pillen (R)",
+       "liquidity": 43060.2555
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYNE",
+    "event": "GOVPARTYNE-26",
+    "title": "Will the Republican party win the governorship in Nebraska",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYNE-26-R",
+       "title": "Will the Republican party win the governorship in Nebraska",
+       "candidate": "Jim Pillen"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYNE-26-D",
+       "title": "Will the Democratic party win the governorship in Nebraska",
+       "candidate": "Lynne Walz"
+      }
+     ]
+    },
+    "volume": 69074.63
+   }
+  },
+  "Nebraska Senate": {
+   "office": "senate",
+   "state": "Nebraska",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "59204",
+    "slug": "nebraska-senate-election-winner",
+    "title": "Nebraska Senate Election Winner  ",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "634891",
+       "token": "55269299240433422758148290868724152324629587438760275683104577693660207425448",
+       "title": "Democrat",
+       "liquidity": 59595.34094
+      }
+     ],
+     "R": [
+      {
+       "market_id": "634892",
+       "token": "92576281548134350814800877416860562553699794074017301653635964206220838638047",
+       "title": "Pete Ricketts (R)",
+       "liquidity": 335782.4697
+      }
+     ],
+     "I": [
+      {
+       "market_id": "634893",
+       "token": "47975366268282823322598946778919483335780002591367838795894307024076579116518",
+       "title": "Independent",
+       "liquidity": 301568.9838
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATENE",
+    "event": "SENATENE-26",
+    "title": "Will Dan Osborn (as an independent)s win the Senate race in Nebraska?",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "SENATENE-26-DOSB",
+       "title": "Will Dan Osborn (as an independent)s win the Senate race in Nebraska?",
+       "candidate": "Dan Osborn"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATENE-26-R",
+       "title": "Will Republicans win the Senate race in Nebraska?",
+       "candidate": "Pete Ricketts"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATENE-26-D",
+       "title": "Will Democratics win the Senate race in Nebraska?",
+       "candidate": "Cindy Burbank"
+      }
+     ]
+    },
+    "volume": 2693901.92
+   }
+  },
+  "Nevada Governor": {
+   "office": "governor",
+   "state": "Nevada",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57181",
+    "slug": "nevada-governor-winner-2026",
+    "title": "Nevada Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629505",
+       "token": "1246864710804983890692377994891598401616546411512113588399830364959833951829",
+       "title": "Aaron Ford (D)",
+       "liquidity": 188851.3495
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629506",
+       "token": "26514162544090965098284473937422427465088569867873952479707540387314217381282",
+       "title": "Joe Lombardo (R)",
+       "liquidity": 175160.6031
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYNV",
+    "event": "GOVPARTYNV-26",
+    "title": "Will the Republican party win the governorship in Nevada",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYNV-26-R",
+       "title": "Will the Republican party win the governorship in Nevada",
+       "candidate": "Joe Lombardo"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYNV-26-D",
+       "title": "Will the Democratic party win the governorship in Nevada",
+       "candidate": "Aaron Ford"
+      }
+     ]
+    },
+    "volume": 1759035.66
+   }
+  },
+  "New Hampshire Governor": {
+   "office": "governor",
+   "state": "New Hampshire",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57182",
+    "slug": "new-hampshire-governor-winner-2026",
+    "title": "New Hampshire Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629518",
+       "token": "50014042446564445111498439180144732017863294969428914194102372141019045896702",
+       "title": "Cinde Warmington (D)",
+       "liquidity": 44548.55192
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629519",
+       "token": "74721757099502856629978429446702729437619614092592091000501653336065671742582",
+       "title": "Kelly Ayotte (R)",
+       "liquidity": 113035.21882
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYNH",
+    "event": "GOVPARTYNH-28",
+    "title": "Will the Republican party win the governorship in New Hampshire",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYNH-28-R",
+       "title": "Will the Republican party win the governorship in New Hampshire",
+       "candidate": "Kelly Ayotte"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYNH-28-D",
+       "title": "Will the Democratic party win the governorship in New Hampshire",
+       "candidate": "Cinde Warmington"
+      }
+     ]
+    },
+    "volume": 213072.56
+   }
+  },
+  "New Hampshire Senate": {
+   "office": "senate",
+   "state": "New Hampshire",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57661",
+    "slug": "new-hampshire-senate-election-winner",
+    "title": "New Hampshire Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630844",
+       "token": "82410058691149830741200014405570918770267839390767234397030380747995715352939",
+       "title": "Chris Pappas (D)",
+       "liquidity": 95400.1553
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630845",
+       "token": "62227089537100115269143206481757249285124282589590263790284791475153705872216",
+       "title": "John E. Sununu (R)",
+       "liquidity": 111242.8921
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATENH",
+    "event": "SENATENH-26",
+    "title": "Will Republicans win the Senate race in New Hampshire?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATENH-26-R",
+       "title": "Will Republicans win the Senate race in New Hampshire?",
+       "candidate": "John E. Sununu"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATENH-26-D",
+       "title": "Will Democratics win the Senate race in New Hampshire?",
+       "candidate": "Chris Pappas"
+      }
+     ]
+    },
+    "volume": 2234071.22
+   }
+  },
+  "New Jersey Senate": {
+   "office": "senate",
+   "state": "New Jersey",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57662",
+    "slug": "new-jersey-senate-election-winner",
+    "title": "New Jersey Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630857",
+       "token": "57191420250913616150846676905047388827581537310894242160546701872955141155912",
+       "title": "Cory Booker (D)",
+       "liquidity": 34804.92715
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630858",
+       "token": "80469582416211324277551196813384851504222711072116234686695188046152640511225",
+       "title": "Justin Murphy (R)",
+       "liquidity": 58995.94006
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATENJ",
+    "event": "SENATENJ-26",
+    "title": "Will Democratics win the Senate race in New Jersey?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATENJ-26-D",
+       "title": "Will Democratics win the Senate race in New Jersey?",
+       "candidate": "Cory Booker"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATENJ-26-R",
+       "title": "Will Republicans win the Senate race in New Jersey?",
+       "candidate": "Justin Murphy"
+      }
+     ]
+    },
+    "volume": 200605.17
+   }
+  },
+  "New Mexico Governor": {
+   "office": "governor",
+   "state": "New Mexico",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57183",
+    "slug": "new-mexico-governor-winner-2026",
+    "title": "New Mexico Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629531",
+       "token": "17781069937970314001472355582427331102577624490515546410398313363226785264562",
+       "title": "Deb Haaland (D)",
+       "liquidity": 52755.99526
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629532",
+       "token": "66486026915087812107390926299428531209332603871609345502520740675575639289776",
+       "title": "Gregg Hull (R)",
+       "liquidity": 56031.3131
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYNM",
+    "event": "GOVPARTYNM-26",
+    "title": "Will the Republican party win the governorship in New Mexico",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYNM-26-R",
+       "title": "Will the Republican party win the governorship in New Mexico",
+       "candidate": "Greggory D. Hull"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYNM-26-D",
+       "title": "Will the Democratic party win the governorship in New Mexico",
+       "candidate": "Deb Haaland"
+      }
+     ]
+    },
+    "volume": 167683.41
+   }
+  },
+  "New Mexico Senate": {
+   "office": "senate",
+   "state": "New Mexico",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57663",
+    "slug": "new-mexico-senate-election-winner",
+    "title": "New Mexico Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630870",
+       "token": "86827974851753312617441915824618617861250657564707166327567168877893121374182",
+       "title": "Ben Ray Luj\u00e1n (D)",
+       "liquidity": 21315.4577
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630871",
+       "token": "47410821361368319377218522333433306313753572972827491807608363074924233552004",
+       "title": "Larry Marker (R)",
+       "liquidity": 54774.51413
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATENM",
+    "event": "SENATENM-26",
+    "title": "Will Republicans win the Senate race in New Mexico?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATENM-26-R",
+       "title": "Will Republicans win the Senate race in New Mexico?",
+       "candidate": "Larry E. Marker"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATENM-26-D",
+       "title": "Will Democratics win the Senate race in New Mexico?",
+       "candidate": "Ben Ray Luj\u00e1n"
+      }
+     ]
+    },
+    "volume": 112472.52
+   }
+  },
+  "New York Governor": {
+   "office": "governor",
+   "state": "New York",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57184",
+    "slug": "new-york-governor-winner-2026",
+    "title": "New York Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629544",
+       "token": "64050273355694113671090110638685043795558853994186493795797238541534244584786",
+       "title": "Kathy Hochul (D)",
+       "liquidity": 67301.84254
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629545",
+       "token": "108106288970534575307495623455701128869187166289634633189375113923142364674394",
+       "title": "Bruce Blakeman (R)",
+       "liquidity": 65810.72774
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYNY",
+    "event": "GOVPARTYNY-26",
+    "title": "Will the Republican party win the governorship in New York",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYNY-26-R",
+       "title": "Will the Republican party win the governorship in New York",
+       "candidate": "Bruce Blakeman"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYNY-26-D",
+       "title": "Will the Democratic party win the governorship in New York",
+       "candidate": "Kathy Hochul"
+      }
+     ]
+    },
+    "volume": 4191093.6799999997
+   }
+  },
+  "North Carolina Senate": {
+   "office": "senate",
+   "state": "North Carolina",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57664",
+    "slug": "north-carolina-senate-election-winner",
+    "title": "North Carolina Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630883",
+       "token": "107151098936186723859677628536733880558851060002514795735761427447010628440047",
+       "title": "Roy Cooper (D)",
+       "liquidity": 89123.92622
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630884",
+       "token": "62831517509825405761763142539845746280269675872170259538293560849475982647892",
+       "title": "Michael Whatley (R)",
+       "liquidity": 66403.48879
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATENC",
+    "event": "SENATENC-26",
+    "title": "Will Republicans win the Senate race in North Carolina?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATENC-26-R",
+       "title": "Will Republicans win the Senate race in North Carolina?",
+       "candidate": "Michael Whatley"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATENC-26-D",
+       "title": "Will Democratics win the Senate race in North Carolina?",
+       "candidate": "Roy Cooper"
+      }
+     ]
+    },
+    "volume": 3567958.91
+   }
+  },
+  "Oklahoma Governor": {
+   "office": "governor",
+   "state": "Oklahoma",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57186",
+    "slug": "oklahoma-governor-winner-2026",
+    "title": "Oklahoma Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629570",
+       "token": "37700214927702560862325287464231700075479667077774217635210792305464305010407",
+       "title": "Cyndi Munson (D)",
+       "liquidity": 63242.5134
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629571",
+       "token": "12195532376431728872322429427491005809800415403259444414908025975252692275196",
+       "title": "Mike Mazzei (R)",
+       "liquidity": 45768.3443
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYOK",
+    "event": "GOVPARTYOK-26",
+    "title": "Will the Republican party win the governorship in Oklahoma",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYOK-26-R",
+       "title": "Will the Republican party win the governorship in Oklahoma",
+       "candidate": "Mike Mazzei"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYOK-26-D",
+       "title": "Will the Democratic party win the governorship in Oklahoma",
+       "candidate": "Cyndi Munson"
+      }
+     ]
+    },
+    "volume": 274222.8
+   }
+  },
+  "Oklahoma Senate": {
+   "office": "senate",
+   "state": "Oklahoma",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57679",
+    "slug": "oklahoma-senate-election-winner",
+    "title": "Oklahoma Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "631030",
+       "token": "112281295057865404870041957222562306206517476142557838682690649172966968734671",
+       "title": "N\u2019Kiyla \u201cJasmine\u201d Thomas (D)",
+       "liquidity": 39954.6059
+      }
+     ],
+     "R": [
+      {
+       "market_id": "631031",
+       "token": "83554519035704522672644117478876258278018394754028161940314277335853541553559",
+       "title": "Kevin Hern (R)",
+       "liquidity": 27972.25769
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEOK",
+    "event": "SENATEOK-26",
+    "title": "Will Democratics win the Senate race in Oklahoma?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATEOK-26-D",
+       "title": "Will Democratics win the Senate race in Oklahoma?",
+       "candidate": "N\u2019Kiyla Thomas"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATEOK-26-R",
+       "title": "Will Republicans win the Senate race in Oklahoma?",
+       "candidate": "Kevin Hern"
+      }
+     ]
+    },
+    "volume": 48442.72
+   }
+  },
+  "Oregon Governor": {
+   "office": "governor",
+   "state": "Oregon",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57187",
+    "slug": "oregon-governor-winner-2026",
+    "title": "Oregon Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629583",
+       "token": "9755787435930070640870536823763281543938387827225853124824813626465365556107",
+       "title": "Tina Kotek (D)",
+       "liquidity": 70689.3404
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629584",
+       "token": "60638893393471159707288518099941698438888451383700859041754575565737488871199",
+       "title": "Christine Drazan (R)",
+       "liquidity": 88390.1849
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYOR",
+    "event": "GOVPARTYOR-26",
+    "title": "Will the Republican party win the governorship in Oregon",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYOR-26-R",
+       "title": "Will the Republican party win the governorship in Oregon",
+       "candidate": "Christine Drazan"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYOR-26-D",
+       "title": "Will the Democratic party win the governorship in Oregon",
+       "candidate": "Tina Kotek"
+      }
+     ]
+    },
+    "volume": 397829.45999999996
+   }
+  },
+  "Oregon Senate": {
+   "office": "senate",
+   "state": "Oregon",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57667",
+    "slug": "oregon-senate-election-winner",
+    "title": "Oregon Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630898",
+       "token": "2092757373218904768373533040846280132805161861393140519418262456097465213332",
+       "title": "Jeff Merkley (D)",
+       "liquidity": 40198.53813
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630899",
+       "token": "79489800771199803792838465972773376352837733018768490302999836500381020065853",
+       "title": "David Brock Smith (R)",
+       "liquidity": 54115.06626
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEOR",
+    "event": "SENATEOR-26",
+    "title": "Will Republicans win the Senate race in Oregon?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEOR-26-R",
+       "title": "Will Republicans win the Senate race in Oregon?",
+       "candidate": "David Brock Smith"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEOR-26-D",
+       "title": "Will Democratics win the Senate race in Oregon?",
+       "candidate": "Jeff Merkley"
+      }
+     ]
+    },
+    "volume": 14849.720000000001
+   }
+  },
+  "PA-01 House race": {
+   "office": "house",
+   "state": "Pennsylvania",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106186",
+    "slug": "pa-01-house-election-winner",
+    "title": "PA-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "943748",
+       "token": "108230243496498344855407302843123554399616537057761543327780472018667198839068",
+       "title": "Brian Fitzpatrick (R)",
+       "liquidity": 91217.0896
+      }
+     ],
+     "D": [
+      {
+       "market_id": "943749",
+       "token": "90438836256571410927299008367228796312209722771624666597034907143954367060240",
+       "title": "Bob Harvie (D)",
+       "liquidity": 98645.8148
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEPA1",
+    "event": "HOUSEPA1-26",
+    "title": "Will Republican win the House race for PA-1?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEPA1-26-R",
+       "title": "Will Republican win the House race for PA-1?",
+       "candidate": "Brian Fitzpatrick"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEPA1-26-D",
+       "title": "Will Democratic win the House race for PA-1?",
+       "candidate": "Bob Harvie"
+      }
+     ]
+    }
+   }
+  },
+  "PA-07 House race": {
+   "office": "house",
+   "state": "Pennsylvania",
+   "district": 7,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106187",
+    "slug": "pa-07-house-election-winner",
+    "title": "PA-07 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "943796",
+       "token": "56412855186822728853119072474894085602768054645914780515455268260878947887549",
+       "title": "Ryan Mackenzie (R)",
+       "liquidity": 62944.4884
+      }
+     ],
+     "D": [
+      {
+       "market_id": "943797",
+       "token": "37713776886536763857380242322222367371582682723176215910322979366716585040762",
+       "title": "Bob Brooks (D)",
+       "liquidity": 47326.749
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEPA7",
+    "event": "HOUSEPA7-26",
+    "title": "Will Republican win the House race for PA-7?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEPA7-26-R",
+       "title": "Will Republican win the House race for PA-7?",
+       "candidate": "Ryan Mackenzie"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEPA7-26-D",
+       "title": "Will Democratic win the House race for PA-7?",
+       "candidate": "Bob Brooks"
+      }
+     ]
+    }
+   }
+  },
+  "PA-08 House race": {
+   "office": "house",
+   "state": "Pennsylvania",
+   "district": 8,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106211",
+    "slug": "pa-08-house-election-winner",
+    "title": "PA-08 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "943942",
+       "token": "57072421827554294140721361338343029545070199210958375988932007732626623305617",
+       "title": "Rob Bresnahan (R)",
+       "liquidity": 91875.0575
+      }
+     ],
+     "D": [
+      {
+       "market_id": "943943",
+       "token": "91391435832155617612019982139435697661029161851437556799916148343508709382987",
+       "title": "Paige Cognetti (D)",
+       "liquidity": 75734.4452
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEPA8",
+    "event": "HOUSEPA8-26",
+    "title": "Will Republican win the House race for PA-8?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEPA8-26-R",
+       "title": "Will Republican win the House race for PA-8?",
+       "candidate": "Rob Bresnahan"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEPA8-26-D",
+       "title": "Will Democratic win the House race for PA-8?",
+       "candidate": "Paige Cognetti"
+      }
+     ]
+    }
+   }
+  },
+  "PA-10 House race": {
+   "office": "house",
+   "state": "Pennsylvania",
+   "district": 10,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106216",
+    "slug": "pa-10-house-election-winner",
+    "title": "PA-10 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "943954",
+       "token": "103572160941197360900419917573086716527751112441366358755475598989264153655130",
+       "title": "Scott Perry (R)",
+       "liquidity": 62986.5157
+      }
+     ],
+     "D": [
+      {
+       "market_id": "943955",
+       "token": "87725551185270618291722253233951821932371187994043126950008311468794742299797",
+       "title": "Janelle Stelson (D)",
+       "liquidity": 56312.7074
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEPA10",
+    "event": "HOUSEPA10-26",
+    "title": "Will Republican win the House race for PA-10?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEPA10-26-R",
+       "title": "Will Republican win the House race for PA-10?",
+       "candidate": "Scott Perry"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEPA10-26-D",
+       "title": "Will Democratic win the House race for PA-10?",
+       "candidate": "Janelle Stelson"
+      }
+     ]
+    }
+   }
+  },
+  "Pennsylvania Governor": {
+   "office": "governor",
+   "state": "Pennsylvania",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57206",
+    "slug": "pennsylvania-governor-winner-2026",
+    "title": "Pennsylvania Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629614",
+       "token": "86158564038726526008163887440654010269502827272776903587995739265573029112945",
+       "title": "Josh Shapiro (D)",
+       "liquidity": 42089.22307
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629615",
+       "token": "5688801435889428424829669547673250506620304454224290559333533905846390372394",
+       "title": "Stacy Garrity (R)",
+       "liquidity": 48989.81311
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYPA",
+    "event": "GOVPARTYPA-26",
+    "title": "Will the Republican party win the governorship in Pennsylvania",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYPA-26-R",
+       "title": "Will the Republican party win the governorship in Pennsylvania",
+       "candidate": "Stacy Garrity"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYPA-26-D",
+       "title": "Will the Democratic party win the governorship in Pennsylvania",
+       "candidate": "Josh Shapiro"
+      }
+     ]
+    },
+    "volume": 940419.4400000001
+   }
+  },
+  "Rhode Island Governor": {
+   "office": "governor",
+   "state": "Rhode Island",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57207",
+    "slug": "rhode-island-governor-winner-2026",
+    "title": "Rhode Island Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629627",
+       "token": "12963869833838696349134591178892586509546549676681530057691780490969939726649",
+       "title": "Helena Foulkes (D)",
+       "liquidity": 28895.11751
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629628",
+       "token": "102532646565376609462398061495436415751549869365588135784659237547896983513156",
+       "title": "Republican",
+       "liquidity": 34373.49763
+      }
+     ],
+     "I": [
+      {
+       "market_id": "629629",
+       "token": "13165388174900569619328636459480727052834519645059869980549561071064022087971",
+       "title": "Independent",
+       "liquidity": 30376.07134
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYRI",
+    "event": "GOVPARTYRI-26",
+    "title": "Will Ken Block (Independent) win the governorship in Rhode Island",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "GOVPARTYRI-26-KBLO",
+       "title": "Will Ken Block (Independent) win the governorship in Rhode Island",
+       "candidate": "Ken Block"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "GOVPARTYRI-26-R",
+       "title": "Will the Republican party win the governorship in Rhode Island",
+       "candidate": "Aaron Guckian"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYRI-26-D",
+       "title": "Will the Democratic party win the governorship in Rhode Island",
+       "candidate": "Helena Foulkes"
+      }
+     ]
+    },
+    "volume": 82908.83
+   }
+  },
+  "Rhode Island Senate": {
+   "office": "senate",
+   "state": "Rhode Island",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57668",
+    "slug": "rhode-island-senate-election-winner",
+    "title": "Rhode Island Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630911",
+       "token": "77004273724753899183699441849597881417275931290950171679615354396048734034984",
+       "title": "Jack Reed (D)",
+       "liquidity": 31634.77534
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630912",
+       "token": "18128207363125529330540526475108389147728645885887417700651189282375630645842",
+       "title": "Raymond McKay (R)",
+       "liquidity": 48998.56426
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATERI",
+    "event": "SENATERI-26",
+    "title": "Will Democratics win the Senate race in Rhode Island?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATERI-26-D",
+       "title": "Will Democratics win the Senate race in Rhode Island?",
+       "candidate": "Jack Reed"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATERI-26-R",
+       "title": "Will Republicans win the Senate race in Rhode Island?",
+       "candidate": "Raymond McKay"
+      }
+     ]
+    },
+    "volume": 39731.82
+   }
+  },
+  "SC-01 House race": {
+   "office": "house",
+   "state": "South Carolina",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191617",
+    "slug": "sc-01-house-election-winner",
+    "title": "SC-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1284671",
+       "token": "9923678446010680223075564519648906123468834936314053947915034634742964733395",
+       "title": "Jenny Costa Honeycutt (R)",
+       "liquidity": 87766.1023
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1284672",
+       "token": "85565449085981219626125045806096417728054675797071084365546294832037886206869",
+       "title": "Nancy Lacore (D)",
+       "liquidity": 98933.6591
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-SC01-26",
+    "title": "Will Republican win the House race for SC-01?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-SC01-26-R",
+       "title": "Will Republican win the House race for SC-01?",
+       "candidate": "Jenny Costa Honeycutt"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-SC01-26-D",
+       "title": "Will Democratic win the House race for SC-01?",
+       "candidate": "Nancy S. Lacore"
+      }
+     ]
+    }
+   }
+  },
+  "South Carolina Governor": {
+   "office": "governor",
+   "state": "South Carolina",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57208",
+    "slug": "south-carolina-governor-winner-2026",
+    "title": "South Carolina Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629640",
+       "token": "69673263487139231624315897585768201230841320475352635832819992690850228911127",
+       "title": "Jermaine Johnson (D)",
+       "liquidity": 56216.25714
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629641",
+       "token": "115258259561547414610995893322363332894307320697384633557391293684664191320185",
+       "title": "Alan Wilson (R)",
+       "liquidity": 43703.503
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYSC",
+    "event": "GOVPARTYSC-26",
+    "title": "Will the Republican party win the governorship in South Carolina",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYSC-26-R",
+       "title": "Will the Republican party win the governorship in South Carolina",
+       "candidate": "Alan Wilson"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYSC-26-D",
+       "title": "Will the Democratic party win the governorship in South Carolina",
+       "candidate": "Jermaine Johnson"
+      }
+     ]
+    },
+    "volume": 42512.5
+   }
+  },
+  "South Carolina Senate": {
+   "office": "senate",
+   "state": "South Carolina",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57669",
+    "slug": "south-carolina-senate-election-winner",
+    "title": "South Carolina Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630924",
+       "token": "30718966535311015751929217398361750334834655110246828806892843311659716192347",
+       "title": "Annie Andrews (D)",
+       "liquidity": 170823.1874
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630925",
+       "token": "84368524152268016512433556151474175385160499638069024812438264090070245734708",
+       "title": "Darline Graham Nordone (R)",
+       "liquidity": 126936.4921
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATESC",
+    "event": "SENATESC-26",
+    "title": "Will Republicans win the Senate race in South Carolina?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATESC-26-R",
+       "title": "Will Republicans win the Senate race in South Carolina?",
+       "candidate": "Darline Graham"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATESC-26-D",
+       "title": "Will Democratics win the Senate race in South Carolina?",
+       "candidate": "Annie Andrews"
+      }
+     ]
+    },
+    "volume": 3966165.21
+   }
+  },
+  "South Dakota Governor": {
+   "office": "governor",
+   "state": "South Dakota",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57209",
+    "slug": "south-dakota-governor-winner-2026",
+    "title": "South Dakota Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629653",
+       "token": "19857809653204352084235953967001149759321806996646353766198011041287290557051",
+       "title": "Dan Ahlers (D)",
+       "liquidity": 43194.59128
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629654",
+       "token": "33837211479232375079024923304907620849682048653904904303440832993092201214603",
+       "title": "Larry Rhoden (R)",
+       "liquidity": 27044.57755
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYSD",
+    "event": "GOVPARTYSD-26",
+    "title": "Will the Republican party win the governorship in South Dakota",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYSD-26-R",
+       "title": "Will the Republican party win the governorship in South Dakota",
+       "candidate": "Larry Rhoden"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYSD-26-D",
+       "title": "Will the Democratic party win the governorship in South Dakota",
+       "candidate": "Dan Ahlers"
+      }
+     ]
+    },
+    "volume": 9952.17
+   }
+  },
+  "South Dakota Senate": {
+   "office": "senate",
+   "state": "South Dakota",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57670",
+    "slug": "south-dakota-senate-election-winner",
+    "title": "South Dakota Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630937",
+       "token": "67967023811721834738685695249992484419619114809767608640505747182577663027691",
+       "title": "Democrat",
+       "liquidity": 42706.43485
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630938",
+       "token": "90757273431062483956880101601137522271949785755347720675502304224330457712154",
+       "title": "Mike Rounds (R)",
+       "liquidity": 46601.07616
+      }
+     ],
+     "I": [
+      {
+       "market_id": "630939",
+       "token": "85091920580146708593441393469155645206377351164316133922062262386625039242645",
+       "title": "Brian Bengs (I)",
+       "liquidity": 52070.97722
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATESD",
+    "event": "SENATESD-26",
+    "title": "Will Brian Bengss win the Senate race in South Dakota?",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "SENATESD-26-BBEN",
+       "title": "Will Brian Bengss win the Senate race in South Dakota?",
+       "candidate": "Brian Bengs"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATESD-26-R",
+       "title": "Will Republicans win the Senate race in South Dakota?",
+       "candidate": "Mike Rounds"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATESD-26-D",
+       "title": "Will Democratics win the Senate race in South Dakota?",
+       "candidate": "Julian Beaudion"
+      }
+     ]
+    },
+    "volume": 420821.91
+   }
+  },
+  "TN-05 House race": {
+   "office": "house",
+   "state": "Tennessee",
+   "district": 5,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191629",
+    "slug": "tn-05-house-election-winner",
+    "title": "TN-05 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1284767",
+       "token": "70611387410738959528084339484893630361746409691183277603893453160832832415748",
+       "title": "Charlie Hatcher (R)",
+       "liquidity": 19852.8584
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1284768",
+       "token": "21093900327085732156538279868500731871043932639237011371281062480462349465304",
+       "title": "Chaz Molder (D)",
+       "liquidity": 32373.41562
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-TN05-26",
+    "title": "Will Republican win the House race for TN-05?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-TN05-26-R",
+       "title": "Will Republican win the House race for TN-05?",
+       "candidate": "Charlie Hatcher"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-TN05-26-D",
+       "title": "Will Democratic win the House race for TN-05?",
+       "candidate": "Chaz Molder"
+      }
+     ]
+    }
+   }
+  },
+  "TX-15 House race": {
+   "office": "house",
+   "state": "Texas",
+   "district": 15,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106219",
+    "slug": "tx-15-house-election-winner",
+    "title": "TX-15 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "944199",
+       "token": "288881405005644701938669382130096221659404307173045178355284864479406728774",
+       "title": "Monica De La Cruz (R)",
+       "liquidity": 73306.3738
+      }
+     ],
+     "D": [
+      {
+       "market_id": "944201",
+       "token": "6584875983046678011286869107197719818123093254495444235544680527373303971994",
+       "title": "Bobby Pulido (D)",
+       "liquidity": 54811.3021
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSETX15",
+    "event": "HOUSETX15-26",
+    "title": "Will Republican win the House race for TX-15?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSETX15-26-R",
+       "title": "Will Republican win the House race for TX-15?",
+       "candidate": "Monica De La Cruz"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSETX15-26-D",
+       "title": "Will Democratic win the House race for TX-15?",
+       "candidate": "Bobby Pulido"
+      }
+     ]
+    }
+   }
+  },
+  "TX-23 House race": {
+   "office": "house",
+   "state": "Texas",
+   "district": 23,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191653",
+    "slug": "tx-23-house-election-winner",
+    "title": "TX-23 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1284959",
+       "token": "55410211684588113064622608223269234944992958173935625527924582089831994856267",
+       "title": "Brandon Herrera (R)",
+       "liquidity": 103855.539
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1284960",
+       "token": "61226688777298855109760287075145560866932162430262148603800321887784593630496",
+       "title": "Katy Padilla Stout (D)",
+       "liquidity": 99192.5433
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-TX23-26",
+    "title": "Will Republican win the House race for TX-23?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-TX23-26-R",
+       "title": "Will Republican win the House race for TX-23?",
+       "candidate": "Brandon Herrera"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-TX23-26-D",
+       "title": "Will Democratic win the House race for TX-23?",
+       "candidate": "Katy Padilla Stout"
+      }
+     ]
+    }
+   }
+  },
+  "TX-28 House race": {
+   "office": "house",
+   "state": "Texas",
+   "district": 28,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106221",
+    "slug": "tx-28-house-election-winner",
+    "title": "TX-28 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "944221",
+       "token": "102134576754598286649546885868416989707545637875943269439533353198498871476278",
+       "title": "Tano Tijerina (R)",
+       "liquidity": 56654.6901
+      }
+     ],
+     "D": [
+      {
+       "market_id": "944222",
+       "token": "84241107374483193244606511118129186494443849681135554558545774792234903960353",
+       "title": "Henry Cuellar (D)",
+       "liquidity": 44447.8098
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSETX28",
+    "event": "HOUSETX28-26",
+    "title": "Will Republican win the House race for TX-28?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSETX28-26-R",
+       "title": "Will Republican win the House race for TX-28?",
+       "candidate": "Tano Tijerina"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSETX28-26-D",
+       "title": "Will Democratic win the House race for TX-28?",
+       "candidate": "Henry Cuellar"
+      }
+     ]
+    }
+   }
+  },
+  "Tennessee Governor": {
+   "office": "governor",
+   "state": "Tennessee",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57210",
+    "slug": "tennessee-governor-winner-2026",
+    "title": "Tennessee Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629666",
+       "token": "42092635016892213098098431597314233695276464574605657188222427223673881775927",
+       "title": "Jerri Green (D)",
+       "liquidity": 54179.22797
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629667",
+       "token": "24326213014906491852819643583064878883456155870415421965354259617491710449915",
+       "title": "Marsha Blackburn (R)",
+       "liquidity": 40994.79273
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYTN",
+    "event": "GOVPARTYTN-26",
+    "title": "Will David Hatley (Independent) win the governorship in Tennessee",
+    "verified": true,
+    "legs": {
+     "I": [
+      {
+       "ticker": "GOVPARTYTN-26-DHAT",
+       "title": "Will David Hatley (Independent) win the governorship in Tennessee",
+       "candidate": "David Hatley"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "GOVPARTYTN-26-R",
+       "title": "Will the Republican party win the governorship in Tennessee",
+       "candidate": "Marsha Blackburn"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYTN-26-D",
+       "title": "Will the Democratic party win the governorship in Tennessee",
+       "candidate": "Jerri Green"
+      }
+     ]
+    },
+    "volume": 220570.94
+   }
+  },
+  "Tennessee Senate": {
+   "office": "senate",
+   "state": "Tennessee",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57671",
+    "slug": "tennessee-senate-election-winner",
+    "title": "Tennessee Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630950",
+       "token": "109770398277480657132311708823042764648778271467537669934185093015733099277755",
+       "title": "Marquita Bradshaw (D)",
+       "liquidity": 49539.80279
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630951",
+       "token": "23982348354062524972887126807952244605287433791462351968680411830837664790435",
+       "title": "Bill Hagerty (R)",
+       "liquidity": 28017.85338
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATETN",
+    "event": "SENATETN-26",
+    "title": "Will Republicans win the Senate race in Tennessee?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATETN-26-R",
+       "title": "Will Republicans win the Senate race in Tennessee?",
+       "candidate": "Bill Hagerty"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATETN-26-D",
+       "title": "Will Democratics win the Senate race in Tennessee?",
+       "candidate": "Marquita Bradshaw"
+      }
+     ]
+    },
+    "volume": 446292.21
+   }
+  },
+  "Texas Governor": {
+   "office": "governor",
+   "state": "Texas",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57222",
+    "slug": "texas-governor-winner-2026",
+    "title": "Texas Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629690",
+       "token": "48232987449750988261789196083999659380058157021032932634331257492238853387252",
+       "title": "Gina Hinojosa (D) ",
+       "liquidity": 117046.1239
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629691",
+       "token": "54743173400191373818547682740700297683169841200363505623023527116388816282328",
+       "title": "Greg Abbott (R)",
+       "liquidity": 121718.91979
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYTX",
+    "event": "GOVPARTYTX-26",
+    "title": "Will the Republican party win the governorship in Texas",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYTX-26-R",
+       "title": "Will the Republican party win the governorship in Texas",
+       "candidate": "Greg Abbott"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYTX-26-D",
+       "title": "Will the Democratic party win the governorship in Texas",
+       "candidate": "Gina Hinojosa"
+      }
+     ]
+    },
+    "volume": 3286634.92
+   }
+  },
+  "Texas Senate": {
+   "office": "senate",
+   "state": "Texas",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57672",
+    "slug": "texas-senate-election-winner",
+    "title": "Texas Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630963",
+       "token": "15290572385458522370285732869432740297199321382471116558439914335588167718663",
+       "title": "James Talarico (D)",
+       "liquidity": 475794.5365
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630964",
+       "token": "21265207456609426291246075480390336499088453711419597084147957999650569091884",
+       "title": "Ken Paxton (R)",
+       "liquidity": 480673.2412
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATETX",
+    "event": "SENATETX-26",
+    "title": "Will Democratics win the Senate race in Texas?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATETX-26-D",
+       "title": "Will Democratics win the Senate race in Texas?",
+       "candidate": "James Talarico"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATETX-26-R",
+       "title": "Will Republicans win the Senate race in Texas?",
+       "candidate": "Ken Paxton"
+      }
+     ]
+    },
+    "volume": 34144005.16
+   }
+  },
+  "U.S. House": {
+   "office": "chamber",
+   "state": null,
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "32225",
+    "slug": "which-party-will-win-the-house-in-2026",
+    "title": "Which party will win the House in 2026?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "562802",
+       "token": "83247781037352156539108067944461291821683755894607244160607042790356561625563",
+       "title": "Democratic Party",
+       "liquidity": 4174689.342
+      }
+     ],
+     "R": [
+      {
+       "market_id": "562803",
+       "token": "65139230827417363158752884968303867495725894165574887635816574090175320800482",
+       "title": "Republican Party",
+       "liquidity": 2905966.1476
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXBALANCEPOWERCOMBO",
+    "event": "KXBALANCEPOWERCOMBO-27FEB",
+    "title": "Congress balance of power (derived)",
+    "verified": true,
+    "derived": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "KXBALANCEPOWERCOMBO-27FEB-DD"
+      },
+      {
+       "ticker": "KXBALANCEPOWERCOMBO-27FEB-DR"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "KXBALANCEPOWERCOMBO-27FEB-RR"
+      },
+      {
+       "ticker": "KXBALANCEPOWERCOMBO-27FEB-RD"
+      }
+     ]
+    }
+   }
+  },
+  "U.S. Senate": {
+   "office": "chamber",
+   "state": null,
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "32224",
+    "slug": "which-party-will-win-the-senate-in-2026",
+    "title": "Which party will win the Senate in 2026?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "562793",
+       "token": "113287701564209339913693347405685749986285999146352375265161592243948562084773",
+       "title": "Democratic Party",
+       "liquidity": 2084974.9821
+      }
+     ],
+     "R": [
+      {
+       "market_id": "562794",
+       "token": "51939490109676186832507970701169130490548061087912630009168726706475001411420",
+       "title": "Republican Party",
+       "liquidity": 2437038.7352
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXBALANCEPOWERCOMBO",
+    "event": "KXBALANCEPOWERCOMBO-27FEB",
+    "title": "Congress balance of power (derived)",
+    "verified": true,
+    "derived": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "KXBALANCEPOWERCOMBO-27FEB-DD"
+      },
+      {
+       "ticker": "KXBALANCEPOWERCOMBO-27FEB-RD"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "KXBALANCEPOWERCOMBO-27FEB-RR"
+      },
+      {
+       "ticker": "KXBALANCEPOWERCOMBO-27FEB-DR"
+      }
+     ]
+    }
+   }
+  },
+  "VA-01 House race": {
+   "office": "house",
+   "state": "Virginia",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106232",
+    "slug": "va-01-house-election-winner",
+    "title": "VA-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "944281",
+       "token": "19527325130044660074684336011478717458899906478875219180396447156299505391740",
+       "title": "Rob Wittman (R)",
+       "liquidity": 85853.0367
+      }
+     ],
+     "D": [
+      {
+       "market_id": "944282",
+       "token": "88628412725357801969852238315853152041907755032296775468463465337049299853893",
+       "title": "Shannon Taylor (D)",
+       "liquidity": 79261.6932
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEVA1",
+    "event": "HOUSEVA1-26",
+    "title": "Will Republican win the House race for VA-1?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEVA1-26-R",
+       "title": "Will Republican win the House race for VA-1?",
+       "candidate": "Rob Wittman"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEVA1-26-D",
+       "title": "Will Democratic win the House race for VA-1?",
+       "candidate": "Shannon Taylor"
+      }
+     ]
+    }
+   }
+  },
+  "VA-02 House race": {
+   "office": "house",
+   "state": "Virginia",
+   "district": 2,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106233",
+    "slug": "va-02-house-election-winner",
+    "title": "VA-02 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "944289",
+       "token": "10986108013063722112541718847525294234187960385441756998469502203421948473299",
+       "title": "Jen Kiggans (R)",
+       "liquidity": 142762.3158
+      }
+     ],
+     "D": [
+      {
+       "market_id": "944290",
+       "token": "113775721914358731979638137579752258137123447875996657512004068518320376669224",
+       "title": "Elaine Luria (D)",
+       "liquidity": 99660.1332
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEVA2",
+    "event": "HOUSEVA2-26",
+    "title": "Will Republican win the House race for VA-2?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEVA2-26-R",
+       "title": "Will Republican win the House race for VA-2?",
+       "candidate": "Jen Kiggans"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEVA2-26-D",
+       "title": "Will Democratic win the House race for VA-2?",
+       "candidate": "Elaine Luria"
+      }
+     ]
+    }
+   }
+  },
+  "VA-05 House race": {
+   "office": "house",
+   "state": "Virginia",
+   "district": 5,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "191668",
+    "slug": "va-05-house-election-winner",
+    "title": "VA-05 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "1285079",
+       "token": "83253007588985953900662535978265304048199216427463571583210985764316132662845",
+       "title": "John McGuire (R)",
+       "liquidity": 100749.7877
+      }
+     ],
+     "D": [
+      {
+       "market_id": "1285080",
+       "token": "30424541292784877350495001354252975055952568624850695789713995653053526735723",
+       "title": "Tom Perriello (D)",
+       "liquidity": 109544.1735
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "KXHOUSERACE",
+    "event": "KXHOUSERACE-VA05-26",
+    "title": "Will Republican win the House race for VA-05?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "KXHOUSERACE-VA05-26-R",
+       "title": "Will Republican win the House race for VA-05?",
+       "candidate": "John McGuire"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "KXHOUSERACE-VA05-26-D",
+       "title": "Will Democratic win the House race for VA-05?",
+       "candidate": "Tom Perriello"
+      }
+     ]
+    }
+   }
+  },
+  "VA-07 House race": {
+   "office": "house",
+   "state": "Virginia",
+   "district": 7,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106234",
+    "slug": "va-07-house-election-winner",
+    "title": "VA-07 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "944297",
+       "token": "13432621903631649165156306037190483686486704889711495381938238490251535633776",
+       "title": "Doug Ollivant (R)",
+       "liquidity": 26696.02167
+      }
+     ],
+     "D": [
+      {
+       "market_id": "944298",
+       "token": "98075623222143547346037366837071572541450376316433615657989340175250414958486",
+       "title": "Eugene Vindman (D)",
+       "liquidity": 18809.09556
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEVA7",
+    "event": "HOUSEVA7-26",
+    "title": "Will Republican win the House race for VA-7?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEVA7-26-R",
+       "title": "Will Republican win the House race for VA-7?",
+       "candidate": "Doug Ollivant"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEVA7-26-D",
+       "title": "Will Democratic win the House race for VA-07?",
+       "candidate": "Eugene Vindman"
+      }
+     ]
+    }
+   }
+  },
+  "Vermont Governor": {
+   "office": "governor",
+   "state": "Vermont",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57225",
+    "slug": "vermont-governor-winner-2026",
+    "title": "Vermont Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629707",
+       "token": "60184991030711150053889856154789765911962237408503307206289529109604385579009",
+       "title": "Amanda Janoo (D)",
+       "liquidity": 129304.4244
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629708",
+       "token": "41583919731714354912849507182398941127545694257513505398713274521520484370640",
+       "title": "Phil Scott (R)",
+       "liquidity": 100626.772
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYVT",
+    "event": "GOVPARTYVT-26",
+    "title": "Will the Republican party win the governorship in Vermont",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYVT-26-R",
+       "title": "Will the Republican party win the governorship in Vermont",
+       "candidate": "Phil Scott"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYVT-26-D",
+       "title": "Will the Democratic party win the governorship in Vermont",
+       "candidate": "Amanda Janoo"
+      }
+     ]
+    },
+    "volume": 556288.67
+   }
+  },
+  "Virginia Senate": {
+   "office": "senate",
+   "state": "Virginia",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57673",
+    "slug": "virginia-senate-election-winner",
+    "title": "Virginia Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630976",
+       "token": "103672405579571940023321290271521195736672061427193452636021280058761450574865",
+       "title": "Mark Warner (D)",
+       "liquidity": 38265.42448
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630977",
+       "token": "30879673422883665658998557649780314115615509792114924412311244164523672753717",
+       "title": "Bert Mizusawa (R)",
+       "liquidity": 47644.99653
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEVA",
+    "event": "SENATEVA-26",
+    "title": "Will Democratics win the Senate race in Virginia?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATEVA-26-D",
+       "title": "Will Democratics win the Senate race in Virginia?",
+       "candidate": "Mark Warner"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATEVA-26-R",
+       "title": "Will Republicans win the Senate race in Virginia?",
+       "candidate": "Bert Mizusawa"
+      }
+     ]
+    },
+    "volume": 37223.08
+   }
+  },
+  "WA-03 House race": {
+   "office": "house",
+   "state": "Washington",
+   "district": 3,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106236",
+    "slug": "wa-03-house-election-winner",
+    "title": "WA-03 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "944313",
+       "token": "11450408400059654095752682163375174616927289912740528299907491682505834882757",
+       "title": "John Braun (R)",
+       "liquidity": 57464.4447
+      }
+     ],
+     "D": [
+      {
+       "market_id": "944314",
+       "token": "62003269433640683744291727761785528693342099533191419822618434570267086928393",
+       "title": "Marie Gluesenkamp Perez (D)",
+       "liquidity": 42041.8357
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEWA3",
+    "event": "HOUSEWA3-26",
+    "title": "Will Republican win the House race for WA-3?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEWA3-26-R",
+       "title": "Will Republican win the House race for WA-3?",
+       "candidate": "John Braun"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEWA3-26-D",
+       "title": "Will Democratic win the House race for WA-3?",
+       "candidate": "Marie Gluesenkamp Perez"
+      }
+     ]
+    }
+   }
+  },
+  "WI-01 House race": {
+   "office": "house",
+   "state": "Wisconsin",
+   "district": 1,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106242",
+    "slug": "wi-01-house-election-winner",
+    "title": "WI-01 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "944333",
+       "token": "89691692433810708662044713280560196245651593280559985593960312638148344324296",
+       "title": "Bryan Steil (R)",
+       "liquidity": 60883.6123
+      }
+     ],
+     "D": [
+      {
+       "market_id": "944334",
+       "token": "27864379735636967187061174592974985530606192477476602134082994654383977817622",
+       "title": "Mitchell Berman (D)",
+       "liquidity": 69562.2398
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEWI1",
+    "event": "HOUSEWI1-26",
+    "title": "Will Republican win the House race for WI-1?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEWI1-26-R",
+       "title": "Will Republican win the House race for WI-1?",
+       "candidate": "Bryan Steil"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEWI1-26-D",
+       "title": "Will Democratic win the House race for WI-1?",
+       "candidate": "Mitchell Berman"
+      }
+     ]
+    }
+   }
+  },
+  "WI-03 House race": {
+   "office": "house",
+   "state": "Wisconsin",
+   "district": 3,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "106243",
+    "slug": "wi-03-house-election-winner",
+    "title": "WI-03 House Election Winner",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "market_id": "944341",
+       "token": "83772236231104306836754599890295414817047560410380925946355605231115771621017",
+       "title": "Derrick Van Orden (R)",
+       "liquidity": 53323.3604
+      }
+     ],
+     "D": [
+      {
+       "market_id": "944342",
+       "token": "98533340650340151055858210214498969967462170000657407829633743183238896087456",
+       "title": "Rebecca Cooke (D)",
+       "liquidity": 32255.9757
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "HOUSEWI3",
+    "event": "HOUSEWI3-26",
+    "title": "Will a Republican win the House race for WI-3?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "HOUSEWI3-26-R",
+       "title": "Will a Republican win the House race for WI-3?",
+       "candidate": "Derrick Van Orden"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "HOUSEWI3-26-D",
+       "title": "Will a Democrat win the House race for WI-3?",
+       "candidate": "Rebecca Cooke"
+      }
+     ]
+    }
+   }
+  },
+  "West Virginia Senate": {
+   "office": "senate",
+   "state": "West Virginia",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57674",
+    "slug": "west-virginia-senate-election-winner",
+    "title": "West Virginia Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "630989",
+       "token": "110692470670299760609405767524469998656804613573367102042492015567399413436772",
+       "title": "Rachel Fetty Anderson (D)",
+       "liquidity": 36607.0022
+      }
+     ],
+     "R": [
+      {
+       "market_id": "630990",
+       "token": "103563721501446582736235672026641229118201717908465299005521462931975944512517",
+       "title": "Shelley Moore Capito (R)",
+       "liquidity": 38500.60081
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEWV",
+    "event": "SENATEWV-26",
+    "title": "Will Republicans win the Senate race in West Virginia?",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "SENATEWV-26-R",
+       "title": "Will Republicans win the Senate race in West Virginia?",
+       "candidate": "Shelley Moore Capito"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "SENATEWV-26-D",
+       "title": "Will Democratics win the Senate race in West Virginia?",
+       "candidate": "Rachel Fetty Anderson"
+      }
+     ]
+    },
+    "volume": 32592.17
+   }
+  },
+  "Wisconsin Governor": {
+   "office": "governor",
+   "state": "Wisconsin",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57226",
+    "slug": "wisconsin-governor-winner-2026",
+    "title": "Wisconsin Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629720",
+       "token": "47540146623620182724372695903724852067595146419459482790641441152489267651664",
+       "title": "David Crowley (D)",
+       "liquidity": 98496.216
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629721",
+       "token": "110568426700454908727813010666782278712329569099119457880819387703511785225289",
+       "title": "Tom Tiffany (R)",
+       "liquidity": 142365.0184
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYWI",
+    "event": "GOVPARTYWI-26",
+    "title": "Will the Republican party win the governorship in Wisconsin",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYWI-26-R",
+       "title": "Will the Republican party win the governorship in Wisconsin",
+       "candidate": "Tom Tiffany"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYWI-26-D",
+       "title": "Will the Democratic party win the governorship in Wisconsin",
+       "candidate": "David Crowley"
+      }
+     ]
+    },
+    "volume": 1428510.85
+   }
+  },
+  "Wyoming Governor": {
+   "office": "governor",
+   "state": "Wyoming",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57227",
+    "slug": "wyoming-governor-winner-2026",
+    "title": "Wyoming Governor Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "629733",
+       "token": "27698880682601961151205903485139737259763277359865731443999905606295817799595",
+       "title": "Kenneth Casner (D)",
+       "liquidity": 36405.32995
+      }
+     ],
+     "R": [
+      {
+       "market_id": "629734",
+       "token": "110662231382210721528347530139180000273032668591469451320298639508988983810813",
+       "title": "Eric Barlow (R)",
+       "liquidity": 22944.98686
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "GOVPARTYWY",
+    "event": "GOVPARTYWY-26",
+    "title": "Will the Republican party win the governorship in Wyoming",
+    "verified": true,
+    "legs": {
+     "R": [
+      {
+       "ticker": "GOVPARTYWY-26-R",
+       "title": "Will the Republican party win the governorship in Wyoming",
+       "candidate": "Eric Barlow"
+      }
+     ],
+     "D": [
+      {
+       "ticker": "GOVPARTYWY-26-D",
+       "title": "Will the Democratic party win the governorship in Wyoming",
+       "candidate": "Kenneth Casner"
+      }
+     ]
+    },
+    "volume": 9459.92
+   }
+  },
+  "Wyoming Senate": {
+   "office": "senate",
+   "state": "Wyoming",
+   "district": null,
+   "unmatched": [],
+   "polymarket": {
+    "event_id": "57675",
+    "slug": "wyoming-senate-election-winner",
+    "title": "Wyoming Senate Election Winner",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "market_id": "631002",
+       "token": "49797779751182114244550178900838522175054943127409025738411962628574218037267",
+       "title": "James W. Byrd (D)",
+       "liquidity": 56364.1011
+      }
+     ],
+     "R": [
+      {
+       "market_id": "631003",
+       "token": "79928077180713102609948647660034580156932658823394290272651325523866637424642",
+       "title": "Harriet Hageman (R) ",
+       "liquidity": 39735.75892
+      }
+     ]
+    }
+   },
+   "kalshi": {
+    "series": "SENATEWY",
+    "event": "SENATEWY-26",
+    "title": "Will Democratics win the Senate race in Wyoming?",
+    "verified": true,
+    "legs": {
+     "D": [
+      {
+       "ticker": "SENATEWY-26-D",
+       "title": "Will Democratics win the Senate race in Wyoming?",
+       "candidate": "James Byrd"
+      }
+     ],
+     "R": [
+      {
+       "ticker": "SENATEWY-26-R",
+       "title": "Will Republicans win the Senate race in Wyoming?",
+       "candidate": "Harriet Hageman"
+      }
+     ]
+    },
+    "volume": 25744.239999999998
+   }
+  }
+ },
+ "unmatched": {
+  "polymarket": [
+   "ME-02 House race"
+  ],
+  "kalshi": [
+   "Kentucky Senate"
+  ]
+ }
+}

@@ -1,0 +1,34 @@
+[Unit]
+Description=SIG Predictions Cup trading bot (sigbot)
+After=network-online.target
+Wants=network-online.target
+# give up restarting if it crashes 5 times in 10 minutes (a repeating bug should stop, not churn orders)
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=sigbot
+Group=sigbot
+WorkingDirectory=/opt/sigbot
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=UTC
+ExecStart=/usr/bin/python3 -m sigbot.run --live
+# SIGTERM makes the bot finish its cycle and cancel all resting orders on exit
+KillSignal=SIGTERM
+TimeoutStopSec=120
+# belt and braces: cancel anything still resting after the process has gone (also runs after a crash)
+ExecStopPost=/usr/bin/python3 /opt/sigbot/deploy/cancel_all.py
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+# hardening: the bot only needs its own folder and the network
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sigbot
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

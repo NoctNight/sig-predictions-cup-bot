@@ -1,0 +1,8766 @@
+{
+ "built_at": 1792654943.0703712,
+ "date": "2026-10-22",
+ "generic_ballot": {
+  "sources": [
+   "Decision Desk HQ",
+   "FiftyPlusOne",
+   "NBC News",
+   "RealClearPolitics",
+   "Silver Bulletin"
+  ],
+  "margins": [
+   7.9,
+   9.1,
+   9.0,
+   8.3,
+   9.2
+  ],
+  "d_minus_r": 8.7
+ },
+ "calibration": {
+  "senate": {
+   "races": 122,
+   "mean_error": -3.34,
+   "sd_error": 5.91,
+   "sd_within_cycle": 5.26,
+   "bias_sd_across_cycles": 4.33,
+   "cycle_means": {
+    "2016": -4.94,
+    "2017": 4.34,
+    "2018": -0.36,
+    "2020": -6.79,
+    "2022": -1.21
+   },
+   "mle_sigma": 3.5,
+   "leader_won": 0.91
+  },
+  "governor": {
+   "races": 90,
+   "mean_error": -1.91,
+   "sd_error": 6.14,
+   "sd_within_cycle": 5.57,
+   "bias_sd_across_cycles": 3.62,
+   "cycle_means": {
+    "2016": -4.1,
+    "2018": 0.06,
+    "2017": 2.19,
+    "2019": -6.42,
+    "2020": -8.09,
+    "2022": -1.2,
+    "2021": -3.35
+   },
+   "mle_sigma": 4.5,
+   "leader_won": 0.856
+  },
+  "house": {
+   "races": 193,
+   "mean_error": -0.87,
+   "sd_error": 7.0,
+   "sd_within_cycle": 6.3,
+   "bias_sd_across_cycles": 4.23,
+   "cycle_means": {
+    "2018": 0.66,
+    "2017": 1.46,
+    "2016": -3.76,
+    "2019": -8.29,
+    "2020": -5.95,
+    "2022": 2.18,
+    "2021": 1.62
+   },
+   "mle_sigma": 8.6,
+   "leader_won": 0.839
+  }
+ },
+ "sources": {
+  "senate": "ok",
+  "governor": "ok",
+  "house": "ok",
+  "house_ratings": "ok",
+  "pres2024": "ok",
+  "votehub_us-senator": "ok (496 polls)",
+  "votehub_governor": "ok (473 polls)",
+  "votehub_us-representative": "ok (155 polls)",
+  "votehub_generic-ballot": "ok (548 polls)",
+  "senate_rows": 35,
+  "governor_rows": 36,
+  "house_rating_rows": 134,
+  "house_candidate_rows": 433
+ },
+ "races": {
+  "AL-02 House race": {
+   "margin_hat": -3.81,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -5.6,
+    "ratings": {
+     "Cook": "Likely R",
+     "IE": "Lean R",
+     "Sabato": "Lean R",
+     "Econ.": "Likely R",
+     "ST": "Tossup",
+     "DDHQ": "Likely R",
+     "FPO": "Lean R",
+     "Fox": "Likely R",
+     "Silver": "Likely R",
+     "RCP": "Lean R"
+    },
+    "pvi": -7.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 0.35,
+    "prior_margin": -3.81,
+    "incumbent": "Shomari Figures",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -30.47,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3167,
+     "lo": 0.0699,
+     "hi": 0.6996
+    },
+    "R": {
+     "fair": 0.6833,
+     "lo": 0.3004,
+     "hi": 0.9301
+    }
+   },
+   "office": "house",
+   "state": "Alabama"
+  },
+  "AZ-01 House race": {
+   "margin_hat": 4.23,
+   "sigma": 8.0,
+   "w_poll": 0.16,
+   "inputs": {
+    "poll_margin": 2.8,
+    "n_polls": 1,
+    "n_eff": 0.29,
+    "poll_shares": {
+     "D": 44.4,
+     "R": 41.6
+    },
+    "latest_poll": "2026-10-01",
+    "rating_margin": 5.0,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tilt D",
+     "Sabato": "Lean D",
+     "Econ.": "Likely D",
+     "ST": "Likely D",
+     "DDHQ": "Lean D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": -1.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 3.35,
+    "prior_margin": 4.5,
+    "incumbent": "David Schweikert",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -5.53,
+    "polls_used": [
+     {
+      "end": "2026-10-01",
+      "pollster": "FirstStrategic",
+      "n": 400,
+      "by_party": {
+       "D": 44.4,
+       "R": 41.6
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.7015,
+     "lo": 0.3187,
+     "hi": 0.9368
+    },
+    "R": {
+     "fair": 0.2985,
+     "lo": 0.0632,
+     "hi": 0.6813
+    }
+   },
+   "office": "house",
+   "state": "Arizona"
+  },
+  "AZ-06 House race": {
+   "margin_hat": 4.19,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 5.4,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Lean D",
+     "Econ.": "Likely D",
+     "ST": "Safe D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": 0.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 1.35,
+    "prior_margin": 4.19,
+    "incumbent": "Juan Ciscomani",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -5.53,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6996,
+     "lo": 0.3167,
+     "hi": 0.9361
+    },
+    "R": {
+     "fair": 0.3004,
+     "lo": 0.0639,
+     "hi": 0.6833
+    }
+   },
+   "office": "house",
+   "state": "Arizona"
+  },
+  "Alabama Governor": {
+   "margin_hat": -12.37,
+   "sigma": 8.0,
+   "w_poll": 0.37,
+   "inputs": {
+    "poll_margin": -12.2,
+    "n_polls": 2,
+    "n_eff": 0.89,
+    "poll_shares": {
+     "R": 50.8,
+     "D": 38.7
+    },
+    "latest_poll": "2026-10-16",
+    "rating_margin": -13.25,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Likely R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "Silver": "Solid R"
+    },
+    "pvi": -15.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -10.65,
+    "prior_margin": -12.47,
+    "incumbent": "Kay Ivey",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -30.47,
+    "polls_used": [
+     {
+      "end": "2026-09-25",
+      "pollster": "RMG Research",
+      "n": 800,
+      "by_party": {
+       "R": 50.0,
+       "D": 37.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-10-16",
+      "pollster": "The Alabama Poll",
+      "n": 600,
+      "by_party": {
+       "R": 51.0,
+       "D": 39.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.061,
+     "lo": 0.0054,
+     "hi": 0.2925
+    },
+    "R": {
+     "fair": 0.939,
+     "lo": 0.7075,
+     "hi": 0.9946
+    }
+   },
+   "office": "governor",
+   "state": "Alabama"
+  },
+  "Alabama Senate": {
+   "margin_hat": -15.98,
+   "sigma": 8.0,
+   "w_poll": 0.37,
+   "inputs": {
+    "poll_margin": -21.0,
+    "n_polls": 2,
+    "n_eff": 0.89,
+    "poll_shares": {
+     "R": 55.7,
+     "D": 34.7
+    },
+    "latest_poll": "2026-10-16",
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Safe R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -15.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -10.65,
+    "prior_margin": -13.0,
+    "incumbent": "Tommy Tuberville",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -30.47,
+    "polls_used": [
+     {
+      "end": "2026-09-25",
+      "pollster": "RMG Research",
+      "n": 800,
+      "by_party": {
+       "R": 54.0,
+       "D": 33.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-10-16",
+      "pollster": "The Alabama Poll",
+      "n": 600,
+      "by_party": {
+       "R": 56.0,
+       "D": 35.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0229,
+     "lo": 0.0014,
+     "hi": 0.1594
+    },
+    "R": {
+     "fair": 0.9771,
+     "lo": 0.8406,
+     "hi": 0.9986
+    }
+   },
+   "office": "senate",
+   "state": "Alabama"
+  },
+  "Alaska Governor": {
+   "margin_hat": 6.16,
+   "sigma": 6.33,
+   "w_poll": 0.63,
+   "inputs": {
+    "poll_margin": 8.6,
+    "n_polls": 5,
+    "n_eff": 2.58,
+    "poll_shares": {
+     "D": 53.5,
+     "R": 44.9
+    },
+    "latest_poll": "2026-10-18",
+    "rating_margin": 3.5,
+    "ratings": {
+     "Cook": "Lean D",
+     "DDHQ": "Lean D",
+     "Fox": "Tossup",
+     "IE": "Tossup",
+     "NBC": "Lean D",
+     "RCP": "Lean D",
+     "Sabato": "Lean D",
+     "Silver": "Likely D"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -1.65,
+    "prior_margin": 1.95,
+    "incumbent": "Mike Dunleavy",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.13,
+    "polls_used": [
+     {
+      "end": "2026-09-11",
+      "pollster": "Fabrizio, Lee & Associates/Impact Research",
+      "n": 800,
+      "by_party": {
+       "D": 55.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-27",
+      "pollster": "Cygnal",
+      "n": 502,
+      "by_party": {
+       "D": 44.0,
+       "R": 24.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "The New York Times/Siena University",
+      "n": 431,
+      "by_party": {
+       "D": 52.0,
+       "R": 48.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-18",
+      "pollster": "Alaska Survey Research",
+      "n": 1568,
+      "by_party": {
+       "D": 55.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-16",
+      "pollster": "Data for Progress",
+      "n": 629,
+      "by_party": {
+       "D": 53.0,
+       "R": 47.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.8348,
+     "lo": 0.4893,
+     "hi": 0.9758
+    },
+    "I": {
+     "fair": 0.0,
+     "lo": 0.0,
+     "hi": 0.0
+    },
+    "R": {
+     "fair": 0.1652,
+     "lo": 0.0242,
+     "hi": 0.5107
+    }
+   },
+   "office": "governor",
+   "state": "Alaska"
+  },
+  "Alaska Senate": {
+   "margin_hat": 0.56,
+   "sigma": 6.06,
+   "w_poll": 0.55,
+   "inputs": {
+    "poll_margin": 1.1,
+    "n_polls": 5,
+    "n_eff": 1.87,
+    "poll_shares": {
+     "D": 49.3,
+     "R": 48.2
+    },
+    "latest_poll": "2026-10-16",
+    "rating_margin": 1.82,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Lean D",
+     "Economist": "Tossup",
+     "FPO": "Lean D",
+     "Fox": "Tossup",
+     "IE": "Tossup",
+     "NBC": "Tossup",
+     "RCP": "Tossup",
+     "Sabato": "Lean D",
+     "SB": "Lean D",
+     "ST": "Lean D"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -4.65,
+    "prior_margin": -0.12,
+    "incumbent": "Dan S. Sullivan",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.13,
+    "polls_used": [
+     {
+      "end": "2026-10-15",
+      "pollster": "Public Policy Polling",
+      "n": 578,
+      "by_party": {
+       "D": 48.0,
+       "R": 47.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-09-11",
+      "pollster": "Fabrizio, Lee & Associates/Impact Research",
+      "n": 800,
+      "by_party": {
+       "D": 53.0,
+       "R": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-17",
+      "pollster": "co/efficient",
+      "n": 799,
+      "by_party": {
+       "D": 46.0,
+       "R": 49.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-30",
+      "pollster": "Quantus Insights",
+      "n": 758,
+      "by_party": {
+       "D": 47.2,
+       "R": 47.8
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-16",
+      "pollster": "Data for Progress",
+      "n": 671,
+      "by_party": {
+       "D": 51.0,
+       "R": 49.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5366,
+     "lo": 0.1819,
+     "hi": 0.8626
+    },
+    "R": {
+     "fair": 0.4634,
+     "lo": 0.1374,
+     "hi": 0.8181
+    }
+   },
+   "office": "senate",
+   "state": "Alaska"
+  },
+  "Arizona Governor": {
+   "margin_hat": 5.05,
+   "sigma": 8.0,
+   "w_poll": 0.33,
+   "inputs": {
+    "poll_margin": 6.0,
+    "n_polls": 1,
+    "n_eff": 0.75,
+    "poll_shares": {
+     "D": 49.0,
+     "R": 43.0
+    },
+    "latest_poll": "2026-10-09",
+    "rating_margin": 4.25,
+    "ratings": {
+     "Cook": "Lean D",
+     "DDHQ": "Lean D",
+     "Fox": "Lean D",
+     "IE": "Tilt D",
+     "NBC": "Lean D",
+     "RCP": "Lean D",
+     "Sabato": "Lean D",
+     "Silver": "Likely D"
+    },
+    "pvi": -2.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 5.35,
+    "prior_margin": 4.58,
+    "incumbent": "Katie Hobbs",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -5.53,
+    "polls_used": [
+     {
+      "end": "2026-10-09",
+      "pollster": "Equis Research",
+      "n": 1214,
+      "by_party": {
+       "D": 49.0,
+       "R": 43.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.7362,
+     "lo": 0.3563,
+     "hi": 0.9486
+    },
+    "R": {
+     "fair": 0.2638,
+     "lo": 0.0514,
+     "hi": 0.6437
+    }
+   },
+   "office": "governor",
+   "state": "Arizona"
+  },
+  "Arkansas Governor": {
+   "margin_hat": -13.89,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "Silver": "Solid R"
+    },
+    "pvi": -15.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -13.65,
+    "prior_margin": -13.89,
+    "incumbent": "Sarah Huckabee Sanders",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -30.64,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0412,
+     "lo": 0.0031,
+     "hi": 0.2306
+    },
+    "R": {
+     "fair": 0.9588,
+     "lo": 0.7694,
+     "hi": 0.9969
+    }
+   },
+   "office": "governor",
+   "state": "Arkansas"
+  },
+  "Arkansas Senate": {
+   "margin_hat": -11.91,
+   "sigma": 6.06,
+   "w_poll": 0.42,
+   "inputs": {
+    "poll_margin": -9.7,
+    "n_polls": 2,
+    "n_eff": 1.09,
+    "poll_shares": {
+     "R": 50.4,
+     "D": 40.6
+    },
+    "latest_poll": "2026-10-13",
+    "rating_margin": -13.45,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Likely R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -15.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -13.65,
+    "prior_margin": -13.51,
+    "incumbent": "Tom Cotton",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -30.64,
+    "polls_used": [
+     {
+      "end": "2026-10-13",
+      "pollster": "Hendrix College",
+      "n": 709,
+      "by_party": {
+       "R": 50.0,
+       "D": 41.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-04",
+      "pollster": "Grayhouse",
+      "n": 550,
+      "by_party": {
+       "D": 40.0,
+       "R": 51.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Jeff Wadlin"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0246,
+     "lo": 0.0015,
+     "hi": 0.167
+    },
+    "R": {
+     "fair": 0.9754,
+     "lo": 0.833,
+     "hi": 0.9985
+    }
+   },
+   "office": "senate",
+   "state": "Arkansas"
+  },
+  "CA-22 House race": {
+   "margin_hat": 4.21,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 5.0,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Lean D",
+     "Econ.": "Safe D",
+     "ST": "Lean D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Tossup",
+     "Silver": "Likely D",
+     "RCP": "Lean D"
+    },
+    "pvi": 1.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 2.35,
+    "prior_margin": 4.21,
+    "incumbent": "David Valadao",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 20.14,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.7004,
+     "lo": 0.3176,
+     "hi": 0.9364
+    },
+    "R": {
+     "fair": 0.2996,
+     "lo": 0.0636,
+     "hi": 0.6824
+    }
+   },
+   "office": "house",
+   "state": "California"
+  },
+  "CA-48 House race": {
+   "margin_hat": 7.52,
+   "sigma": 8.0,
+   "w_poll": 0.23,
+   "inputs": {
+    "poll_margin": 9.0,
+    "n_polls": 1,
+    "n_eff": 0.44,
+    "poll_shares": {
+     "D": 47.0,
+     "R": 38.0
+    },
+    "latest_poll": "2026-10-07",
+    "rating_margin": 7.4,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tilt D",
+     "Sabato": "Likely D",
+     "Econ.": "Likely D",
+     "ST": "Safe D",
+     "DDHQ": "Likely D",
+     "FPO": "Safe D",
+     "Fox": "Lean D",
+     "Silver": "Likely D",
+     "RCP": "Lean D"
+    },
+    "pvi": 2.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 6.35,
+    "prior_margin": 7.08,
+    "incumbent": "Darrell Issa",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 20.14,
+    "polls_used": [
+     {
+      "end": "2026-10-07",
+      "pollster": "SurveyUSA",
+      "n": 518,
+      "by_party": {
+       "D": 47.0,
+       "R": 38.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.8264,
+     "lo": 0.476,
+     "hi": 0.9738
+    },
+    "R": {
+     "fair": 0.1736,
+     "lo": 0.0262,
+     "hi": 0.524
+    }
+   },
+   "office": "house",
+   "state": "California"
+  },
+  "CO-03 House race": {
+   "margin_hat": -4.46,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -4.8,
+    "ratings": {
+     "Cook": "Likely R",
+     "IE": "Likely R",
+     "Sabato": "Likely R",
+     "Econ.": "Lean R",
+     "ST": "Lean R",
+     "DDHQ": "Lean R",
+     "FPO": "Tossup",
+     "Fox": "Lean R",
+     "Silver": "Likely R",
+     "RCP": "Tossup"
+    },
+    "pvi": -5.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -3.65,
+    "prior_margin": -4.46,
+    "incumbent": "Jeff Hurd",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 10.99,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.2888,
+     "lo": 0.0598,
+     "hi": 0.6712
+    },
+    "R": {
+     "fair": 0.7112,
+     "lo": 0.3288,
+     "hi": 0.9402
+    }
+   },
+   "office": "house",
+   "state": "Colorado"
+  },
+  "CO-04 House race": {
+   "margin_hat": -6.81,
+   "sigma": 8.0,
+   "w_poll": 0.12,
+   "inputs": {
+    "poll_margin": -5.0,
+    "n_polls": 1,
+    "n_eff": 0.2,
+    "poll_shares": {
+     "D": 40.0,
+     "R": 45.0,
+     "I": 9.0
+    },
+    "latest_poll": "2026-09-24",
+    "rating_margin": -6.8,
+    "ratings": {
+     "Cook": "Solid R",
+     "IE": "Solid R",
+     "Sabato": "Lean R",
+     "Econ.": "Lean R",
+     "ST": "Tossup",
+     "DDHQ": "Likely R",
+     "FPO": "Likely R",
+     "Fox": "Likely R",
+     "Silver": "Likely R",
+     "RCP": "Tossup"
+    },
+    "pvi": -9.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -7.65,
+    "prior_margin": -7.05,
+    "incumbent": "Lauren Boebert",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 10.99,
+    "polls_used": [
+     {
+      "end": "2026-09-24",
+      "pollster": "Impact Research",
+      "n": 403,
+      "by_party": {
+       "D": 40.0,
+       "R": 45.0,
+       "I": 9.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.1972,
+     "lo": 0.032,
+     "hi": 0.559
+    },
+    "R": {
+     "fair": 0.8028,
+     "lo": 0.441,
+     "hi": 0.968
+    }
+   },
+   "office": "house",
+   "state": "Colorado"
+  },
+  "CO-08 House race": {
+   "margin_hat": 3.49,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 4.4,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Lean D",
+     "Econ.": "Lean D",
+     "ST": "Lean D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Likely D",
+     "RCP": "Lean D"
+    },
+    "pvi": 0.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 1.35,
+    "prior_margin": 3.49,
+    "incumbent": "Gabe Evans",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 10.99,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6684,
+     "lo": 0.2862,
+     "hi": 0.9244
+    },
+    "R": {
+     "fair": 0.3316,
+     "lo": 0.0756,
+     "hi": 0.7138
+    }
+   },
+   "office": "house",
+   "state": "Colorado"
+  },
+  "California Governor": {
+   "margin_hat": 20.57,
+   "sigma": 6.33,
+   "w_poll": 0.65,
+   "inputs": {
+    "poll_margin": 23.8,
+    "n_polls": 5,
+    "n_eff": 2.73,
+    "poll_shares": {
+     "D": 58.9,
+     "R": 35.1
+    },
+    "latest_poll": "2026-10-19",
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 12.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 16.35,
+    "prior_margin": 14.71,
+    "incumbent": "Gavin Newsom",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 20.14,
+    "polls_used": [
+     {
+      "end": "2026-09-20",
+      "pollster": "SurveyUSA",
+      "n": 742,
+      "by_party": {
+       "D": 55.0,
+       "R": 33.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-20",
+      "pollster": "UC Berkeley Institute of Governmental Studies",
+      "n": 4512,
+      "by_party": {
+       "D": 58.0,
+       "R": 33.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-16",
+      "pollster": "University of California Berkeley Jack Citrin Center for Public Opinion Research/Verasight/TrueDot",
+      "n": 1983,
+      "by_party": {
+       "D": 54.0,
+       "R": 36.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-14",
+      "pollster": "University of California Berkeley Jack Citrin Center for Public Opinion Research/Verasight/TrueDot",
+      "n": 909,
+      "by_party": {
+       "D": 55.0,
+       "R": 35.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-19",
+      "pollster": "Emerson College",
+      "n": 1000,
+      "by_party": {
+       "D": 64.0,
+       "R": 36.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.995,
+     "lo": 0.9878,
+     "hi": 1.0
+    },
+    "R": {
+     "fair": 0.005,
+     "lo": 0.0,
+     "hi": 0.0122
+    }
+   },
+   "office": "governor",
+   "state": "California"
+  },
+  "Colorado Governor": {
+   "margin_hat": 12.38,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 13.25,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Likely D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 10.35,
+    "prior_margin": 12.38,
+    "incumbent": "Jared Polis",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 10.99,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9391,
+     "lo": 0.708,
+     "hi": 0.9946
+    },
+    "R": {
+     "fair": 0.0609,
+     "lo": 0.0054,
+     "hi": 0.292
+    }
+   },
+   "office": "governor",
+   "state": "Colorado"
+  },
+  "Colorado Senate": {
+   "margin_hat": 13.8,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 13.35,
+    "prior_margin": 13.8,
+    "incumbent": "John Hickenlooper",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 10.99,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9578,
+     "lo": 0.766,
+     "hi": 0.9968
+    },
+    "R": {
+     "fair": 0.0422,
+     "lo": 0.0032,
+     "hi": 0.234
+    }
+   },
+   "office": "senate",
+   "state": "Colorado"
+  },
+  "Connecticut Governor": {
+   "margin_hat": 17.53,
+   "sigma": 6.33,
+   "w_poll": 0.65,
+   "inputs": {
+    "poll_margin": 19.5,
+    "n_polls": 5,
+    "n_eff": 2.79,
+    "poll_shares": {
+     "D": 55.4,
+     "R": 35.9
+    },
+    "latest_poll": "2026-10-12",
+    "rating_margin": 13.25,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Likely D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 15.35,
+    "prior_margin": 13.88,
+    "incumbent": "Ned Lamont",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 14.51,
+    "polls_used": [
+     {
+      "end": "2026-10-07",
+      "pollster": "Wesleyan University Survey Lab/YouGov",
+      "n": 500,
+      "by_party": {
+       "D": 57.0,
+       "R": 34.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-12",
+      "pollster": "Emerson College",
+      "n": 800,
+      "by_party": {
+       "D": 51.4,
+       "R": 37.8
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 540,
+      "by_party": {
+       "D": 55.0,
+       "R": 38.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-12",
+      "pollster": "Quinnipiac University",
+      "n": 702,
+      "by_party": {
+       "D": 58.0,
+       "R": 38.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-12",
+      "pollster": "GreatBlue Research",
+      "n": 1000,
+      "by_party": {
+       "D": 56.0,
+       "R": 33.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.995,
+     "lo": 0.9618,
+     "hi": 0.9999
+    },
+    "R": {
+     "fair": 0.005,
+     "lo": 0.0001,
+     "hi": 0.0382
+    }
+   },
+   "office": "governor",
+   "state": "Connecticut"
+  },
+  "Delaware Senate": {
+   "margin_hat": 14.4,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 15.35,
+    "prior_margin": 14.4,
+    "incumbent": "Chris Coons",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 14.7,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9641,
+     "lo": 0.7883,
+     "hi": 0.9974
+    },
+    "R": {
+     "fair": 0.0359,
+     "lo": 0.0026,
+     "hi": 0.2117
+    }
+   },
+   "office": "senate",
+   "state": "Delaware"
+  },
+  "FL-07 House race": {
+   "margin_hat": -3.14,
+   "sigma": 8.0,
+   "w_poll": 0.19,
+   "inputs": {
+    "poll_margin": 0.0,
+    "n_polls": 1,
+    "n_eff": 0.36,
+    "poll_shares": {
+     "D": 45.0,
+     "R": 45.0
+    },
+    "latest_poll": "2026-10-19",
+    "rating_margin": -4.0,
+    "ratings": {
+     "Cook": "Likely R",
+     "IE": "Likely R",
+     "Sabato": "Likely R",
+     "Econ.": "Lean D",
+     "ST": "Lean R",
+     "DDHQ": "Lean R",
+     "FPO": "Lean R",
+     "Fox": "Lean R",
+     "Silver": "Tossup",
+     "RCP": "Lean R"
+    },
+    "pvi": -5.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -3.65,
+    "prior_margin": -3.9,
+    "incumbent": "Cory Mills",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.1,
+    "polls_used": [
+     {
+      "end": "2026-10-19",
+      "pollster": "DCCC Targeting and Analytics Department",
+      "n": 414,
+      "by_party": {
+       "D": 45.0,
+       "R": 45.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3473,
+     "lo": 0.0819,
+     "hi": 0.7282
+    },
+    "R": {
+     "fair": 0.6527,
+     "lo": 0.2718,
+     "hi": 0.9181
+    }
+   },
+   "office": "house",
+   "state": "Florida"
+  },
+  "FL-09 House race": {
+   "margin_hat": -3.28,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -4.4,
+    "ratings": {
+     "Cook": "Likely R",
+     "IE": "Likely R",
+     "Sabato": "Likely R",
+     "Econ.": "Tossup",
+     "ST": "Lean R",
+     "DDHQ": "Lean R",
+     "FPO": "Likely R",
+     "Fox": "Lean R",
+     "Silver": "Tossup",
+     "RCP": "Tossup"
+    },
+    "pvi": -8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": -0.65,
+    "prior_margin": -3.28,
+    "incumbent": "Darren Soto",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.1,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3411,
+     "lo": 0.0794,
+     "hi": 0.7226
+    },
+    "R": {
+     "fair": 0.6589,
+     "lo": 0.2774,
+     "hi": 0.9206
+    }
+   },
+   "office": "house",
+   "state": "Florida"
+  },
+  "FL-13 House race": {
+   "margin_hat": -3.89,
+   "sigma": 8.0,
+   "w_poll": 0.19,
+   "inputs": {
+    "poll_margin": 1.0,
+    "n_polls": 1,
+    "n_eff": 0.35,
+    "poll_shares": {
+     "R": 46.0,
+     "D": 47.0
+    },
+    "latest_poll": "2026-10-15",
+    "rating_margin": -5.2,
+    "ratings": {
+     "Cook": "Lean R",
+     "IE": "Lean R",
+     "Sabato": "Likely R",
+     "Econ.": "Lean R",
+     "ST": "Likely R",
+     "DDHQ": "Likely R",
+     "FPO": "Lean R",
+     "Fox": "Lean R",
+     "Silver": "Lean R",
+     "RCP": "Lean R"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -4.65,
+    "prior_margin": -5.04,
+    "incumbent": "Anna Paulina Luna",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.1,
+    "polls_used": [
+     {
+      "end": "2026-10-15",
+      "pollster": "Public Policy Polling",
+      "n": 603,
+      "by_party": {
+       "R": 46.0,
+       "D": 47.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3133,
+     "lo": 0.0686,
+     "hi": 0.6961
+    },
+    "R": {
+     "fair": 0.6867,
+     "lo": 0.3039,
+     "hi": 0.9314
+    }
+   },
+   "office": "house",
+   "state": "Florida"
+  },
+  "FL-16 House race": {
+   "margin_hat": -5.38,
+   "sigma": 8.0,
+   "w_poll": 0.1,
+   "inputs": {
+    "poll_margin": -4.0,
+    "n_polls": 1,
+    "n_eff": 0.17,
+    "poll_shares": {
+     "D": 39.0,
+     "R": 43.0
+    },
+    "latest_poll": "2026-10-02",
+    "rating_margin": -7.2,
+    "ratings": {
+     "Cook": "Likely R",
+     "IE": "Likely R",
+     "Sabato": "Likely R",
+     "Econ.": "Lean R",
+     "ST": "Likely R",
+     "DDHQ": "Likely R",
+     "FPO": "Lean R",
+     "Fox": "Likely R",
+     "Silver": "Likely R",
+     "RCP": "Likely R"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -1.65,
+    "prior_margin": -5.54,
+    "incumbent": "Vern Buchanan",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.1,
+    "polls_used": [
+     {
+      "end": "2026-10-02",
+      "pollster": "Public Policy Polling",
+      "n": 530,
+      "by_party": {
+       "D": 39.0,
+       "R": 43.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.2507,
+     "lo": 0.0472,
+     "hi": 0.6284
+    },
+    "R": {
+     "fair": 0.7493,
+     "lo": 0.3716,
+     "hi": 0.9528
+    }
+   },
+   "office": "house",
+   "state": "Florida"
+  },
+  "FL-20 House race": {
+   "margin_hat": 4.35,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": null,
+    "ratings": {},
+    "pvi": null,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 4.35,
+    "prior_margin": 4.35,
+    "incumbent": null,
+    "open_seat": null,
+    "days_to_election": 12,
+    "pres2024_margin": -13.1,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.7067,
+     "lo": 0.3241,
+     "hi": 0.9387
+    },
+    "R": {
+     "fair": 0.2933,
+     "lo": 0.0613,
+     "hi": 0.6759
+    }
+   },
+   "office": "house",
+   "state": "Florida"
+  },
+  "FL-22 House race": {
+   "margin_hat": 0.8,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 1.0,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tilt R",
+     "Sabato": "Tossup",
+     "Econ.": "Lean D",
+     "ST": "Tossup",
+     "DDHQ": "Tossup",
+     "FPO": "Lean D",
+     "Fox": "Tossup",
+     "Silver": "Lean D",
+     "RCP": "Tossup"
+    },
+    "pvi": -4.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 0.35,
+    "prior_margin": 0.8,
+    "incumbent": null,
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.1,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5401,
+     "lo": 0.1842,
+     "hi": 0.8645
+    },
+    "R": {
+     "fair": 0.4599,
+     "lo": 0.1355,
+     "hi": 0.8158
+    }
+   },
+   "office": "house",
+   "state": "Florida"
+  },
+  "Florida Governor": {
+   "margin_hat": -3.59,
+   "sigma": 6.33,
+   "w_poll": 0.82,
+   "inputs": {
+    "poll_margin": -3.8,
+    "n_polls": 12,
+    "n_eff": 6.65,
+    "poll_shares": {
+     "D": 44.5,
+     "R": 48.3
+    },
+    "latest_poll": "2026-10-19",
+    "rating_margin": -3.5,
+    "ratings": {
+     "Cook": "Lean R",
+     "DDHQ": "Lean R",
+     "Fox": "Lean R",
+     "IE": "Lean R",
+     "NBC": "Lean R",
+     "RCP": "Tossup",
+     "Sabato": "Lean R",
+     "Silver": "Lean R"
+    },
+    "pvi": -5.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -0.65,
+    "prior_margin": -2.65,
+    "incumbent": "Ron DeSantis",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.1,
+    "polls_used": [
+     {
+      "end": "2026-09-09",
+      "pollster": "Change Research",
+      "n": 1107,
+      "by_party": {
+       "D": 47.0,
+       "R": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-17",
+      "pollster": "St. Pete Polls",
+      "n": 913,
+      "by_party": {
+       "R": 43.5,
+       "D": 43.4
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "Stetson University Center for Public Opinion Research",
+      "n": 830,
+      "by_party": {
+       "R": 51.0,
+       "D": 39.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-27",
+      "pollster": "Change Research",
+      "n": 1063,
+      "by_party": {
+       "R": 46.0,
+       "D": 48.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-07",
+      "pollster": "St. Pete Polls",
+      "n": 836,
+      "by_party": {
+       "R": 45.0,
+       "D": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-04",
+      "pollster": "Targoz Market Research",
+      "n": 857,
+      "by_party": {
+       "D": 42.0,
+       "R": 52.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-04",
+      "pollster": "Targoz Market Research",
+      "n": 1200,
+      "by_party": {
+       "D": 39.0,
+       "R": 48.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-10",
+      "pollster": "Change Research",
+      "n": 920,
+      "by_party": {
+       "R": 47.0,
+       "D": 47.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-10",
+      "pollster": "MDW Communications",
+      "n": 2351,
+      "by_party": {
+       "R": 46.0,
+       "D": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-15",
+      "pollster": "YouGov",
+      "n": 825,
+      "by_party": {
+       "R": 50.0,
+       "D": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-19",
+      "pollster": "ActiVote",
+      "n": 400,
+      "by_party": {
+       "R": 51.7,
+       "D": 48.3
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-19",
+      "pollster": "University of North Florida",
+      "n": 1378,
+      "by_party": {
+       "R": 49.0,
+       "D": 47.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.2853,
+     "lo": 0.0586,
+     "hi": 0.6675
+    },
+    "R": {
+     "fair": 0.7147,
+     "lo": 0.3325,
+     "hi": 0.9414
+    }
+   },
+   "office": "governor",
+   "state": "Florida"
+  },
+  "Florida Senate": {
+   "margin_hat": -5.79,
+   "sigma": 6.06,
+   "w_poll": 0.77,
+   "inputs": {
+    "poll_margin": -5.6,
+    "n_polls": 11,
+    "n_eff": 4.94,
+    "poll_shares": {
+     "R": 48.9,
+     "D": 43.2
+    },
+    "latest_poll": "2026-10-19",
+    "rating_margin": -8.91,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Likely R",
+     "Economist": "Likely R",
+     "FPO": "Lean R",
+     "Fox": "Solid R",
+     "IE": "Likely R",
+     "NBC": "Likely R",
+     "RCP": "Lean R",
+     "Sabato": "Safe R",
+     "SB": "Likely R",
+     "ST": "Likely R"
+    },
+    "pvi": -5.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -0.65,
+    "prior_margin": -6.43,
+    "incumbent": "Ashley Moody",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.1,
+    "polls_used": [
+     {
+      "end": "2026-10-10",
+      "pollster": "MDW",
+      "n": 800,
+      "by_party": {
+       "R": 48.0,
+       "D": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-09",
+      "pollster": "Change Research",
+      "n": 1107,
+      "by_party": {
+       "R": 47.0,
+       "D": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-10",
+      "pollster": "Quantus Insights",
+      "n": 733,
+      "by_party": {
+       "R": 50.1,
+       "D": 42.7
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-17",
+      "pollster": "St. Pete Polls",
+      "n": 913,
+      "by_party": {
+       "R": 45.2,
+       "D": 44.8
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "InsiderAdvantage",
+      "n": 600,
+      "by_party": {
+       "R": 49.3,
+       "D": 41.8
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "Stetson University Center for Public Opinion Research",
+      "n": 830,
+      "by_party": {
+       "R": 51.0,
+       "D": 40.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-27",
+      "pollster": "Change Research",
+      "n": 1063,
+      "by_party": {
+       "R": 48.0,
+       "D": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-07",
+      "pollster": "St. Pete Polls",
+      "n": 836,
+      "by_party": {
+       "R": 47.0,
+       "D": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-04",
+      "pollster": "Targoz Market Research",
+      "n": 857,
+      "by_party": {
+       "D": 42.0,
+       "R": 52.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-04",
+      "pollster": "Targoz Market Research",
+      "n": 1200,
+      "by_party": {
+       "D": 38.0,
+       "R": 50.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-19",
+      "pollster": "University of North Florida",
+      "n": 1414,
+      "by_party": {
+       "R": 49.0,
+       "D": 45.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Neil Gillespie"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.1693,
+     "lo": 0.0252,
+     "hi": 0.5172
+    },
+    "R": {
+     "fair": 0.8307,
+     "lo": 0.4828,
+     "hi": 0.9748
+    }
+   },
+   "office": "senate",
+   "state": "Florida"
+  },
+  "Georgia Governor": {
+   "margin_hat": -1.0,
+   "sigma": 6.33,
+   "w_poll": 0.75,
+   "inputs": {
+    "poll_margin": -1.8,
+    "n_polls": 7,
+    "n_eff": 4.4,
+    "poll_shares": {
+     "R": 48.7,
+     "D": 46.9
+    },
+    "latest_poll": "2026-10-20",
+    "rating_margin": 0.5,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Tossup",
+     "Fox": "Tossup",
+     "IE": "Tossup",
+     "NBC": "Tossup",
+     "RCP": "Tossup",
+     "Sabato": "Tossup",
+     "Silver": "Lean D"
+    },
+    "pvi": -1.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 3.35,
+    "prior_margin": 1.35,
+    "incumbent": "Brian Kemp",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -2.19,
+    "polls_used": [
+     {
+      "end": "2026-10-13",
+      "pollster": "InsiderAdvantage",
+      "n": 800,
+      "by_party": {
+       "R": 49.0,
+       "D": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-23",
+      "pollster": "Big Data Poll",
+      "n": 678,
+      "by_party": {
+       "R": 50.5,
+       "D": 49.5
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-23",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "R": 48.0,
+       "D": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-03",
+      "pollster": "Wedgewood Polls",
+      "n": 600,
+      "by_party": {
+       "R": 51.0,
+       "D": 49.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-17",
+      "pollster": "Quantus Insights",
+      "n": 755,
+      "by_party": {
+       "D": 46.6,
+       "R": 48.2
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-15",
+      "pollster": "GBAO Strategies",
+      "n": 2000,
+      "by_party": {
+       "R": 46.0,
+       "D": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-20",
+      "pollster": "ActiVote",
+      "n": 400,
+      "by_party": {
+       "D": 48.5,
+       "R": 51.5
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.4373,
+     "lo": 0.1235,
+     "hi": 0.8002
+    },
+    "R": {
+     "fair": 0.5627,
+     "lo": 0.1998,
+     "hi": 0.8765
+    }
+   },
+   "office": "governor",
+   "state": "Georgia"
+  },
+  "Georgia Senate": {
+   "margin_hat": 8.11,
+   "sigma": 6.06,
+   "w_poll": 0.7,
+   "inputs": {
+    "poll_margin": 8.1,
+    "n_polls": 6,
+    "n_eff": 3.51,
+    "poll_shares": {
+     "D": 51.7,
+     "R": 43.6
+    },
+    "latest_poll": "2026-10-20",
+    "rating_margin": 8.91,
+    "ratings": {
+     "Cook": "Likely D",
+     "DDHQ": "Likely D",
+     "Economist": "Likely D",
+     "FPO": "Safe D",
+     "Fox": "Likely D",
+     "IE": "Lean D",
+     "NBC": "Likely D",
+     "RCP": "Lean D",
+     "Sabato": "Likely D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": -1.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 6.35,
+    "prior_margin": 8.14,
+    "incumbent": "Jon Ossoff",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -2.19,
+    "polls_used": [
+     {
+      "end": "2026-09-23",
+      "pollster": "Big Data Poll",
+      "n": 678,
+      "by_party": {
+       "D": 55.4,
+       "R": 44.6
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-23",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "D": 50.0,
+       "R": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-03",
+      "pollster": "Wedgewood Polls",
+      "n": 600,
+      "by_party": {
+       "D": 55.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-17",
+      "pollster": "Quantus Insights",
+      "n": 755,
+      "by_party": {
+       "D": 51.8,
+       "R": 44.9
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-20",
+      "pollster": "ActiVote",
+      "n": 400,
+      "by_party": {
+       "D": 54.0,
+       "R": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-15",
+      "pollster": "University of Georgia School of Public and International Affairs",
+      "n": 1000,
+      "by_party": {
+       "D": 48.0,
+       "R": 40.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9098,
+     "lo": 0.633,
+     "hi": 0.9904
+    },
+    "R": {
+     "fair": 0.0902,
+     "lo": 0.0096,
+     "hi": 0.367
+    }
+   },
+   "office": "senate",
+   "state": "Georgia"
+  },
+  "Hawaii Governor": {
+   "margin_hat": 15.91,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 13.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 20.35,
+    "prior_margin": 15.91,
+    "incumbent": "Josh Green",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 23.11,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9766,
+     "lo": 0.8385,
+     "hi": 0.9986
+    },
+    "R": {
+     "fair": 0.0234,
+     "lo": 0.0014,
+     "hi": 0.1615
+    }
+   },
+   "office": "governor",
+   "state": "Hawaii"
+  },
+  "IA-01 House race": {
+   "margin_hat": 2.99,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 5.4,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tilt D",
+     "Sabato": "Lean D",
+     "Econ.": "Likely D",
+     "ST": "Likely D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": -4.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -2.65,
+    "prior_margin": 2.99,
+    "incumbent": "Mariannette Miller-Meeks",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.21,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6455,
+     "lo": 0.2654,
+     "hi": 0.9151
+    },
+    "I": {
+     "fair": 0.0,
+     "lo": 0.0,
+     "hi": 0.0
+    },
+    "R": {
+     "fair": 0.3545,
+     "lo": 0.0849,
+     "hi": 0.7346
+    }
+   },
+   "office": "house",
+   "state": "Iowa"
+  },
+  "IA-02 House race": {
+   "margin_hat": 1.23,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 1.6,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Lean D",
+     "Econ.": "Lean D",
+     "ST": "Lean D",
+     "DDHQ": "Tossup",
+     "FPO": "Lean D",
+     "Fox": "Tossup",
+     "Silver": "Tossup",
+     "RCP": "Tossup"
+    },
+    "pvi": -4.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 0.35,
+    "prior_margin": 1.23,
+    "incumbent": "Ashley Hinson",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.21,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5609,
+     "lo": 0.1985,
+     "hi": 0.8756
+    },
+    "R": {
+     "fair": 0.4391,
+     "lo": 0.1244,
+     "hi": 0.8015
+    }
+   },
+   "office": "house",
+   "state": "Iowa"
+  },
+  "IA-03 House race": {
+   "margin_hat": 3.58,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 5.4,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tilt D",
+     "Sabato": "Lean D",
+     "Econ.": "Likely D",
+     "ST": "Likely D",
+     "DDHQ": "Lean D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Likely D",
+     "RCP": "Lean D"
+    },
+    "pvi": -2.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -0.65,
+    "prior_margin": 3.58,
+    "incumbent": "Zach Nunn",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.21,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.673,
+     "lo": 0.2905,
+     "hi": 0.9262
+    },
+    "R": {
+     "fair": 0.327,
+     "lo": 0.0738,
+     "hi": 0.7095
+    }
+   },
+   "office": "house",
+   "state": "Iowa"
+  },
+  "Idaho Governor": {
+   "margin_hat": -14.79,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "Silver": "Solid R"
+    },
+    "pvi": -18.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -16.65,
+    "prior_margin": -14.79,
+    "incumbent": "Brad Little",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -36.49,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0322,
+     "lo": 0.0022,
+     "hi": 0.1978
+    },
+    "R": {
+     "fair": 0.9678,
+     "lo": 0.8022,
+     "hi": 0.9978
+    }
+   },
+   "office": "governor",
+   "state": "Idaho"
+  },
+  "Idaho Senate": {
+   "margin_hat": -14.41,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -13.45,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Likely R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -18.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -16.65,
+    "prior_margin": -14.41,
+    "incumbent": "Jim Risch",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -36.49,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0358,
+     "lo": 0.0025,
+     "hi": 0.2115
+    },
+    "I": {
+     "fair": 0.0,
+     "lo": 0.0,
+     "hi": 0.0
+    },
+    "R": {
+     "fair": 0.9642,
+     "lo": 0.7885,
+     "hi": 0.9975
+    }
+   },
+   "office": "senate",
+   "state": "Idaho"
+  },
+  "Illinois Governor": {
+   "margin_hat": 13.96,
+   "sigma": 8.0,
+   "w_poll": 0.1,
+   "inputs": {
+    "poll_margin": 20.0,
+    "n_polls": 1,
+    "n_eff": 0.17,
+    "poll_shares": {
+     "D": 54.0,
+     "R": 34.0
+    },
+    "latest_poll": "2026-10-01",
+    "rating_margin": 13.25,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Likely D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 13.35,
+    "prior_margin": 13.28,
+    "incumbent": "JB Pritzker",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 10.9,
+    "polls_used": [
+     {
+      "end": "2026-10-01",
+      "pollster": "Public Policy Polling",
+      "n": 569,
+      "by_party": {
+       "D": 54.0,
+       "R": 34.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": [
+     "Collin Corbett"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9596,
+     "lo": 0.772,
+     "hi": 0.997
+    },
+    "R": {
+     "fair": 0.0404,
+     "lo": 0.003,
+     "hi": 0.228
+    }
+   },
+   "office": "governor",
+   "state": "Illinois"
+  },
+  "Illinois Senate": {
+   "margin_hat": 14.15,
+   "sigma": 8.0,
+   "w_poll": 0.38,
+   "inputs": {
+    "poll_margin": 16.2,
+    "n_polls": 2,
+    "n_eff": 0.91,
+    "poll_shares": {
+     "D": 57.1,
+     "R": 40.9
+    },
+    "latest_poll": "2026-10-20",
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 10.35,
+    "prior_margin": 12.9,
+    "incumbent": "Dick Durbin",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 10.9,
+    "polls_used": [
+     {
+      "end": "2026-10-01",
+      "pollster": "Public Policy Polling",
+      "n": 569,
+      "by_party": {
+       "D": 49.0,
+       "R": 36.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-20",
+      "pollster": "ActiVote",
+      "n": 400,
+      "by_party": {
+       "D": 59.0,
+       "R": 42.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9615,
+     "lo": 0.7789,
+     "hi": 0.9972
+    },
+    "R": {
+     "fair": 0.0385,
+     "lo": 0.0028,
+     "hi": 0.2211
+    }
+   },
+   "office": "senate",
+   "state": "Illinois"
+  },
+  "Iowa Governor": {
+   "margin_hat": 6.0,
+   "sigma": 6.33,
+   "w_poll": 0.78,
+   "inputs": {
+    "poll_margin": 7.0,
+    "n_polls": 12,
+    "n_eff": 5.29,
+    "poll_shares": {
+     "D": 50.7,
+     "R": 43.7
+    },
+    "latest_poll": "2026-10-19",
+    "rating_margin": 4.25,
+    "ratings": {
+     "Cook": "Lean D",
+     "DDHQ": "Lean D",
+     "Fox": "Lean D",
+     "IE": "Tilt D",
+     "NBC": "Lean D",
+     "RCP": "Lean D",
+     "Sabato": "Lean D",
+     "Silver": "Likely D"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -1.65,
+    "prior_margin": 2.48,
+    "incumbent": "Kim Reynolds",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.21,
+    "polls_used": [
+     {
+      "end": "2026-10-12",
+      "pollster": "YouGov",
+      "n": 2245,
+      "by_party": {
+       "D": 50.0,
+       "R": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-11",
+      "pollster": "Marist University",
+      "n": 1100,
+      "by_party": {
+       "D": 52.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-08",
+      "pollster": "YouGov",
+      "n": 2041,
+      "by_party": {
+       "R": 41.0,
+       "D": 51.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-08",
+      "pollster": "YouGov",
+      "n": 2167,
+      "by_party": {
+       "D": 50.0,
+       "R": 39.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-16",
+      "pollster": "co/efficient",
+      "n": 831,
+      "by_party": {
+       "D": 46.0,
+       "R": 42.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-09-20",
+      "pollster": "Marist University",
+      "n": 1050,
+      "by_party": {
+       "D": 54.0,
+       "R": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "Beacon Research/Shaw & Co. Research",
+      "n": 1008,
+      "by_party": {
+       "D": 53.0,
+       "R": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "The New York Times/Siena University",
+      "n": 606,
+      "by_party": {
+       "D": 52.0,
+       "R": 41.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-05",
+      "pollster": "CNN/SSRS",
+      "n": 801,
+      "by_party": {
+       "D": 51.0,
+       "R": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-06",
+      "pollster": "Emerson College",
+      "n": 650,
+      "by_party": {
+       "D": 49.0,
+       "R": 45.3
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-12",
+      "pollster": "National Public Affairs",
+      "n": 678,
+      "by_party": {
+       "D": 50.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-19",
+      "pollster": "co/efficient",
+      "n": 863,
+      "by_party": {
+       "D": 49.0,
+       "R": 45.0
+      },
+      "partisan": "REP"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.8286,
+     "lo": 0.4795,
+     "hi": 0.9743
+    },
+    "R": {
+     "fair": 0.1714,
+     "lo": 0.0257,
+     "hi": 0.5205
+    }
+   },
+   "office": "governor",
+   "state": "Iowa"
+  },
+  "Iowa Senate": {
+   "margin_hat": 0.09,
+   "sigma": 6.06,
+   "w_poll": 0.77,
+   "inputs": {
+    "poll_margin": 0.3,
+    "n_polls": 11,
+    "n_eff": 4.94,
+    "poll_shares": {
+     "R": 45.8,
+     "D": 46.1
+    },
+    "latest_poll": "2026-10-19",
+    "rating_margin": -0.18,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Tossup",
+     "Economist": "Lean R",
+     "FPO": "Tossup",
+     "Fox": "Tossup",
+     "IE": "Tilt R",
+     "NBC": "Tossup",
+     "RCP": "Tossup",
+     "Sabato": "Tossup",
+     "SB": "Lean D",
+     "ST": "Tossup"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -1.65,
+    "prior_margin": -0.62,
+    "incumbent": "Joni Ernst",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.21,
+    "polls_used": [
+     {
+      "end": "2026-10-12",
+      "pollster": "YouGov",
+      "n": 2245,
+      "by_party": {
+       "R": 46.0,
+       "D": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-11",
+      "pollster": "Marist University",
+      "n": 1100,
+      "by_party": {
+       "R": 45.0,
+       "D": 48.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-08",
+      "pollster": "YouGov",
+      "n": 2166,
+      "by_party": {
+       "R": 43.0,
+       "D": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-08",
+      "pollster": "YouGov",
+      "n": 2041,
+      "by_party": {
+       "D": 47.0,
+       "R": 43.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-16",
+      "pollster": "co/efficient",
+      "n": 831,
+      "by_party": {
+       "R": 46.0,
+       "D": 42.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-09-20",
+      "pollster": "Marist University",
+      "n": 1050,
+      "by_party": {
+       "R": 42.0,
+       "D": 50.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "Beacon Research/Shaw & Co. Research",
+      "n": 1008,
+      "by_party": {
+       "R": 47.0,
+       "D": 49.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-05",
+      "pollster": "CNN/SSRS",
+      "n": 801,
+      "by_party": {
+       "R": 45.0,
+       "D": 43.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-06",
+      "pollster": "Emerson College",
+      "n": 650,
+      "by_party": {
+       "D": 45.0,
+       "R": 46.6
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-12",
+      "pollster": "National Public Affairs",
+      "n": 678,
+      "by_party": {
+       "R": 47.0,
+       "D": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-19",
+      "pollster": "co/efficient",
+      "n": 863,
+      "by_party": {
+       "R": 48.0,
+       "D": 45.0
+      },
+      "partisan": "REP"
+     }
+    ],
+    "unmapped_poll_names": [
+     "Thomas Laehn"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5056,
+     "lo": 0.1621,
+     "hi": 0.8447
+    },
+    "R": {
+     "fair": 0.4944,
+     "lo": 0.1553,
+     "hi": 0.8379
+    }
+   },
+   "office": "senate",
+   "state": "Iowa"
+  },
+  "KY-04 House race": {
+   "margin_hat": -13.65,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": null,
+    "ratings": {},
+    "pvi": -18.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -13.65,
+    "prior_margin": -13.65,
+    "incumbent": "Thomas Massie",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -30.53,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.044,
+     "lo": 0.0034,
+     "hi": 0.24
+    },
+    "R": {
+     "fair": 0.956,
+     "lo": 0.76,
+     "hi": 0.9966
+    }
+   },
+   "office": "house",
+   "state": "Kentucky"
+  },
+  "Kansas Governor": {
+   "margin_hat": -3.98,
+   "sigma": 8.0,
+   "w_poll": 0.33,
+   "inputs": {
+    "poll_margin": -5.2,
+    "n_polls": 3,
+    "n_eff": 0.75,
+    "poll_shares": {
+     "R": 50.4,
+     "D": 45.2
+    },
+    "latest_poll": "2026-09-30",
+    "rating_margin": -3.25,
+    "ratings": {
+     "Cook": "Lean R",
+     "DDHQ": "Lean R",
+     "Fox": "Lean R",
+     "IE": "Tilt R",
+     "NBC": "Lean R",
+     "RCP": "Tossup",
+     "Sabato": "Lean R",
+     "Silver": "Lean R"
+    },
+    "pvi": -8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -3.65,
+    "prior_margin": -3.37,
+    "incumbent": "Laura Kelly",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -16.12,
+    "polls_used": [
+     {
+      "end": "2026-09-16",
+      "pollster": "Emerson College",
+      "n": 750,
+      "by_party": {
+       "R": 51.0,
+       "D": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-24",
+      "pollster": "Wedgewood Polls",
+      "n": 500,
+      "by_party": {
+       "R": 52.0,
+       "D": 48.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-30",
+      "pollster": "The New York Times/Siena University",
+      "n": 605,
+      "by_party": {
+       "R": 49.0,
+       "D": 44.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3094,
+     "lo": 0.0671,
+     "hi": 0.6923
+    },
+    "R": {
+     "fair": 0.6906,
+     "lo": 0.3077,
+     "hi": 0.9329
+    }
+   },
+   "office": "governor",
+   "state": "Kansas"
+  },
+  "Kansas Senate": {
+   "margin_hat": -1.42,
+   "sigma": 6.06,
+   "w_poll": 0.48,
+   "inputs": {
+    "poll_margin": -0.1,
+    "n_polls": 3,
+    "n_eff": 1.37,
+    "poll_shares": {
+     "R": 47.3,
+     "D": 47.2
+    },
+    "latest_poll": "2026-10-14",
+    "rating_margin": -0.91,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Lean R",
+     "Economist": "Tossup",
+     "FPO": "Tossup",
+     "Fox": "Lean R",
+     "IE": "Tilt R",
+     "NBC": "Tossup",
+     "RCP": "Tossup",
+     "Sabato": "Tossup",
+     "SB": "Tossup",
+     "ST": "Tossup"
+    },
+    "pvi": -8.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -6.65,
+    "prior_margin": -2.63,
+    "incumbent": "Roger Marshall",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -16.12,
+    "polls_used": [
+     {
+      "end": "2026-09-16",
+      "pollster": "Emerson College",
+      "n": 750,
+      "by_party": {
+       "R": 43.0,
+       "D": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-14",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "R": 48.0,
+       "D": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-24",
+      "pollster": "Wedgewood Polls",
+      "n": 500,
+      "by_party": {
+       "R": 48.0,
+       "D": 50.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "David Graham"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.4071,
+     "lo": 0.1084,
+     "hi": 0.7778
+    },
+    "R": {
+     "fair": 0.5929,
+     "lo": 0.2222,
+     "hi": 0.8916
+    }
+   },
+   "office": "senate",
+   "state": "Kansas"
+  },
+  "Kentucky Senate": {
+   "margin_hat": -13.0,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Safe R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -15.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -10.65,
+    "prior_margin": -13.0,
+    "incumbent": "Mitch McConnell",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -30.53,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0521,
+     "lo": 0.0043,
+     "hi": 0.2662
+    },
+    "R": {
+     "fair": 0.9479,
+     "lo": 0.7338,
+     "hi": 0.9957
+    }
+   },
+   "office": "senate",
+   "state": "Kentucky"
+  },
+  "Louisiana Senate": {
+   "margin_hat": -11.17,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -11.82,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Likely R",
+     "Economist": "Likely R",
+     "FPO": "Likely R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Likely R",
+     "ST": "Safe R"
+    },
+    "pvi": -11.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -9.65,
+    "prior_margin": -11.17,
+    "incumbent": "Bill Cassidy",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -22.01,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0813,
+     "lo": 0.0083,
+     "hi": 0.346
+    },
+    "R": {
+     "fair": 0.9187,
+     "lo": 0.654,
+     "hi": 0.9917
+    }
+   },
+   "office": "senate",
+   "state": "Louisiana"
+  },
+  "ME-02 House race": {
+   "margin_hat": -0.74,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -1.2,
+    "ratings": {
+     "Cook": "Lean R",
+     "IE": "Lean R",
+     "Sabato": "Lean R",
+     "Econ.": "Lean D",
+     "ST": "Lean R",
+     "DDHQ": "Tossup",
+     "FPO": "Lean D",
+     "Fox": "Tossup",
+     "Silver": "Lean R",
+     "RCP": "Tossup"
+    },
+    "pvi": -4.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 0.35,
+    "prior_margin": -0.74,
+    "incumbent": "Jared Golden",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 6.94,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.4634,
+     "lo": 0.1374,
+     "hi": 0.8181
+    },
+    "R": {
+     "fair": 0.5366,
+     "lo": 0.1819,
+     "hi": 0.8626
+    }
+   },
+   "office": "house",
+   "state": "Maine"
+  },
+  "MI-07 House race": {
+   "margin_hat": 2.65,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 3.2,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Tossup",
+     "Econ.": "Lean D",
+     "ST": "Lean D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Tossup",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": 0.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 1.35,
+    "prior_margin": 2.65,
+    "incumbent": "Tom Barrett",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -1.42,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6295,
+     "lo": 0.2516,
+     "hi": 0.9083
+    },
+    "R": {
+     "fair": 0.3705,
+     "lo": 0.0917,
+     "hi": 0.7484
+    }
+   },
+   "office": "house",
+   "state": "Michigan"
+  },
+  "MI-10 House race": {
+   "margin_hat": 2.23,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 2.6,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tilt R",
+     "Sabato": "Tossup",
+     "Econ.": "Lean D",
+     "ST": "Lean D",
+     "DDHQ": "Lean D",
+     "FPO": "Likely D",
+     "Fox": "Tossup",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": -3.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 1.35,
+    "prior_margin": 2.23,
+    "incumbent": "John James",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -1.42,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6095,
+     "lo": 0.2352,
+     "hi": 0.8994
+    },
+    "R": {
+     "fair": 0.3905,
+     "lo": 0.1006,
+     "hi": 0.7648
+    }
+   },
+   "office": "house",
+   "state": "Michigan"
+  },
+  "MN-01 House race": {
+   "margin_hat": -2.29,
+   "sigma": 8.0,
+   "w_poll": 0.39,
+   "inputs": {
+    "poll_margin": 1.2,
+    "n_polls": 3,
+    "n_eff": 0.94,
+    "poll_shares": {
+     "R": 43.9,
+     "D": 45.0
+    },
+    "latest_poll": "2026-10-14",
+    "rating_margin": -4.4,
+    "ratings": {
+     "Cook": "Lean R",
+     "IE": "Likely R",
+     "Sabato": "Lean R",
+     "Econ.": "Tossup",
+     "ST": "Likely R",
+     "DDHQ": "Lean R",
+     "FPO": "Tossup",
+     "Fox": "Likely R",
+     "Silver": "Lean R",
+     "RCP": "Lean R"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -4.65,
+    "prior_margin": -4.48,
+    "incumbent": "Brad Finstad",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 4.24,
+    "polls_used": [
+     {
+      "end": "2026-09-21",
+      "pollster": "GBAO Strategies",
+      "n": 500,
+      "by_party": {
+       "R": 46.0,
+       "D": 47.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-09",
+      "pollster": "SurveyUSA",
+      "n": 565,
+      "by_party": {
+       "R": 44.0,
+       "D": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-14",
+      "pollster": "Public Policy Polling",
+      "n": 588,
+      "by_party": {
+       "R": 43.0,
+       "D": 43.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3874,
+     "lo": 0.0992,
+     "hi": 0.7624
+    },
+    "R": {
+     "fair": 0.6126,
+     "lo": 0.2376,
+     "hi": 0.9008
+    }
+   },
+   "office": "house",
+   "state": "Minnesota"
+  },
+  "MN-02 House race": {
+   "margin_hat": 9.9,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 11.0,
+    "ratings": {
+     "Cook": "Likely D",
+     "IE": "Likely D",
+     "Sabato": "Likely D",
+     "Econ.": "Safe D",
+     "ST": "Safe D",
+     "DDHQ": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Likely D",
+     "Silver": "Solid D",
+     "RCP": "Likely D"
+    },
+    "pvi": 3.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 7.35,
+    "prior_margin": 9.9,
+    "incumbent": "Angie Craig",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 4.24,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.8922,
+     "lo": 0.5941,
+     "hi": 0.9874
+    },
+    "R": {
+     "fair": 0.1078,
+     "lo": 0.0126,
+     "hi": 0.4059
+    }
+   },
+   "office": "house",
+   "state": "Minnesota"
+  },
+  "MN-05 House race": {
+   "margin_hat": 36.35,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": null,
+    "ratings": {},
+    "pvi": 32.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 36.35,
+    "prior_margin": 36.35,
+    "incumbent": "Ilhan Omar",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 4.24,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.995,
+     "lo": 0.9998,
+     "hi": 1.0
+    },
+    "I": {
+     "fair": 0.0,
+     "lo": 0.0,
+     "hi": 0.0
+    },
+    "R": {
+     "fair": 0.005,
+     "lo": 0.0,
+     "hi": 0.0002
+    }
+   },
+   "office": "house",
+   "state": "Minnesota"
+  },
+  "MT-01 House race": {
+   "margin_hat": -0.67,
+   "sigma": 8.0,
+   "w_poll": 0.25,
+   "inputs": {
+    "poll_margin": 1.7,
+    "n_polls": 2,
+    "n_eff": 0.5,
+    "poll_shares": {
+     "R": 45.3,
+     "D": 47.1,
+     "I": 2.0
+    },
+    "latest_poll": "2026-10-14",
+    "rating_margin": -1.8,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tilt R",
+     "Sabato": "Lean R",
+     "Econ.": "Tossup",
+     "ST": "Lean R",
+     "DDHQ": "Lean R",
+     "FPO": "Tossup",
+     "Fox": "Tossup",
+     "Silver": "Lean R",
+     "RCP": "Tossup"
+    },
+    "pvi": -5.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -0.65,
+    "prior_margin": -1.46,
+    "incumbent": "Ryan Zinke",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -19.93,
+    "polls_used": [
+     {
+      "end": "2026-09-24",
+      "pollster": "American Pulse Research & Polling",
+      "n": 314,
+      "by_party": {
+       "R": 45.9,
+       "D": 45.4,
+       "I": 5.4
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-14",
+      "pollster": "Public Policy Polling",
+      "n": 541,
+      "by_party": {
+       "R": 45.0,
+       "D": 48.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.4668,
+     "lo": 0.1393,
+     "hi": 0.8204
+    },
+    "R": {
+     "fair": 0.5332,
+     "lo": 0.1796,
+     "hi": 0.8607
+    }
+   },
+   "office": "house",
+   "state": "Montana"
+  },
+  "Maine Governor": {
+   "margin_hat": 11.1,
+   "sigma": 6.33,
+   "w_poll": 0.65,
+   "inputs": {
+    "poll_margin": 11.3,
+    "n_polls": 8,
+    "n_eff": 2.76,
+    "poll_shares": {
+     "D": 49.2,
+     "R": 38.0,
+     "I": 6.4
+    },
+    "latest_poll": "2026-10-05",
+    "rating_margin": 11.75,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Likely D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Likely D",
+     "Sabato": "Likely D",
+     "Silver": "Solid D"
+    },
+    "pvi": 4.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 8.35,
+    "prior_margin": 10.73,
+    "incumbent": "Janet Mills",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 6.94,
+    "polls_used": [
+     {
+      "end": "2026-09-08",
+      "pollster": "YouGov",
+      "n": 1334,
+      "by_party": {
+       "D": 47.0,
+       "R": 36.0,
+       "I": 2.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "University of Massachusetts Lowell Center for Public Opinion/YouGov",
+      "n": 650,
+      "by_party": {
+       "D": 49.0,
+       "R": 38.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "The New York Times/Siena University",
+      "n": 619,
+      "by_party": {
+       "D": 47.0,
+       "R": 34.0,
+       "I": 8.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-30",
+      "pollster": "co/efficient",
+      "n": 1240,
+      "by_party": {
+       "D": 47.0,
+       "R": 38.0,
+       "I": 6.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "Fabrizio, Lee & Associates/Impact Research",
+      "n": 982,
+      "by_party": {
+       "D": 52.0,
+       "R": 39.0,
+       "I": 6.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-04",
+      "pollster": "Marist University",
+      "n": 1505,
+      "by_party": {
+       "D": 52.0,
+       "R": 40.0,
+       "I": 6.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 1312,
+      "by_party": {
+       "D": 48.0,
+       "R": 40.0,
+       "I": 5.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-05",
+      "pollster": "The Washington Post/George Mason University School of Policy and Government",
+      "n": 800,
+      "by_party": {
+       "D": 49.0,
+       "R": 36.0,
+       "I": 11.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9603,
+     "lo": 0.7747,
+     "hi": 0.9971
+    },
+    "I": {
+     "fair": 0.0,
+     "lo": 0.0,
+     "hi": 0.0
+    },
+    "R": {
+     "fair": 0.0397,
+     "lo": 0.0029,
+     "hi": 0.2253
+    }
+   },
+   "office": "governor",
+   "state": "Maine"
+  },
+  "Maine Senate": {
+   "margin_hat": 2.53,
+   "sigma": 6.06,
+   "w_poll": 0.74,
+   "inputs": {
+    "poll_margin": 2.4,
+    "n_polls": 11,
+    "n_eff": 4.17,
+    "poll_shares": {
+     "D": 49.2,
+     "R": 46.8
+    },
+    "latest_poll": "2026-10-14",
+    "rating_margin": 1.82,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Tossup",
+     "Economist": "Lean D",
+     "FPO": "Lean D",
+     "Fox": "Tossup",
+     "IE": "Tossup",
+     "NBC": "Lean D",
+     "RCP": "Tossup",
+     "Sabato": "Tossup",
+     "SB": "Lean D",
+     "ST": "Lean D"
+    },
+    "pvi": 4.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 5.35,
+    "prior_margin": 2.88,
+    "incumbent": "Susan Collins",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 6.94,
+    "polls_used": [
+     {
+      "end": "2026-10-14",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "D": 49.0,
+       "R": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-08",
+      "pollster": "YouGov",
+      "n": 1335,
+      "by_party": {
+       "D": 48.0,
+       "R": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-15",
+      "pollster": "Quantus Insights",
+      "n": 621,
+      "by_party": {
+       "D": 46.4,
+       "R": 47.1
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "The New York Times/Siena University",
+      "n": 619,
+      "by_party": {
+       "R": 49.0,
+       "D": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "University of Massachusetts Lowell Center for Public Opinion/YouGov",
+      "n": 650,
+      "by_party": {
+       "D": 48.0,
+       "R": 43.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 1312,
+      "by_party": {
+       "D": 51.0,
+       "R": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-30",
+      "pollster": "co/efficient",
+      "n": 1240,
+      "by_party": {
+       "R": 48.0,
+       "D": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "Fabrizio, Lee & Associates/Impact Research",
+      "n": 982,
+      "by_party": {
+       "D": 50.0,
+       "R": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "Wedgewood Polls",
+      "n": 400,
+      "by_party": {
+       "D": 52.0,
+       "R": 48.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-04",
+      "pollster": "Marist University",
+      "n": 1505,
+      "by_party": {
+       "D": 51.0,
+       "R": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-05",
+      "pollster": "The Washington Post/George Mason University School of Policy and Government",
+      "n": 800,
+      "by_party": {
+       "D": 50.0,
+       "R": 45.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6618,
+     "lo": 0.28,
+     "hi": 0.9218
+    },
+    "R": {
+     "fair": 0.3382,
+     "lo": 0.0782,
+     "hi": 0.72
+    }
+   },
+   "office": "senate",
+   "state": "Maine"
+  },
+  "Maryland Governor": {
+   "margin_hat": 18.4,
+   "sigma": 8.0,
+   "w_poll": 0.18,
+   "inputs": {
+    "poll_margin": 27.0,
+    "n_polls": 1,
+    "n_eff": 0.33,
+    "poll_shares": {
+     "D": 51.0,
+     "R": 24.0
+    },
+    "latest_poll": "2026-09-27",
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 15.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 22.35,
+    "prior_margin": 16.5,
+    "incumbent": "Wes Moore",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 28.54,
+    "polls_used": [
+     {
+      "end": "2026-09-27",
+      "pollster": "University of Maryland Baltimore County Institute of Politics",
+      "n": 776,
+      "by_party": {
+       "D": 51.0,
+       "R": 24.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Andy Ellis",
+     "Cathy White"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9893,
+     "lo": 0.9031,
+     "hi": 0.9995
+    },
+    "R": {
+     "fair": 0.0107,
+     "lo": 0.0005,
+     "hi": 0.0969
+    }
+   },
+   "office": "governor",
+   "state": "Maryland"
+  },
+  "Massachusetts Governor": {
+   "margin_hat": 19.83,
+   "sigma": 6.33,
+   "w_poll": 0.56,
+   "inputs": {
+    "poll_margin": 22.7,
+    "n_polls": 4,
+    "n_eff": 1.89,
+    "poll_shares": {
+     "D": 56.6,
+     "R": 33.9
+    },
+    "latest_poll": "2026-10-17",
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 14.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 21.35,
+    "prior_margin": 16.21,
+    "incumbent": "Maura Healey",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 25.2,
+    "polls_used": [
+     {
+      "end": "2026-09-22",
+      "pollster": "MassINC Polling Group",
+      "n": 800,
+      "by_party": {
+       "D": 51.0,
+       "R": 30.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 564,
+      "by_party": {
+       "D": 54.0,
+       "R": 38.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-12",
+      "pollster": "University of Massachusetts Department of Political Science/YouGov",
+      "n": 800,
+      "by_party": {
+       "D": 57.0,
+       "R": 32.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-17",
+      "pollster": "Suffolk University",
+      "n": 500,
+      "by_party": {
+       "D": 59.0,
+       "R": 36.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Andrea James"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.995,
+     "lo": 0.9836,
+     "hi": 1.0
+    },
+    "R": {
+     "fair": 0.005,
+     "lo": 0.0,
+     "hi": 0.0164
+    }
+   },
+   "office": "governor",
+   "state": "Massachusetts"
+  },
+  "Massachusetts Senate": {
+   "margin_hat": 22.11,
+   "sigma": 6.06,
+   "w_poll": 0.56,
+   "inputs": {
+    "poll_margin": 26.8,
+    "n_polls": 4,
+    "n_eff": 1.89,
+    "poll_shares": {
+     "D": 56.6,
+     "R": 29.8
+    },
+    "latest_poll": "2026-10-17",
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 14.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 21.35,
+    "prior_margin": 16.21,
+    "incumbent": "Ed Markey",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 25.2,
+    "polls_used": [
+     {
+      "end": "2026-09-22",
+      "pollster": "MassINC Polling Group",
+      "n": 800,
+      "by_party": {
+       "D": 52.0,
+       "R": 26.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 564,
+      "by_party": {
+       "D": 53.0,
+       "R": 30.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-12",
+      "pollster": "University of Massachusetts Department of Political Science/YouGov",
+      "n": 800,
+      "by_party": {
+       "D": 56.0,
+       "R": 29.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-17",
+      "pollster": "Suffolk University",
+      "n": 500,
+      "by_party": {
+       "D": 60.0,
+       "R": 32.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Joe Tache",
+     "Shriya Ayyadurai"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.995,
+     "lo": 0.996,
+     "hi": 1.0
+    },
+    "R": {
+     "fair": 0.005,
+     "lo": 0.0,
+     "hi": 0.004
+    }
+   },
+   "office": "senate",
+   "state": "Massachusetts"
+  },
+  "Michigan Governor": {
+   "margin_hat": 6.14,
+   "sigma": 6.33,
+   "w_poll": 0.73,
+   "inputs": {
+    "poll_margin": 6.7,
+    "n_polls": 10,
+    "n_eff": 4.07,
+    "poll_shares": {
+     "D": 50.1,
+     "R": 43.4
+    },
+    "latest_poll": "2026-10-27",
+    "rating_margin": 4.75,
+    "ratings": {
+     "Cook": "Lean D",
+     "DDHQ": "Likely D",
+     "Fox": "Lean D",
+     "IE": "Tilt D",
+     "NBC": "Lean D",
+     "RCP": "Lean D",
+     "Sabato": "Lean D",
+     "Silver": "Likely D"
+    },
+    "pvi": 0.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 4.35,
+    "prior_margin": 4.63,
+    "incumbent": "Gretchen Whitmer",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -1.42,
+    "polls_used": [
+     {
+      "end": "2026-09-14",
+      "pollster": "The Washington Post/George Mason University School of Policy and Government",
+      "n": 803,
+      "by_party": {
+       "D": 53.0,
+       "R": 41.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "Emerson College",
+      "n": 1000,
+      "by_party": {
+       "D": 48.6,
+       "R": 41.9
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-20",
+      "pollster": "Suffolk University",
+      "n": 500,
+      "by_party": {
+       "D": 51.0,
+       "R": 34.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-23",
+      "pollster": "co/efficient",
+      "n": 843,
+      "by_party": {
+       "D": 47.0,
+       "R": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "The New York Times/Siena University",
+      "n": 605,
+      "by_party": {
+       "D": 48.0,
+       "R": 43.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "Cygnal/Beacon Research",
+      "n": 600,
+      "by_party": {
+       "D": 45.0,
+       "R": 38.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "Beacon Research/Shaw & Co. Research",
+      "n": 1028,
+      "by_party": {
+       "D": 54.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-27",
+      "pollster": "Guidant Polling and Strategy",
+      "n": 800,
+      "by_party": {
+       "D": 50.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "Z to A Research",
+      "n": 483,
+      "by_party": {
+       "D": 50.0,
+       "R": 40.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-18",
+      "pollster": "Marist University",
+      "n": 500,
+      "by_party": {
+       "D": 51.0,
+       "R": 45.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Anthony Hudson",
+     "Donna Brandenburg",
+     "Douglas Campbell"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.8342,
+     "lo": 0.4884,
+     "hi": 0.9756
+    },
+    "I": {
+     "fair": 0.0,
+     "lo": 0.0,
+     "hi": 0.0
+    },
+    "R": {
+     "fair": 0.1658,
+     "lo": 0.0244,
+     "hi": 0.5116
+    }
+   },
+   "office": "governor",
+   "state": "Michigan"
+  },
+  "Michigan Senate": {
+   "margin_hat": 2.98,
+   "sigma": 6.06,
+   "w_poll": 0.73,
+   "inputs": {
+    "poll_margin": 2.8,
+    "n_polls": 15,
+    "n_eff": 4.0,
+    "poll_shares": {
+     "D": 47.9,
+     "R": 45.1
+    },
+    "latest_poll": "2026-10-18",
+    "rating_margin": 3.09,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Lean D",
+     "Economist": "Lean D",
+     "FPO": "Lean D",
+     "Fox": "Tossup",
+     "IE": "Tilt D",
+     "NBC": "Lean D",
+     "RCP": "Tossup",
+     "Sabato": "Lean D",
+     "SB": "Likely D",
+     "ST": "Lean D"
+    },
+    "pvi": 0.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 4.35,
+    "prior_margin": 3.47,
+    "incumbent": "Gary Peters",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -1.42,
+    "polls_used": [
+     {
+      "end": "2026-09-27",
+      "pollster": "The Tyson Group",
+      "n": 600,
+      "by_party": {
+       "D": 44.0,
+       "R": 43.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-10-08",
+      "pollster": "The Tyson Group",
+      "n": 600,
+      "by_party": {
+       "D": 44.0,
+       "R": 46.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-09-09",
+      "pollster": "Trafalgar Group",
+      "n": 1079,
+      "by_party": {
+       "D": 46.3,
+       "R": 44.8
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "The Washington Post/George Mason University School of Policy and Government",
+      "n": 803,
+      "by_party": {
+       "D": 48.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "Emerson College",
+      "n": 1000,
+      "by_party": {
+       "D": 48.2,
+       "R": 45.7
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-20",
+      "pollster": "Suffolk University",
+      "n": 500,
+      "by_party": {
+       "D": 47.0,
+       "R": 40.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-23",
+      "pollster": "co/efficient",
+      "n": 843,
+      "by_party": {
+       "D": 50.0,
+       "R": 50.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "The New York Times/Siena University",
+      "n": 605,
+      "by_party": {
+       "D": 49.0,
+       "R": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "Cygnal/Beacon Research",
+      "n": 600,
+      "by_party": {
+       "D": 45.0,
+       "R": 40.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "Beacon Research/Shaw & Co. Research",
+      "n": 1028,
+      "by_party": {
+       "D": 50.0,
+       "R": 49.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-30",
+      "pollster": "Trafalgar Group",
+      "n": 1085,
+      "by_party": {
+       "D": 47.0,
+       "R": 45.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "Mitchell Research & Communications",
+      "n": 682,
+      "by_party": {
+       "D": 46.0,
+       "R": 41.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Douglas P. Marsh",
+     "Lydia Christensen",
+     "Tim Long",
+     "Walter P. Kristy"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6888,
+     "lo": 0.3059,
+     "hi": 0.9322
+    },
+    "R": {
+     "fair": 0.3112,
+     "lo": 0.0678,
+     "hi": 0.6941
+    }
+   },
+   "office": "senate",
+   "state": "Michigan"
+  },
+  "Minnesota Governor": {
+   "margin_hat": 8.9,
+   "sigma": 6.33,
+   "w_poll": 0.48,
+   "inputs": {
+    "poll_margin": 7.8,
+    "n_polls": 3,
+    "n_eff": 1.38,
+    "poll_shares": {
+     "D": 48.7,
+     "R": 40.9
+    },
+    "latest_poll": "2026-10-12",
+    "rating_margin": 11.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Likely D",
+     "Fox": "Likely D",
+     "IE": "Likely D",
+     "NBC": "Solid D",
+     "RCP": "Likely D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 3.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 7.35,
+    "prior_margin": 9.9,
+    "incumbent": "Tim Walz",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 4.24,
+    "polls_used": [
+     {
+      "end": "2026-10-12",
+      "pollster": "SurveyUSA",
+      "n": 718,
+      "by_party": {
+       "D": 48.0,
+       "R": 41.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "SurveyUSA",
+      "n": 654,
+      "by_party": {
+       "D": 47.0,
+       "R": 40.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-07",
+      "pollster": "Mason-Dixon",
+      "n": 800,
+      "by_party": {
+       "D": 50.0,
+       "R": 41.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Steven Young"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9202,
+     "lo": 0.6577,
+     "hi": 0.9919
+    },
+    "R": {
+     "fair": 0.0798,
+     "lo": 0.0081,
+     "hi": 0.3423
+    }
+   },
+   "office": "governor",
+   "state": "Minnesota"
+  },
+  "Minnesota Senate": {
+   "margin_hat": 4.64,
+   "sigma": 6.06,
+   "w_poll": 0.51,
+   "inputs": {
+    "poll_margin": 3.3,
+    "n_polls": 5,
+    "n_eff": 1.54,
+    "poll_shares": {
+     "D": 46.0,
+     "R": 42.7
+    },
+    "latest_poll": "2026-10-12",
+    "rating_margin": 5.45,
+    "ratings": {
+     "Cook": "Lean D",
+     "DDHQ": "Likely D",
+     "Economist": "Lean D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "IE": "Lean D",
+     "NBC": "Likely D",
+     "RCP": "Tossup",
+     "Sabato": "Lean D",
+     "SB": "Likely D",
+     "ST": "Likely D"
+    },
+    "pvi": 3.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 7.35,
+    "prior_margin": 6.02,
+    "incumbent": "Tina Smith",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 4.24,
+    "polls_used": [
+     {
+      "end": "2026-10-12",
+      "pollster": "SurveyUSA",
+      "n": 718,
+      "by_party": {
+       "D": 45.0,
+       "R": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-10",
+      "pollster": "Quantus Insights",
+      "n": 720,
+      "by_party": {
+       "D": 48.2,
+       "R": 44.4
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "SurveyUSA",
+      "n": 654,
+      "by_party": {
+       "D": 42.0,
+       "R": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-30",
+      "pollster": "Big Data Poll",
+      "n": 622,
+      "by_party": {
+       "D": 46.0,
+       "R": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-04",
+      "pollster": "GQR",
+      "n": 800,
+      "by_party": {
+       "D": 50.0,
+       "R": 42.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": [
+     "Marisa Simonetti",
+     "Rebecca Whiting"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.7783,
+     "lo": 0.4077,
+     "hi": 0.9614
+    },
+    "R": {
+     "fair": 0.2217,
+     "lo": 0.0386,
+     "hi": 0.5923
+    }
+   },
+   "office": "senate",
+   "state": "Minnesota"
+  },
+  "Mississippi Senate": {
+   "margin_hat": -8.8,
+   "sigma": 8.0,
+   "w_poll": 0.29,
+   "inputs": {
+    "poll_margin": -4.0,
+    "n_polls": 1,
+    "n_eff": 0.62,
+    "poll_shares": {
+     "R": 52.0,
+     "D": 48.0
+    },
+    "latest_poll": "2026-10-14",
+    "rating_margin": -11.27,
+    "ratings": {
+     "Cook": "Likely R",
+     "DDHQ": "Likely R",
+     "Economist": "Likely R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Likely R",
+     "RCP": "Solid R",
+     "Sabato": "Likely R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -11.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -9.65,
+    "prior_margin": -10.78,
+    "incumbent": "Cindy Hyde-Smith",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -22.89,
+    "polls_used": [
+     {
+      "end": "2026-10-14",
+      "pollster": "Wedgewood Polls",
+      "n": 511,
+      "by_party": {
+       "R": 52.0,
+       "D": 48.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.1357,
+     "lo": 0.0179,
+     "hi": 0.4602
+    },
+    "R": {
+     "fair": 0.8643,
+     "lo": 0.5398,
+     "hi": 0.9821
+    }
+   },
+   "office": "senate",
+   "state": "Mississippi"
+  },
+  "Montana Senate": {
+   "margin_hat": -13.87,
+   "sigma": 6.06,
+   "w_poll": 0.46,
+   "inputs": {
+    "poll_margin": -19.3,
+    "n_polls": 3,
+    "n_eff": 1.29,
+    "poll_shares": {
+     "R": 45.6,
+     "D": 26.3,
+     "I": 22.4
+    },
+    "latest_poll": "2026-10-18",
+    "rating_margin": -10.73,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Likely R",
+     "Economist": "Likely R",
+     "FPO": "Likely R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Likely R",
+     "RCP": "Likely R",
+     "Sabato": "Safe R",
+     "SB": "Likely R",
+     "ST": "Safe R"
+    },
+    "pvi": -10.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -5.65,
+    "prior_margin": -9.21,
+    "incumbent": "Steve Daines",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -19.93,
+    "polls_used": [
+     {
+      "end": "2026-09-15",
+      "pollster": "Quantus Insights",
+      "n": 625,
+      "by_party": {
+       "R": 44.0,
+       "D": 23.0,
+       "I": 24.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-24",
+      "pollster": "American Pulse Research & Polling",
+      "n": 604,
+      "by_party": {
+       "R": 45.0,
+       "D": 19.0,
+       "I": 26.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-18",
+      "pollster": "Quantus Insights",
+      "n": 686,
+      "by_party": {
+       "R": 46.0,
+       "D": 29.0,
+       "I": 21.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Kyle Austin"
+    ]
+   },
+   "mode": "multi-candidate",
+   "legs": {
+    "D": {
+     "fair": 0.0076,
+     "lo": 0.0005,
+     "hi": 0.0983
+    },
+    "I": {
+     "fair": 0.0032,
+     "lo": 0.0,
+     "hi": 0.0096
+    },
+    "R": {
+     "fair": 0.9892,
+     "lo": 0.9017,
+     "hi": 0.9995
+    }
+   },
+   "office": "senate",
+   "state": "Montana"
+  },
+  "NE-02 House race": {
+   "margin_hat": 8.94,
+   "sigma": 8.0,
+   "w_poll": 0.22,
+   "inputs": {
+    "poll_margin": 10.5,
+    "n_polls": 2,
+    "n_eff": 0.42,
+    "poll_shares": {
+     "D": 49.2,
+     "R": 38.8,
+     "I": 4.9
+    },
+    "latest_poll": "2026-10-05",
+    "rating_margin": 9.0,
+    "ratings": {
+     "Cook": "Likely D",
+     "IE": "Lean D",
+     "Sabato": "Likely D",
+     "Econ.": "Likely D",
+     "ST": "Safe D",
+     "DDHQ": "Likely D",
+     "FPO": "Safe D",
+     "Fox": "Lean D",
+     "Silver": "Solid D",
+     "RCP": "Likely D"
+    },
+    "pvi": 3.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 7.35,
+    "prior_margin": 8.5,
+    "incumbent": "Don Bacon",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -20.46,
+    "polls_used": [
+     {
+      "end": "2026-09-13",
+      "pollster": "SurveyUSA",
+      "n": 182,
+      "by_party": {
+       "D": 46.0,
+       "R": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-05",
+      "pollster": "National Public Affairs",
+      "n": 377,
+      "by_party": {
+       "D": 50.0,
+       "R": 38.0,
+       "I": 6.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.8681,
+     "lo": 0.5468,
+     "hi": 0.9829
+    },
+    "R": {
+     "fair": 0.1319,
+     "lo": 0.0171,
+     "hi": 0.4532
+    }
+   },
+   "office": "house",
+   "state": "Nebraska"
+  },
+  "NH-01 House race": {
+   "margin_hat": 7.89,
+   "sigma": 8.0,
+   "w_poll": 0.13,
+   "inputs": {
+    "poll_margin": 4.0,
+    "n_polls": 1,
+    "n_eff": 0.23,
+    "poll_shares": {
+     "D": 46.0,
+     "R": 42.0
+    },
+    "latest_poll": "2026-09-21",
+    "rating_margin": 9.4,
+    "ratings": {
+     "Cook": "Likely D",
+     "IE": "Lean D",
+     "Sabato": "Likely D",
+     "Econ.": "Likely D",
+     "ST": "Safe D",
+     "DDHQ": "Likely D",
+     "FPO": "Safe D",
+     "Fox": "Likely D",
+     "Silver": "Solid D",
+     "RCP": "Likely D"
+    },
+    "pvi": 2.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 6.35,
+    "prior_margin": 8.48,
+    "incumbent": "Chris Pappas",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 2.78,
+    "polls_used": [
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 711,
+      "by_party": {
+       "D": 46.0,
+       "R": 42.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.838,
+     "lo": 0.4945,
+     "hi": 0.9765
+    },
+    "R": {
+     "fair": 0.162,
+     "lo": 0.0235,
+     "hi": 0.5055
+    }
+   },
+   "office": "house",
+   "state": "New Hampshire"
+  },
+  "NJ-07 House race": {
+   "margin_hat": 4.19,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 5.4,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tilt D",
+     "Sabato": "Lean D",
+     "Econ.": "Likely D",
+     "ST": "Lean D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Likely D",
+     "RCP": "Lean D"
+    },
+    "pvi": 0.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 1.35,
+    "prior_margin": 4.19,
+    "incumbent": "Thomas Kean Jr.",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 5.91,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6996,
+     "lo": 0.3167,
+     "hi": 0.9361
+    },
+    "R": {
+     "fair": 0.3004,
+     "lo": 0.0639,
+     "hi": 0.6833
+    }
+   },
+   "office": "house",
+   "state": "New Jersey"
+  },
+  "NY-13 House race": {
+   "margin_hat": 36.35,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": null,
+    "ratings": {},
+    "pvi": 32.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 36.35,
+    "prior_margin": 36.35,
+    "incumbent": "Adriano Espaillat",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 12.6,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.995,
+     "lo": 0.9998,
+     "hi": 1.0
+    },
+    "R": {
+     "fair": 0.005,
+     "lo": 0.0,
+     "hi": 0.0002
+    }
+   },
+   "office": "house",
+   "state": "New York"
+  },
+  "NY-17 House race": {
+   "margin_hat": 2.33,
+   "sigma": 8.0,
+   "w_poll": 0.15,
+   "inputs": {
+    "poll_margin": 2.0,
+    "n_polls": 1,
+    "n_eff": 0.26,
+    "poll_shares": {
+     "D": 48.0,
+     "R": 46.0
+    },
+    "latest_poll": "2026-09-29",
+    "rating_margin": 2.4,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Tossup",
+     "Econ.": "Lean D",
+     "ST": "Lean D",
+     "DDHQ": "Tossup",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Lean D",
+     "RCP": "Tossup"
+    },
+    "pvi": 1.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 2.35,
+    "prior_margin": 2.38,
+    "incumbent": "Mike Lawler",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 12.6,
+    "polls_used": [
+     {
+      "end": "2026-09-29",
+      "pollster": "Emerson College",
+      "n": 400,
+      "by_party": {
+       "D": 48.0,
+       "R": 46.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6145,
+     "lo": 0.2392,
+     "hi": 0.9017
+    },
+    "R": {
+     "fair": 0.3855,
+     "lo": 0.0983,
+     "hi": 0.7608
+    }
+   },
+   "office": "house",
+   "state": "New York"
+  },
+  "Nebraska Governor": {
+   "margin_hat": -7.54,
+   "sigma": 8.0,
+   "w_poll": 0.25,
+   "inputs": {
+    "poll_margin": -4.0,
+    "n_polls": 1,
+    "n_eff": 0.5,
+    "poll_shares": {
+     "R": 44.0,
+     "D": 40.0
+    },
+    "latest_poll": "2026-10-05",
+    "rating_margin": -8.75,
+    "ratings": {
+     "Cook": "Likely R",
+     "DDHQ": "Likely R",
+     "Fox": "Likely R",
+     "IE": "Likely R",
+     "NBC": "Likely R",
+     "RCP": "Solid R",
+     "Sabato": "Likely R",
+     "Silver": "Likely R"
+    },
+    "pvi": -10.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -8.65,
+    "prior_margin": -8.72,
+    "incumbent": "Jim Pillen",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -20.46,
+    "polls_used": [
+     {
+      "end": "2026-10-05",
+      "pollster": "National Public Affairs",
+      "n": 800,
+      "by_party": {
+       "R": 44.0,
+       "D": 40.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Brett Lindstrom",
+     "Rick Beard"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.173,
+     "lo": 0.026,
+     "hi": 0.5229
+    },
+    "R": {
+     "fair": 0.827,
+     "lo": 0.4771,
+     "hi": 0.974
+    }
+   },
+   "office": "governor",
+   "state": "Nebraska"
+  },
+  "Nebraska Senate": {
+   "margin_hat": -17.44,
+   "sigma": 8.0,
+   "w_poll": 0.27,
+   "inputs": {
+    "poll_margin": -48.7,
+    "n_polls": 2,
+    "n_eff": 0.56,
+    "poll_shares": {
+     "R": 48.7,
+     "I": 46.1
+    },
+    "latest_poll": "2026-10-05",
+    "rating_margin": -5.82,
+    "ratings": {
+     "Cook": "Likely R",
+     "DDHQ": "Likely R",
+     "Economist": "Lean R",
+     "FPO": "Likely R",
+     "Fox": "Likely R",
+     "IE": "Lean R",
+     "NBC": "Likely R",
+     "RCP": "Lean R",
+     "Sabato": "Lean R",
+     "SB": "Lean R",
+     "ST": "Lean R"
+    },
+    "pvi": -10.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -5.65,
+    "prior_margin": -5.77,
+    "incumbent": "Pete Ricketts",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -20.46,
+    "polls_used": [
+     {
+      "end": "2026-09-08",
+      "pollster": "GBAO Strategies",
+      "n": 800,
+      "by_party": {
+       "R": 46.0,
+       "I": 47.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-05",
+      "pollster": "National Public Affairs",
+      "n": 800,
+      "by_party": {
+       "R": 49.0,
+       "I": 46.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "multi-candidate",
+   "legs": {
+    "D": {
+     "fair": 0.0143,
+     "lo": 0.0007,
+     "hi": 0.119
+    },
+    "I": {
+     "fair": 0.2644,
+     "lo": 0.0,
+     "hi": 0.3
+    },
+    "R": {
+     "fair": 0.7213,
+     "lo": 0.881,
+     "hi": 0.9993
+    }
+   },
+   "office": "senate",
+   "state": "Nebraska"
+  },
+  "Nevada Governor": {
+   "margin_hat": -0.08,
+   "sigma": 8.0,
+   "w_poll": 0.23,
+   "inputs": {
+    "poll_margin": -0.1,
+    "n_polls": 2,
+    "n_eff": 0.44,
+    "poll_shares": {
+     "R": 39.1,
+     "D": 39.0
+    },
+    "latest_poll": "2026-09-26",
+    "rating_margin": -0.25,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Tossup",
+     "Fox": "Tossup",
+     "IE": "Tilt R",
+     "NBC": "Tossup",
+     "RCP": "Tossup",
+     "Sabato": "Tossup",
+     "Silver": "Tossup"
+    },
+    "pvi": -1.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 0.35,
+    "prior_margin": -0.07,
+    "incumbent": "Joe Lombardo",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -3.1,
+    "polls_used": [
+     {
+      "end": "2026-09-08",
+      "pollster": "Emerson College",
+      "n": 680,
+      "by_party": {
+       "R": 42.0,
+       "D": 44.2
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-26",
+      "pollster": "Noble Predictive Insights",
+      "n": 800,
+      "by_party": {
+       "R": 38.0,
+       "D": 37.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.4962,
+     "lo": 0.1563,
+     "hi": 0.839
+    },
+    "R": {
+     "fair": 0.5038,
+     "lo": 0.161,
+     "hi": 0.8437
+    }
+   },
+   "office": "governor",
+   "state": "Nevada"
+  },
+  "New Hampshire Governor": {
+   "margin_hat": -6.65,
+   "sigma": 8.0,
+   "w_poll": 0.32,
+   "inputs": {
+    "poll_margin": -10.2,
+    "n_polls": 3,
+    "n_eff": 0.72,
+    "poll_shares": {
+     "R": 50.4,
+     "D": 40.3
+    },
+    "latest_poll": "2026-09-22",
+    "rating_margin": -8.5,
+    "ratings": {
+     "Cook": "Likely R",
+     "DDHQ": "Lean R",
+     "Fox": "Likely R",
+     "IE": "Solid R",
+     "NBC": "Likely R",
+     "RCP": "Lean R",
+     "Sabato": "Likely R",
+     "Silver": "Solid R"
+    },
+    "pvi": 2.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 3.35,
+    "prior_margin": -4.95,
+    "incumbent": "Kelly Ayotte",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 2.78,
+    "polls_used": [
+     {
+      "end": "2026-09-11",
+      "pollster": "co/efficient",
+      "n": 958,
+      "by_party": {
+       "R": 55.0,
+       "D": 34.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 1418,
+      "by_party": {
+       "R": 47.0,
+       "D": 43.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "The New York Times/Siena University",
+      "n": 613,
+      "by_party": {
+       "R": 52.0,
+       "D": 41.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Stephen Villee"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.2029,
+     "lo": 0.0335,
+     "hi": 0.567
+    },
+    "R": {
+     "fair": 0.7971,
+     "lo": 0.433,
+     "hi": 0.9665
+    }
+   },
+   "office": "governor",
+   "state": "New Hampshire"
+  },
+  "New Hampshire Senate": {
+   "margin_hat": 6.45,
+   "sigma": 8.0,
+   "w_poll": 0.35,
+   "inputs": {
+    "poll_margin": 7.1,
+    "n_polls": 3,
+    "n_eff": 0.8,
+    "poll_shares": {
+     "D": 49.4,
+     "R": 42.2
+    },
+    "latest_poll": "2026-09-22",
+    "rating_margin": 6.0,
+    "ratings": {
+     "Cook": "Lean D",
+     "DDHQ": "Likely D",
+     "Economist": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "IE": "Tilt D",
+     "NBC": "Lean D",
+     "RCP": "Lean D",
+     "Sabato": "Likely D",
+     "SB": "Likely D",
+     "ST": "Likely D"
+    },
+    "pvi": 2.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 6.35,
+    "prior_margin": 6.1,
+    "incumbent": "Jeanne Shaheen",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 2.78,
+    "polls_used": [
+     {
+      "end": "2026-09-17",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "D": 48.0,
+       "R": 40.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "The New York Times/Siena University",
+      "n": 613,
+      "by_party": {
+       "D": 50.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 1418,
+      "by_party": {
+       "D": 50.0,
+       "R": 42.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Edmond Laplante"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.79,
+     "lo": 0.4232,
+     "hi": 0.9646
+    },
+    "R": {
+     "fair": 0.21,
+     "lo": 0.0354,
+     "hi": 0.5768
+    }
+   },
+   "office": "senate",
+   "state": "New Hampshire"
+  },
+  "New Jersey Senate": {
+   "margin_hat": 13.21,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 4.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 11.35,
+    "prior_margin": 13.21,
+    "incumbent": "Cory Booker",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 5.91,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9506,
+     "lo": 0.7424,
+     "hi": 0.996
+    },
+    "R": {
+     "fair": 0.0494,
+     "lo": 0.004,
+     "hi": 0.2576
+    }
+   },
+   "office": "senate",
+   "state": "New Jersey"
+  },
+  "New Mexico Governor": {
+   "margin_hat": 10.38,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 11.25,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Likely D",
+     "Fox": "Solid D",
+     "IE": "Likely D",
+     "NBC": "Solid D",
+     "RCP": "Lean D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 4.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 8.35,
+    "prior_margin": 10.38,
+    "incumbent": "Michelle Lujan Grisham",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": 6.0,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9028,
+     "lo": 0.617,
+     "hi": 0.9892
+    },
+    "R": {
+     "fair": 0.0972,
+     "lo": 0.0108,
+     "hi": 0.383
+    }
+   },
+   "office": "governor",
+   "state": "New Mexico"
+  },
+  "New Mexico Senate": {
+   "margin_hat": 13.75,
+   "sigma": 8.0,
+   "w_poll": 0.18,
+   "inputs": {
+    "poll_margin": 18.0,
+    "n_polls": 1,
+    "n_eff": 0.33,
+    "poll_shares": {
+     "D": 54.0,
+     "R": 36.0
+    },
+    "latest_poll": "2026-09-30",
+    "rating_margin": 13.45,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Likely D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 4.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 11.35,
+    "prior_margin": 12.82,
+    "incumbent": "Ben Ray Luj\u00e1n",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 6.0,
+    "polls_used": [
+     {
+      "end": "2026-09-30",
+      "pollster": "SurveyUSA",
+      "n": 576,
+      "by_party": {
+       "D": 54.0,
+       "R": 36.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9572,
+     "lo": 0.764,
+     "hi": 0.9967
+    },
+    "R": {
+     "fair": 0.0428,
+     "lo": 0.0033,
+     "hi": 0.236
+    }
+   },
+   "office": "senate",
+   "state": "New Mexico"
+  },
+  "New York Governor": {
+   "margin_hat": 14.93,
+   "sigma": 6.33,
+   "w_poll": 0.5,
+   "inputs": {
+    "poll_margin": 16.5,
+    "n_polls": 4,
+    "n_eff": 1.5,
+    "poll_shares": {
+     "D": 53.1,
+     "R": 36.7
+    },
+    "latest_poll": "2026-10-06",
+    "rating_margin": 12.5,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Likely D",
+     "Fox": "Solid D",
+     "IE": "Likely D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 15.35,
+    "prior_margin": 13.36,
+    "incumbent": "Kathy Hochul",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 12.6,
+    "polls_used": [
+     {
+      "end": "2026-10-06",
+      "pollster": "Beacon Research",
+      "n": 820,
+      "by_party": {
+       "D": 53.0,
+       "R": 31.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-20",
+      "pollster": "Quinnipiac University",
+      "n": 1026,
+      "by_party": {
+       "D": 58.0,
+       "R": 39.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-25",
+      "pollster": "co/efficient",
+      "n": 1046,
+      "by_party": {
+       "D": 48.0,
+       "R": 41.0
+      },
+      "partisan": "REP"
+     },
+     {
+      "end": "2026-10-05",
+      "pollster": "Emerson College",
+      "n": 900,
+      "by_party": {
+       "R": 39.7,
+       "D": 52.4
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9909,
+     "lo": 0.913,
+     "hi": 0.9996
+    },
+    "R": {
+     "fair": 0.0091,
+     "lo": 0.0004,
+     "hi": 0.087
+    }
+   },
+   "office": "governor",
+   "state": "New York"
+  },
+  "North Carolina Senate": {
+   "margin_hat": 10.19,
+   "sigma": 6.06,
+   "w_poll": 0.7,
+   "inputs": {
+    "poll_margin": 11.5,
+    "n_polls": 9,
+    "n_eff": 3.48,
+    "poll_shares": {
+     "D": 52.8,
+     "R": 41.2
+    },
+    "latest_poll": "2026-10-20",
+    "rating_margin": 8.8,
+    "ratings": {
+     "Cook": "Likely D",
+     "DDHQ": "Likely D",
+     "Economist": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Likely D",
+     "IE": "Lean D",
+     "NBC": "Likely D",
+     "RCP": "Likely D",
+     "Sabato": "Solid D",
+     "SB": "Safe D"
+    },
+    "pvi": -1.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 3.35,
+    "prior_margin": 7.17,
+    "incumbent": "Thom Tillis",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -3.21,
+    "polls_used": [
+     {
+      "end": "2026-09-15",
+      "pollster": "Harper Polling",
+      "n": 608,
+      "by_party": {
+       "D": 49.0,
+       "R": 34.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-17",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "D": 48.4,
+       "R": 42.5
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-16",
+      "pollster": "High Point University Survey Research Center",
+      "n": 706,
+      "by_party": {
+       "D": 50.0,
+       "R": 42.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-29",
+      "pollster": "Big Data Poll",
+      "n": 642,
+      "by_party": {
+       "D": 51.0,
+       "R": 39.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-03",
+      "pollster": "East Carolina University",
+      "n": 810,
+      "by_party": {
+       "D": 53.0,
+       "R": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-11",
+      "pollster": "SurveyUSA",
+      "n": 643,
+      "by_party": {
+       "D": 54.0,
+       "R": 40.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-07",
+      "pollster": "Change Research",
+      "n": 829,
+      "by_party": {
+       "D": 50.0,
+       "R": 40.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-08",
+      "pollster": "Elon University/YouGov",
+      "n": 561,
+      "by_party": {
+       "D": 52.0,
+       "R": 39.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-20",
+      "pollster": "ActiVote",
+      "n": 400,
+      "by_party": {
+       "D": 56.9,
+       "R": 43.1
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Michael Dublin",
+     "Shannon Bray"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9539,
+     "lo": 0.7529,
+     "hi": 0.9964
+    },
+    "R": {
+     "fair": 0.0461,
+     "lo": 0.0036,
+     "hi": 0.2471
+    }
+   },
+   "office": "senate",
+   "state": "North Carolina"
+  },
+  "Oklahoma Governor": {
+   "margin_hat": -11.5,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -11.0,
+    "ratings": {
+     "Cook": "Likely R",
+     "DDHQ": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Likely R",
+     "NBC": "Likely R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "Silver": "Likely R"
+    },
+    "pvi": -17.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -12.65,
+    "prior_margin": -11.5,
+    "incumbent": "Kevin Stitt",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -34.26,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0754,
+     "lo": 0.0074,
+     "hi": 0.3311
+    },
+    "R": {
+     "fair": 0.9246,
+     "lo": 0.6689,
+     "hi": 0.9926
+    }
+   },
+   "office": "governor",
+   "state": "Oklahoma"
+  },
+  "Oklahoma Senate": {
+   "margin_hat": -13.6,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Safe R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -17.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -12.65,
+    "prior_margin": -13.6,
+    "incumbent": "Alan Armstrong",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -34.26,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0446,
+     "lo": 0.0035,
+     "hi": 0.2422
+    },
+    "R": {
+     "fair": 0.9554,
+     "lo": 0.7578,
+     "hi": 0.9965
+    }
+   },
+   "office": "senate",
+   "state": "Oklahoma"
+  },
+  "Oregon Governor": {
+   "margin_hat": 6.39,
+   "sigma": 8.0,
+   "w_poll": 0.24,
+   "inputs": {
+    "poll_margin": 0.9,
+    "n_polls": 2,
+    "n_eff": 0.47,
+    "poll_shares": {
+     "D": 45.2,
+     "R": 44.3
+    },
+    "latest_poll": "2026-10-01",
+    "rating_margin": 5.0,
+    "ratings": {
+     "Cook": "Lean D",
+     "DDHQ": "Likely D",
+     "Fox": "Lean D",
+     "IE": "Lean D",
+     "NBC": "Likely D",
+     "RCP": "Tossup",
+     "Sabato": "Lean D",
+     "Silver": "Likely D"
+    },
+    "pvi": 8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 15.35,
+    "prior_margin": 8.11,
+    "incumbent": "Tina Kotek",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 14.3,
+    "polls_used": [
+     {
+      "end": "2026-09-11",
+      "pollster": "DHM Research",
+      "n": 600,
+      "by_party": {
+       "D": 43.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "DHM Research",
+      "n": 549,
+      "by_party": {
+       "D": 46.0,
+       "R": 44.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Brett Smith"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.7876,
+     "lo": 0.4201,
+     "hi": 0.9639
+    },
+    "R": {
+     "fair": 0.2124,
+     "lo": 0.0361,
+     "hi": 0.5799
+    }
+   },
+   "office": "governor",
+   "state": "Oregon"
+  },
+  "Oregon Senate": {
+   "margin_hat": 14.4,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 15.35,
+    "prior_margin": 14.4,
+    "incumbent": "Jeff Merkley",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 14.3,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9641,
+     "lo": 0.7883,
+     "hi": 0.9974
+    },
+    "R": {
+     "fair": 0.0359,
+     "lo": 0.0026,
+     "hi": 0.2117
+    }
+   },
+   "office": "senate",
+   "state": "Oregon"
+  },
+  "PA-01 House race": {
+   "margin_hat": -0.14,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -1.2,
+    "ratings": {
+     "Cook": "Lean R",
+     "IE": "Lean R",
+     "Sabato": "Lean R",
+     "Econ.": "Lean R",
+     "ST": "Tossup",
+     "DDHQ": "Lean R",
+     "FPO": "Likely D",
+     "Fox": "Tossup",
+     "Silver": "Tossup",
+     "RCP": "Tossup"
+    },
+    "pvi": 1.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 2.35,
+    "prior_margin": -0.14,
+    "incumbent": "Brian Fitzpatrick",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -1.71,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.4933,
+     "lo": 0.1546,
+     "hi": 0.8372
+    },
+    "R": {
+     "fair": 0.5067,
+     "lo": 0.1628,
+     "hi": 0.8454
+    }
+   },
+   "office": "house",
+   "state": "Pennsylvania"
+  },
+  "PA-07 House race": {
+   "margin_hat": 3.49,
+   "sigma": 8.0,
+   "w_poll": 0.1,
+   "inputs": {
+    "poll_margin": 5.0,
+    "n_polls": 1,
+    "n_eff": 0.16,
+    "poll_shares": {
+     "R": 40.0,
+     "D": 45.0
+    },
+    "latest_poll": "2026-09-20",
+    "rating_margin": 4.6,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tilt D",
+     "Sabato": "Lean D",
+     "Econ.": "Lean D",
+     "ST": "Likely D",
+     "DDHQ": "Lean D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": -1.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 0.35,
+    "prior_margin": 3.32,
+    "incumbent": "Ryan Mackenzie",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -1.71,
+    "polls_used": [
+     {
+      "end": "2026-09-20",
+      "pollster": "Franklin & Marshall College",
+      "n": 357,
+      "by_party": {
+       "R": 40.0,
+       "D": 45.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6685,
+     "lo": 0.2863,
+     "hi": 0.9245
+    },
+    "R": {
+     "fair": 0.3315,
+     "lo": 0.0755,
+     "hi": 0.7137
+    }
+   },
+   "office": "house",
+   "state": "Pennsylvania"
+  },
+  "PA-08 House race": {
+   "margin_hat": 0.75,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 2.2,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tilt D",
+     "Sabato": "Tossup",
+     "Econ.": "Tossup",
+     "ST": "Lean D",
+     "DDHQ": "Tossup",
+     "FPO": "Likely D",
+     "Fox": "Tossup",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": -4.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -2.65,
+    "prior_margin": 0.75,
+    "incumbent": "Rob Bresnahan",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -1.71,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5371,
+     "lo": 0.1822,
+     "hi": 0.8628
+    },
+    "R": {
+     "fair": 0.4629,
+     "lo": 0.1372,
+     "hi": 0.8178
+    }
+   },
+   "office": "house",
+   "state": "Pennsylvania"
+  },
+  "PA-10 House race": {
+   "margin_hat": 3.13,
+   "sigma": 8.0,
+   "w_poll": 0.1,
+   "inputs": {
+    "poll_margin": 3.0,
+    "n_polls": 1,
+    "n_eff": 0.17,
+    "poll_shares": {
+     "D": 47.0,
+     "R": 44.0
+    },
+    "latest_poll": "2026-09-20",
+    "rating_margin": 5.2,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tossup",
+     "Sabato": "Lean D",
+     "Econ.": "Likely D",
+     "ST": "Likely D",
+     "DDHQ": "Lean D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Likely D",
+     "RCP": "Lean D"
+    },
+    "pvi": -3.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -1.65,
+    "prior_margin": 3.15,
+    "incumbent": "Scott Perry",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -1.71,
+    "polls_used": [
+     {
+      "end": "2026-09-20",
+      "pollster": "Franklin & Marshall College",
+      "n": 390,
+      "by_party": {
+       "D": 47.0,
+       "R": 44.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.6522,
+     "lo": 0.2714,
+     "hi": 0.9179
+    },
+    "R": {
+     "fair": 0.3478,
+     "lo": 0.0821,
+     "hi": 0.7286
+    }
+   },
+   "office": "house",
+   "state": "Pennsylvania"
+  },
+  "Pennsylvania Governor": {
+   "margin_hat": 15.17,
+   "sigma": 8.0,
+   "w_poll": 0.35,
+   "inputs": {
+    "poll_margin": 21.5,
+    "n_polls": 3,
+    "n_eff": 0.82,
+    "poll_shares": {
+     "D": 55.0,
+     "R": 33.4
+    },
+    "latest_poll": "2026-10-01",
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": -1.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 6.35,
+    "prior_margin": 11.71,
+    "incumbent": "Josh Shapiro",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -1.71,
+    "polls_used": [
+     {
+      "end": "2026-09-22",
+      "pollster": "The New York Times/Siena University",
+      "n": 615,
+      "by_party": {
+       "D": 58.0,
+       "R": 38.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "Bravo Group",
+      "n": 624,
+      "by_party": {
+       "D": 55.0,
+       "R": 28.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "Z to A Research",
+      "n": 630,
+      "by_party": {
+       "D": 53.0,
+       "R": 34.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Ken Krawchuk"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.971,
+     "lo": 0.8148,
+     "hi": 0.9981
+    },
+    "R": {
+     "fair": 0.029,
+     "lo": 0.0019,
+     "hi": 0.1852
+    }
+   },
+   "office": "governor",
+   "state": "Pennsylvania"
+  },
+  "Rhode Island Governor": {
+   "margin_hat": 17.5,
+   "sigma": 8.0,
+   "w_poll": 0.35,
+   "inputs": {
+    "poll_margin": 23.3,
+    "n_polls": 2,
+    "n_eff": 0.8,
+    "poll_shares": {
+     "D": 40.3,
+     "R": 17.0,
+     "I": 27.2
+    },
+    "latest_poll": "2026-10-08",
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "Silver": "Solid D"
+    },
+    "pvi": 8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 15.35,
+    "prior_margin": 14.4,
+    "incumbent": "Dan McKee",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 13.78,
+    "polls_used": [
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 598,
+      "by_party": {
+       "D": 44.0,
+       "R": 17.0,
+       "I": 25.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-08",
+      "pollster": "Embold Research",
+      "n": 815,
+      "by_party": {
+       "D": 39.0,
+       "R": 17.0,
+       "I": 28.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "CD Reynolds",
+     "Jasjit Gotra"
+    ]
+   },
+   "mode": "multi-candidate",
+   "legs": {
+    "D": {
+     "fair": 0.9418,
+     "lo": 0.8825,
+     "hi": 0.9993
+    },
+    "I": {
+     "fair": 0.0429,
+     "lo": 0.0,
+     "hi": 0.1287
+    },
+    "R": {
+     "fair": 0.0154,
+     "lo": 0.0007,
+     "hi": 0.1175
+    }
+   },
+   "office": "governor",
+   "state": "Rhode Island"
+  },
+  "Rhode Island Senate": {
+   "margin_hat": 17.12,
+   "sigma": 8.0,
+   "w_poll": 0.35,
+   "inputs": {
+    "poll_margin": 22.2,
+    "n_polls": 2,
+    "n_eff": 0.8,
+    "poll_shares": {
+     "D": 54.5,
+     "R": 32.3
+    },
+    "latest_poll": "2026-10-08",
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 15.35,
+    "prior_margin": 14.4,
+    "incumbent": "Jack Reed",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 13.78,
+    "polls_used": [
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 598,
+      "by_party": {
+       "D": 53.0,
+       "R": 33.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-08",
+      "pollster": "Embold Research",
+      "n": 815,
+      "by_party": {
+       "D": 55.0,
+       "R": 32.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Michael Bahry"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9838,
+     "lo": 0.8728,
+     "hi": 0.9992
+    },
+    "R": {
+     "fair": 0.0162,
+     "lo": 0.0008,
+     "hi": 0.1272
+    }
+   },
+   "office": "senate",
+   "state": "Rhode Island"
+  },
+  "SC-01 House race": {
+   "margin_hat": -3.58,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -4.4,
+    "ratings": {
+     "Cook": "Lean R",
+     "IE": "Lean R",
+     "Sabato": "Lean R",
+     "Econ.": "Tossup",
+     "ST": "Lean R",
+     "DDHQ": "Lean R",
+     "FPO": "Lean R",
+     "Fox": "Likely R",
+     "Silver": "Likely R",
+     "RCP": "Lean R"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -1.65,
+    "prior_margin": -3.58,
+    "incumbent": "Nancy Mace",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -17.87,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3275,
+     "lo": 0.074,
+     "hi": 0.7099
+    },
+    "R": {
+     "fair": 0.6725,
+     "lo": 0.2901,
+     "hi": 0.926
+    }
+   },
+   "office": "house",
+   "state": "South Carolina"
+  },
+  "South Carolina Governor": {
+   "margin_hat": -11.24,
+   "sigma": 8.0,
+   "w_poll": 0.27,
+   "inputs": {
+    "poll_margin": -16.0,
+    "n_polls": 1,
+    "n_eff": 0.55,
+    "poll_shares": {
+     "R": 52.5,
+     "D": 36.5
+    },
+    "latest_poll": "2026-10-18",
+    "rating_margin": -12.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Lean R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Likely R",
+     "Sabato": "Safe R",
+     "Silver": "Solid R"
+    },
+    "pvi": -8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -3.65,
+    "prior_margin": -9.5,
+    "incumbent": "Henry McMaster",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -17.87,
+    "polls_used": [
+     {
+      "end": "2026-10-18",
+      "pollster": "Trafalgar Group",
+      "n": 1095,
+      "by_party": {
+       "R": 52.5,
+       "D": 36.5
+      },
+      "partisan": "REP"
+     }
+    ],
+    "unmapped_poll_names": [
+     "Michael Addison",
+     "Walid Hakim"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.08,
+     "lo": 0.0081,
+     "hi": 0.3427
+    },
+    "R": {
+     "fair": 0.92,
+     "lo": 0.6573,
+     "hi": 0.9919
+    }
+   },
+   "office": "governor",
+   "state": "South Carolina"
+  },
+  "South Carolina Senate": {
+   "margin_hat": -3.65,
+   "sigma": 8.0,
+   "w_poll": 0.29,
+   "inputs": {
+    "poll_margin": -1.2,
+    "n_polls": 2,
+    "n_eff": 0.62,
+    "poll_shares": {
+     "R": 45.8,
+     "D": 44.5
+    },
+    "latest_poll": "2026-09-29",
+    "rating_margin": -5.09,
+    "ratings": {
+     "Cook": "Lean R",
+     "DDHQ": "Lean R",
+     "Economist": "Lean R",
+     "FPO": "Lean R",
+     "Fox": "Likely R",
+     "IE": "Lean R",
+     "NBC": "Lean R",
+     "RCP": "Lean R",
+     "Sabato": "Likely R",
+     "SB": "Lean R",
+     "ST": "Likely R"
+    },
+    "pvi": -8.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -3.65,
+    "prior_margin": -4.66,
+    "incumbent": "Darline Graham",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -17.87,
+    "polls_used": [
+     {
+      "end": "2026-09-09",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "R": 45.1,
+       "D": 43.2
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-29",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "R": 46.0,
+       "D": 45.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Kasie Whitener",
+     "Mark Hackett"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3243,
+     "lo": 0.0727,
+     "hi": 0.7068
+    },
+    "R": {
+     "fair": 0.6757,
+     "lo": 0.2932,
+     "hi": 0.9273
+    }
+   },
+   "office": "senate",
+   "state": "South Carolina"
+  },
+  "South Dakota Governor": {
+   "margin_hat": -13.89,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "Silver": "Solid R"
+    },
+    "pvi": -15.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -13.65,
+    "prior_margin": -13.89,
+    "incumbent": "Larry Rhoden",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -29.19,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0412,
+     "lo": 0.0031,
+     "hi": 0.2306
+    },
+    "R": {
+     "fair": 0.9588,
+     "lo": 0.7694,
+     "hi": 0.9969
+    }
+   },
+   "office": "governor",
+   "state": "South Dakota"
+  },
+  "South Dakota Senate": {
+   "margin_hat": -13.13,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -12.91,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Likely R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Likely R"
+    },
+    "pvi": -15.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -13.65,
+    "prior_margin": -13.13,
+    "incumbent": "Mike Rounds",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -29.19,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0503,
+     "lo": 0.0041,
+     "hi": 0.2606
+    },
+    "I": {
+     "fair": 0.0,
+     "lo": 0.0,
+     "hi": 0.0
+    },
+    "R": {
+     "fair": 0.9497,
+     "lo": 0.7394,
+     "hi": 0.9959
+    }
+   },
+   "office": "senate",
+   "state": "South Dakota"
+  },
+  "TN-05 House race": {
+   "margin_hat": -11.13,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -12.2,
+    "ratings": {
+     "Cook": "Solid R",
+     "IE": "Solid R",
+     "Sabato": "Safe R",
+     "Econ.": "Likely R",
+     "ST": "Safe R",
+     "DDHQ": "Safe R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "Silver": "Likely R",
+     "RCP": "Likely R"
+    },
+    "pvi": -10.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -8.65,
+    "prior_margin": -11.13,
+    "incumbent": "Andy Ogles",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -29.72,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.082,
+     "lo": 0.0084,
+     "hi": 0.3476
+    },
+    "R": {
+     "fair": 0.918,
+     "lo": 0.6524,
+     "hi": 0.9916
+    }
+   },
+   "office": "house",
+   "state": "Tennessee"
+  },
+  "TX-15 House race": {
+   "margin_hat": 1.64,
+   "sigma": 8.0,
+   "w_poll": 0.35,
+   "inputs": {
+    "poll_margin": 7.9,
+    "n_polls": 2,
+    "n_eff": 0.8,
+    "poll_shares": {
+     "D": 51.5,
+     "R": 43.5
+    },
+    "latest_poll": "2026-10-16",
+    "rating_margin": 0.0,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Tossup",
+     "Econ.": "Tossup",
+     "ST": "Lean D",
+     "DDHQ": "Tossup",
+     "FPO": "Lean R",
+     "Fox": "Tossup",
+     "Silver": "Lean R",
+     "RCP": "Lean D"
+    },
+    "pvi": -7.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -5.65,
+    "prior_margin": -1.7,
+    "incumbent": "Monica De La Cruz",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.68,
+    "polls_used": [
+     {
+      "end": "2026-09-28",
+      "pollster": "Normington, Petts & Associates",
+      "n": 400,
+      "by_party": {
+       "D": 54.0,
+       "R": 41.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-16",
+      "pollster": "Texas Southern University Barbara Jordan Public Policy Research and Survey Center",
+      "n": 500,
+      "by_party": {
+       "D": 51.0,
+       "R": 44.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5813,
+     "lo": 0.2134,
+     "hi": 0.886
+    },
+    "R": {
+     "fair": 0.4187,
+     "lo": 0.114,
+     "hi": 0.7866
+    }
+   },
+   "office": "house",
+   "state": "Texas"
+  },
+  "TX-23 House race": {
+   "margin_hat": -3.44,
+   "sigma": 8.0,
+   "w_poll": 0.11,
+   "inputs": {
+    "poll_margin": 0.0,
+    "n_polls": 1,
+    "n_eff": 0.19,
+    "poll_shares": {
+     "R": 46.0,
+     "D": 46.0
+    },
+    "latest_poll": "2026-10-07",
+    "rating_margin": -4.4,
+    "ratings": {
+     "Cook": "Likely R",
+     "IE": "Likely R",
+     "Sabato": "Lean R",
+     "Econ.": "Lean R",
+     "ST": "Tossup",
+     "DDHQ": "Likely R",
+     "FPO": "Lean R",
+     "Fox": "Likely R",
+     "Silver": "Tossup",
+     "RCP": "Tossup"
+    },
+    "pvi": -7.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -2.65,
+    "prior_margin": -3.88,
+    "incumbent": null,
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -13.68,
+    "polls_used": [
+     {
+      "end": "2026-10-07",
+      "pollster": "Normington, Petts & Associates",
+      "n": 400,
+      "by_party": {
+       "R": 46.0,
+       "D": 46.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3336,
+     "lo": 0.0764,
+     "hi": 0.7157
+    },
+    "R": {
+     "fair": 0.6664,
+     "lo": 0.2843,
+     "hi": 0.9236
+    }
+   },
+   "office": "house",
+   "state": "Texas"
+  },
+  "TX-28 House race": {
+   "margin_hat": 7.99,
+   "sigma": 8.0,
+   "w_poll": 0.17,
+   "inputs": {
+    "poll_margin": 20.0,
+    "n_polls": 1,
+    "n_eff": 0.31,
+    "poll_shares": {
+     "D": 54.0,
+     "R": 34.0
+    },
+    "latest_poll": "2026-10-13",
+    "rating_margin": 6.0,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tilt D",
+     "Sabato": "Lean D",
+     "Econ.": "Likely D",
+     "ST": "Safe D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": -3.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 4.35,
+    "prior_margin": 5.5,
+    "incumbent": "Henry Cuellar",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.68,
+    "polls_used": [
+     {
+      "end": "2026-10-13",
+      "pollster": "DCCC Targeting and Analytics Department",
+      "n": 563,
+      "by_party": {
+       "D": 54.0,
+       "R": 34.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.841,
+     "lo": 0.4994,
+     "hi": 0.9772
+    },
+    "R": {
+     "fair": 0.159,
+     "lo": 0.0228,
+     "hi": 0.5006
+    }
+   },
+   "office": "house",
+   "state": "Texas"
+  },
+  "Tennessee Governor": {
+   "margin_hat": -12.04,
+   "sigma": 8.0,
+   "w_poll": 0.36,
+   "inputs": {
+    "poll_margin": -11.8,
+    "n_polls": 2,
+    "n_eff": 0.83,
+    "poll_shares": {
+     "R": 44.1,
+     "D": 32.3,
+     "I": 12.6
+    },
+    "latest_poll": "2026-10-16",
+    "rating_margin": -13.25,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Likely R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "Silver": "Solid R"
+    },
+    "pvi": -14.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -9.65,
+    "prior_margin": -12.17,
+    "incumbent": "Bill Lee",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -29.72,
+    "polls_used": [
+     {
+      "end": "2026-09-12",
+      "pollster": "TargetSmart",
+      "n": 600,
+      "by_party": {
+       "R": 45.0,
+       "D": 36.0,
+       "I": 19.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-16",
+      "pollster": "Spry Strategies",
+      "n": 635,
+      "by_party": {
+       "R": 44.0,
+       "D": 32.0,
+       "I": 12.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Lauren Pinkston"
+    ]
+   },
+   "mode": "multi-candidate",
+   "legs": {
+    "D": {
+     "fair": 0.0554,
+     "lo": 0.0061,
+     "hi": 0.3069
+    },
+    "I": {
+     "fair": 0.0067,
+     "lo": 0.0,
+     "hi": 0.0202
+    },
+    "R": {
+     "fair": 0.9379,
+     "lo": 0.6931,
+     "hi": 0.9939
+    }
+   },
+   "office": "governor",
+   "state": "Tennessee"
+  },
+  "Tennessee Senate": {
+   "margin_hat": -13.6,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Safe R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -14.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -12.65,
+    "prior_margin": -13.6,
+    "incumbent": "Bill Hagerty",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -29.72,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0446,
+     "lo": 0.0035,
+     "hi": 0.2422
+    },
+    "R": {
+     "fair": 0.9554,
+     "lo": 0.7578,
+     "hi": 0.9965
+    }
+   },
+   "office": "senate",
+   "state": "Tennessee"
+  },
+  "Texas Governor": {
+   "margin_hat": -2.57,
+   "sigma": 6.33,
+   "w_poll": 0.69,
+   "inputs": {
+    "poll_margin": -2.0,
+    "n_polls": 10,
+    "n_eff": 3.39,
+    "poll_shares": {
+     "R": 48.7,
+     "D": 46.7
+    },
+    "latest_poll": "2026-10-14",
+    "rating_margin": -3.5,
+    "ratings": {
+     "Cook": "Lean R",
+     "DDHQ": "Lean R",
+     "Fox": "Lean R",
+     "IE": "Lean R",
+     "NBC": "Lean R",
+     "RCP": "Tossup",
+     "Sabato": "Lean R",
+     "Silver": "Lean R"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -4.65,
+    "prior_margin": -3.85,
+    "incumbent": "Greg Abbott",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.68,
+    "polls_used": [
+     {
+      "end": "2026-10-14",
+      "pollster": "ActiVote",
+      "n": 400,
+      "by_party": {
+       "R": 50.9,
+       "D": 49.1
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "Emerson College",
+      "n": 1000,
+      "by_party": {
+       "R": 49.0,
+       "D": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-11",
+      "pollster": "ReconMR/Siena University",
+      "n": 614,
+      "by_party": {
+       "R": 45.0,
+       "D": 49.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-19",
+      "pollster": "Texas Southern University Barbara Jordan Public Policy Research and Survey Center",
+      "n": 1800,
+      "by_party": {
+       "R": 49.0,
+       "D": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "Slingshot Strategies",
+      "n": 1007,
+      "by_party": {
+       "R": 50.0,
+       "D": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "Beacon Research/Shaw & Co. Research",
+      "n": 881,
+      "by_party": {
+       "R": 52.0,
+       "D": 47.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-30",
+      "pollster": "The New York Times/Siena University",
+      "n": 605,
+      "by_party": {
+       "R": 46.0,
+       "D": 49.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "Guidant Polling and Strategy",
+      "n": 800,
+      "by_party": {
+       "R": 46.0,
+       "D": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "University of Massachusetts Lowell Center for Public Opinion/YouGov",
+      "n": 850,
+      "by_party": {
+       "R": 48.0,
+       "D": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-08",
+      "pollster": "ReconMR/Siena University",
+      "n": 617,
+      "by_party": {
+       "R": 48.0,
+       "D": 47.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Pat Dixon"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.3425,
+     "lo": 0.0799,
+     "hi": 0.7239
+    },
+    "R": {
+     "fair": 0.6575,
+     "lo": 0.2761,
+     "hi": 0.9201
+    }
+   },
+   "office": "governor",
+   "state": "Texas"
+  },
+  "Texas Senate": {
+   "margin_hat": 0.94,
+   "sigma": 6.06,
+   "w_poll": 0.76,
+   "inputs": {
+    "poll_margin": 1.5,
+    "n_polls": 12,
+    "n_eff": 4.87,
+    "poll_shares": {
+     "D": 48.1,
+     "R": 46.7
+    },
+    "latest_poll": "2026-10-14",
+    "rating_margin": 0.73,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Tossup",
+     "Economist": "Tossup",
+     "FPO": "Tossup",
+     "Fox": "Tossup",
+     "IE": "Tossup",
+     "NBC": "Tossup",
+     "RCP": "Tossup",
+     "Sabato": "Tossup",
+     "SB": "Lean D",
+     "ST": "Lean D"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -4.65,
+    "prior_margin": -0.88,
+    "incumbent": "John Cornyn",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -13.68,
+    "polls_used": [
+     {
+      "end": "2026-10-14",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "D": 48.0,
+       "R": 49.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-14",
+      "pollster": "ActiVote",
+      "n": 400,
+      "by_party": {
+       "D": 51.9,
+       "R": 48.1
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-09",
+      "pollster": "InsiderAdvantage",
+      "n": 1200,
+      "by_party": {
+       "D": 47.1,
+       "R": 45.6
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-14",
+      "pollster": "Emerson College",
+      "n": 1000,
+      "by_party": {
+       "D": 47.0,
+       "R": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-11",
+      "pollster": "ReconMR/Siena University",
+      "n": 614,
+      "by_party": {
+       "D": 49.0,
+       "R": 43.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-19",
+      "pollster": "Texas Southern University Barbara Jordan Public Policy Research and Survey Center",
+      "n": 1800,
+      "by_party": {
+       "D": 47.0,
+       "R": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-22",
+      "pollster": "Slingshot Strategies",
+      "n": 1007,
+      "by_party": {
+       "D": 49.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "Beacon Research/Shaw & Co. Research",
+      "n": 881,
+      "by_party": {
+       "D": 51.0,
+       "R": 49.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "Guidant Polling and Strategy",
+      "n": 800,
+      "by_party": {
+       "D": 46.6,
+       "R": 44.2
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-09-28",
+      "pollster": "University of Massachusetts Lowell Center for Public Opinion/YouGov",
+      "n": 850,
+      "by_party": {
+       "D": 45.0,
+       "R": 45.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-08",
+      "pollster": "ReconMR/Siena University",
+      "n": 617,
+      "by_party": {
+       "D": 48.0,
+       "R": 44.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-11",
+      "pollster": "Quantus Insights",
+      "n": 854,
+      "by_party": {
+       "D": 46.7,
+       "R": 47.2
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Ted Brown"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5616,
+     "lo": 0.1991,
+     "hi": 0.876
+    },
+    "R": {
+     "fair": 0.4384,
+     "lo": 0.124,
+     "hi": 0.8009
+    }
+   },
+   "office": "senate",
+   "state": "Texas"
+  },
+  "VA-01 House race": {
+   "margin_hat": 0.27,
+   "sigma": 8.0,
+   "w_poll": 0.17,
+   "inputs": {
+    "poll_margin": 4.0,
+    "n_polls": 1,
+    "n_eff": 0.31,
+    "poll_shares": {
+     "R": 46.0,
+     "D": 50.0
+    },
+    "latest_poll": "2026-09-28",
+    "rating_margin": 0.0,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Lean R",
+     "Sabato": "Tossup",
+     "Econ.": "Tossup",
+     "ST": "Tossup",
+     "DDHQ": "Lean R",
+     "FPO": "Likely D",
+     "Fox": "Tossup",
+     "Silver": "Tossup",
+     "RCP": "Tossup"
+    },
+    "pvi": -3.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -1.65,
+    "prior_margin": -0.5,
+    "incumbent": "Rob Wittman",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 5.78,
+    "polls_used": [
+     {
+      "end": "2026-09-28",
+      "pollster": "The Washington Post/George Mason University Schar School of Policy and Government",
+      "n": 609,
+      "by_party": {
+       "R": 46.0,
+       "D": 50.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5137,
+     "lo": 0.1671,
+     "hi": 0.8495
+    },
+    "R": {
+     "fair": 0.4863,
+     "lo": 0.1505,
+     "hi": 0.8329
+    }
+   },
+   "office": "house",
+   "state": "Virginia"
+  },
+  "VA-02 House race": {
+   "margin_hat": 3.76,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 4.8,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Lean D",
+     "Econ.": "Lean D",
+     "ST": "Likely D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Likely D",
+     "RCP": "Lean D"
+    },
+    "pvi": 0.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 1.35,
+    "prior_margin": 3.76,
+    "incumbent": "Jen Kiggans",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 5.78,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.681,
+     "lo": 0.2983,
+     "hi": 0.9293
+    },
+    "R": {
+     "fair": 0.319,
+     "lo": 0.0707,
+     "hi": 0.7017
+    }
+   },
+   "office": "house",
+   "state": "Virginia"
+  },
+  "VA-05 House race": {
+   "margin_hat": -5.26,
+   "sigma": 8.0,
+   "w_poll": 0.17,
+   "inputs": {
+    "poll_margin": -5.0,
+    "n_polls": 1,
+    "n_eff": 0.3,
+    "poll_shares": {
+     "R": 51.0,
+     "D": 46.0
+    },
+    "latest_poll": "2026-09-28",
+    "rating_margin": -5.6,
+    "ratings": {
+     "Cook": "Likely R",
+     "IE": "Likely R",
+     "Sabato": "Lean R",
+     "Econ.": "Likely R",
+     "ST": "Likely R",
+     "DDHQ": "Lean R",
+     "FPO": "Lean R",
+     "Fox": "Lean R",
+     "Silver": "Lean R",
+     "RCP": "Lean R"
+    },
+    "pvi": -6.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -4.65,
+    "prior_margin": -5.31,
+    "incumbent": "John McGuire",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 5.78,
+    "polls_used": [
+     {
+      "end": "2026-09-28",
+      "pollster": "The Washington Post/George Mason University Schar School of Policy and Government",
+      "n": 600,
+      "by_party": {
+       "R": 51.0,
+       "D": 46.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.2553,
+     "lo": 0.0487,
+     "hi": 0.6339
+    },
+    "R": {
+     "fair": 0.7447,
+     "lo": 0.3661,
+     "hi": 0.9513
+    }
+   },
+   "office": "house",
+   "state": "Virginia"
+  },
+  "VA-07 House race": {
+   "margin_hat": 10.5,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 11.0,
+    "ratings": {
+     "Cook": "Likely D",
+     "IE": "Likely D",
+     "Sabato": "Likely D",
+     "Econ.": "Safe D",
+     "ST": "Safe D",
+     "DDHQ": "Likely D",
+     "FPO": "Safe D",
+     "Fox": "Likely D",
+     "Silver": "Solid D",
+     "RCP": "Solid D"
+    },
+    "pvi": 2.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 9.35,
+    "prior_margin": 10.5,
+    "incumbent": "Eugene Vindman",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 5.78,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9054,
+     "lo": 0.6229,
+     "hi": 0.9896
+    },
+    "R": {
+     "fair": 0.0946,
+     "lo": 0.0104,
+     "hi": 0.3771
+    }
+   },
+   "office": "house",
+   "state": "Virginia"
+  },
+  "Vermont Governor": {
+   "margin_hat": -1.71,
+   "sigma": 8.0,
+   "w_poll": 0.14,
+   "inputs": {
+    "poll_margin": 6.0,
+    "n_polls": 1,
+    "n_eff": 0.25,
+    "poll_shares": {
+     "D": 49.0,
+     "R": 43.0
+    },
+    "latest_poll": "2026-09-21",
+    "rating_margin": -7.0,
+    "ratings": {
+     "Cook": "Likely R",
+     "DDHQ": "Likely R",
+     "Fox": "Likely R",
+     "IE": "Likely R",
+     "NBC": "Likely R",
+     "RCP": "Lean R",
+     "Sabato": "Likely R",
+     "Silver": "Lean R"
+    },
+    "pvi": 17.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": 18.35,
+    "prior_margin": -3.0,
+    "incumbent": "Phil Scott",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 31.51,
+    "polls_used": [
+     {
+      "end": "2026-09-21",
+      "pollster": "University of New Hampshire",
+      "n": 835,
+      "by_party": {
+       "D": 49.0,
+       "R": 43.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": [
+     "Brian Judd",
+     "Dean Roy",
+     "June Goodband"
+    ]
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.4152,
+     "lo": 0.1123,
+     "hi": 0.784
+    },
+    "R": {
+     "fair": 0.5848,
+     "lo": 0.216,
+     "hi": 0.8877
+    }
+   },
+   "office": "governor",
+   "state": "Vermont"
+  },
+  "Virginia Senate": {
+   "margin_hat": 12.9,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 14.0,
+    "ratings": {
+     "Cook": "Solid D",
+     "DDHQ": "Safe D",
+     "Economist": "Safe D",
+     "FPO": "Safe D",
+     "Fox": "Solid D",
+     "IE": "Solid D",
+     "NBC": "Solid D",
+     "RCP": "Solid D",
+     "Sabato": "Safe D",
+     "SB": "Solid D",
+     "ST": "Safe D"
+    },
+    "pvi": 3.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 10.35,
+    "prior_margin": 12.9,
+    "incumbent": "Mark Warner",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 5.78,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.9466,
+     "lo": 0.7301,
+     "hi": 0.9955
+    },
+    "R": {
+     "fair": 0.0534,
+     "lo": 0.0045,
+     "hi": 0.2699
+    }
+   },
+   "office": "senate",
+   "state": "Virginia"
+  },
+  "WA-03 House race": {
+   "margin_hat": 4.5,
+   "sigma": 8.0,
+   "w_poll": 0.16,
+   "inputs": {
+    "poll_margin": -1.0,
+    "n_polls": 1,
+    "n_eff": 0.28,
+    "poll_shares": {
+     "D": 47.0,
+     "R": 48.0
+    },
+    "latest_poll": "2026-09-27",
+    "rating_margin": 5.6,
+    "ratings": {
+     "Cook": "Lean D",
+     "IE": "Tossup",
+     "Sabato": "Lean D",
+     "Econ.": "Likely D",
+     "ST": "Likely D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Lean D",
+     "Silver": "Likely D",
+     "RCP": "Lean D"
+    },
+    "pvi": -2.0,
+    "generic_ballot": 8.7,
+    "incumbency": 3.0,
+    "fund_margin": 5.35,
+    "prior_margin": 5.52,
+    "incumbent": "Marie Gluesenkamp Perez",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": 18.22,
+    "polls_used": [
+     {
+      "end": "2026-09-27",
+      "pollster": "DHM Research",
+      "n": 543,
+      "by_party": {
+       "D": 47.0,
+       "R": 48.0
+      },
+      "partisan": null
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.7131,
+     "lo": 0.3308,
+     "hi": 0.9409
+    },
+    "R": {
+     "fair": 0.2869,
+     "lo": 0.0591,
+     "hi": 0.6692
+    }
+   },
+   "office": "house",
+   "state": "Washington"
+  },
+  "WI-01 House race": {
+   "margin_hat": -1.73,
+   "sigma": 8.0,
+   "w_poll": 0.15,
+   "inputs": {
+    "poll_margin": 0.6,
+    "n_polls": 2,
+    "n_eff": 0.27,
+    "poll_shares": {
+     "R": 47.4,
+     "D": 48.0
+    },
+    "latest_poll": "2026-10-01",
+    "rating_margin": -2.8,
+    "ratings": {
+     "Cook": "Lean R",
+     "IE": "Likely R",
+     "Sabato": "Lean R",
+     "Econ.": "Tossup",
+     "ST": "Lean R",
+     "DDHQ": "Lean R",
+     "FPO": "Lean D",
+     "Fox": "Lean R",
+     "Silver": "Lean R",
+     "RCP": "Tossup"
+    },
+    "pvi": -2.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -0.65,
+    "prior_margin": -2.16,
+    "incumbent": "Bryan Steil",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -0.86,
+    "polls_used": [
+     {
+      "end": "2026-09-23",
+      "pollster": "DCCC Targeting and Analytics Department",
+      "n": 495,
+      "by_party": {
+       "R": 48.0,
+       "D": 48.0
+      },
+      "partisan": "DEM"
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "Impact Research",
+      "n": 500,
+      "by_party": {
+       "R": 47.0,
+       "D": 48.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.4142,
+     "lo": 0.1118,
+     "hi": 0.7832
+    },
+    "R": {
+     "fair": 0.5858,
+     "lo": 0.2168,
+     "hi": 0.8882
+    }
+   },
+   "office": "house",
+   "state": "Wisconsin"
+  },
+  "WI-03 House race": {
+   "margin_hat": 2.03,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": 3.6,
+    "ratings": {
+     "Cook": "Tossup",
+     "IE": "Tossup",
+     "Sabato": "Lean D",
+     "Econ.": "Lean D",
+     "ST": "Lean D",
+     "DDHQ": "Likely D",
+     "FPO": "Likely D",
+     "Fox": "Tossup",
+     "Silver": "Lean D",
+     "RCP": "Lean D"
+    },
+    "pvi": -3.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -1.65,
+    "prior_margin": 2.03,
+    "incumbent": "Derrick Van Orden",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -0.86,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.5999,
+     "lo": 0.2276,
+     "hi": 0.8949
+    },
+    "R": {
+     "fair": 0.4001,
+     "lo": 0.1051,
+     "hi": 0.7724
+    }
+   },
+   "office": "house",
+   "state": "Wisconsin"
+  },
+  "West Virginia Senate": {
+   "margin_hat": -15.7,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Safe R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -21.0,
+    "generic_ballot": 8.7,
+    "incumbency": -3.0,
+    "fund_margin": -19.65,
+    "prior_margin": -15.7,
+    "incumbent": "Shelley Moore Capito",
+    "open_seat": false,
+    "days_to_election": 12,
+    "pres2024_margin": -41.87,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0249,
+     "lo": 0.0015,
+     "hi": 0.1681
+    },
+    "R": {
+     "fair": 0.9751,
+     "lo": 0.8319,
+     "hi": 0.9985
+    }
+   },
+   "office": "senate",
+   "state": "West Virginia"
+  },
+  "Wisconsin Governor": {
+   "margin_hat": 2.95,
+   "sigma": 8.0,
+   "w_poll": 0.23,
+   "inputs": {
+    "poll_margin": 3.8,
+    "n_polls": 2,
+    "n_eff": 0.44,
+    "poll_shares": {
+     "D": 49.0,
+     "R": 45.2
+    },
+    "latest_poll": "2026-10-01",
+    "rating_margin": 2.0,
+    "ratings": {
+     "Cook": "Tossup",
+     "DDHQ": "Lean D",
+     "Fox": "Tossup",
+     "IE": "Tossup",
+     "NBC": "Lean D",
+     "RCP": "Tossup",
+     "Sabato": "Lean D",
+     "Silver": "Lean D"
+    },
+    "pvi": 0.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": 4.35,
+    "prior_margin": 2.71,
+    "incumbent": "Tony Evers",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -0.86,
+    "polls_used": [
+     {
+      "end": "2026-09-23",
+      "pollster": "Marquette University Law School",
+      "n": 692,
+      "by_party": {
+       "D": 49.0,
+       "R": 46.0
+      },
+      "partisan": null
+     },
+     {
+      "end": "2026-10-01",
+      "pollster": "Z to A Research",
+      "n": 662,
+      "by_party": {
+       "D": 49.0,
+       "R": 44.0
+      },
+      "partisan": "DEM"
+     }
+    ],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.644,
+     "lo": 0.2641,
+     "hi": 0.9145
+    },
+    "R": {
+     "fair": 0.356,
+     "lo": 0.0855,
+     "hi": 0.7359
+    }
+   },
+   "office": "governor",
+   "state": "Wisconsin"
+  },
+  "Wyoming Governor": {
+   "margin_hat": -15.39,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "Silver": "Solid R"
+    },
+    "pvi": -23.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -18.65,
+    "prior_margin": -15.39,
+    "incumbent": "Mark Gordon",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -45.76,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0272,
+     "lo": 0.0017,
+     "hi": 0.1776
+    },
+    "R": {
+     "fair": 0.9728,
+     "lo": 0.8224,
+     "hi": 0.9983
+    }
+   },
+   "office": "governor",
+   "state": "Wyoming"
+  },
+  "Wyoming Senate": {
+   "margin_hat": -15.39,
+   "sigma": 8.0,
+   "w_poll": 0.0,
+   "inputs": {
+    "poll_margin": null,
+    "n_polls": 0,
+    "n_eff": 0.0,
+    "poll_shares": null,
+    "latest_poll": null,
+    "rating_margin": -14.0,
+    "ratings": {
+     "Cook": "Solid R",
+     "DDHQ": "Safe R",
+     "Economist": "Safe R",
+     "FPO": "Safe R",
+     "Fox": "Solid R",
+     "IE": "Solid R",
+     "NBC": "Solid R",
+     "RCP": "Solid R",
+     "Sabato": "Safe R",
+     "SB": "Solid R",
+     "ST": "Safe R"
+    },
+    "pvi": -23.0,
+    "generic_ballot": 8.7,
+    "incumbency": 0.0,
+    "fund_margin": -18.65,
+    "prior_margin": -15.39,
+    "incumbent": "Cynthia Lummis",
+    "open_seat": true,
+    "days_to_election": 12,
+    "pres2024_margin": -45.76,
+    "polls_used": [],
+    "unmapped_poll_names": []
+   },
+   "mode": "two-party",
+   "legs": {
+    "D": {
+     "fair": 0.0272,
+     "lo": 0.0017,
+     "hi": 0.1776
+    },
+    "R": {
+     "fair": 0.9728,
+     "lo": 0.8224,
+     "hi": 0.9983
+    }
+   },
+   "office": "senate",
+   "state": "Wyoming"
+  }
+ }
+}

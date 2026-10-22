@@ -1,0 +1,119 @@
+{
+  "tournament_slug": "midterm-elections",
+  "cycle_sec": 60,
+  "tape_poll_markets": 4,
+  "mm_write_budget": 18,
+  "arb": {
+    "min_edge_sell": 0.005,
+    "min_edge_buy": 0.005,
+    "capital_frac": 0.9,
+    "max_race_frac": 0.15,
+    "min_set_qty": 20,
+    "x_overrides": {},
+    "hedge_residual": false,
+    "recycle_enabled": true,
+    "recycle_min_gain": 0.005,
+    "recycle_min_new_ret": 0.02,
+    "min_ret": 0.024
+  },
+  "mm": {
+    "capital_frac": 0.33,
+    "n_markets": 40,
+    "levels": 2,
+    "level_ticks": [
+      1,
+      2
+    ],
+    "level_size_mult": [
+      1.0,
+      0.5
+    ],
+    "base_qty": 300,
+    "max_inventory_notional": 900,
+    "stop_quoting_at": "2026-11-03T12:00:00Z",
+    "min_price": 0.12,
+    "max_price": 0.88,
+    "requote_ticks": 1.0,
+    "order_ttl_sec": 1800,
+    "refresh_sec": 1500,
+    "hard_inventory_stop": true,
+    "portfolio_max_partisan_notional": 5000,
+    "vol_gate_size_mult": 0.5,
+    "wave_hot_frac": 0.15,
+    "wave_size_mult": 0.25,
+    "wave_spread_add": 2,
+    "meanrev_weight": 1.0,
+    "meanrev_max_ticks": 2.0,
+    "vol_gate_fade_mult": 0.5,
+    "improve_when_spread_ticks_ge": 3
+  },
+  "tilt": {
+    "enabled": true,
+    "capital_frac": 0.2,
+    "max_market_frac": 0.01,
+    "calibration_slope": 1.5,
+    "tilt_s": 0.1,
+    "min_edge": 0.04,
+    "max_markets": 30
+  },
+  "news": {
+    "enabled": true,
+    "allow_live": false,
+    "poll_sec": 90,
+    "race_queries_per_poll": 6,
+    "venue_news_per_poll": 6,
+    "max_item_age_hours": 6,
+    "screen_model": "claude-haiku-5-5",
+    "final_model": "claude-opus-5-5",
+    "min_confidence": 0.8,
+    "min_move_pts": 3.0,
+    "already_moved_frac": 0.34,
+    "capital_frac": 0.05,
+    "per_event_budget": 1000,
+    "max_events_per_race_per_day": 2,
+    "order_ttl_sec": 120,
+    "mm_pause_sec": 1800,
+    "followup_minutes": [
+      5,
+      30,
+      120
+    ]
+  },
+  "cycle_sec_fast": 30,
+  "fast_hours_et": [
+    9,
+    24
+  ],
+  "reads_per_min": 36,
+  "kill_drawdown": 400,
+  "kill_markout_ticks": -1.0,
+  "kill_pause_sec": 1800,
+  "analytics_every_sec": 300,
+  "arb_scan_sec": 5.0,
+  "arb_scan_offset": 4.5,
+  "arb_scan_books": 3,
+  "writes_per_min": 18,
+  "scan_reads_per_min": 38,
+  "scan_writes_per_min": 10,
+  "direction": {
+    "enabled": true,
+    "allow_live": true,
+    "per_market_cap": 600,
+    "overall_cash_frac": 0.08,
+    "per_poll_budget": 900.0,
+    "min_edge_take": 0.06,
+    "move_reserve_frac": 0.0,
+    "poll_sec_day": 60.0,
+    "poll_sec_night": 120.0
+  },
+  "exit_band": 0.01,
+  "free_unwind_every_sec": 300,
+  "shadow": {
+    "auto_apply": true
+  },
+  "allocator": {
+    "auto_apply": true,
+    "offload_live": true
+  },
+  "mm_fast_requotes_per_min": 3
+}

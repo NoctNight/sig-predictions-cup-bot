@@ -1,0 +1,19 @@
+{
+ "generated_at": "2026-10-22T11:45:00Z",
+ "username": "sunny-beacon-7397",
+ "fill_volume_mode": "side_cost",
+ "fill_volume_mode_note": "leaderboard volume = bid+ask notional = quantity x price paid on the side bought; calibrated 2026-10-22: leaderboard +18,346 vs fills side-cost +18,723 over the same window (yes-price sum would have been 14,200)",
+ "target_volume_per_day": 100000,
+ "target_basis": "position-neutral capacity measured from our own fills: only 24% of MM fills coincide with a >2,500-share sweep and sweep fills take 56 of our 100 resting shares on average, so size is not binding on sweeps; 72% of fills are full, so each doubling of level-1 size adds at most ~1.7x of MM volume while its 48-h markout stays >= 0 (MM 7k -> ~25k/day at 4x); + arb turnover 30-40k (recycle and unwind at >= cost) + tilt 7-14k + direction 5k ~ 80-100k/day",
+ "stretch_volume_per_day": 277000,
+ "stretch_basis": "median volume per day of the current top-50 accounts (5.94M over 21.5 days)",
+ "benchmark_top10_volume_per_day": 719000,
+ "benchmark_top10_basis": "median volume per day of the current top-10 (15.4M over 21.5 days); their P&L/volume is 4-5%, i.e. directional size, not market making - not a target for neutral trading",
+ "ceiling_volume_per_day": 150000,
+ "ceiling_basis": "MM at 8x size with every full fill scaling (~50k) + arb capital (70k) turned once a day + tilt and direction at their caps; the top-50 median pace (277k) is unreachable without taker or directional volume",
+ "ev_rule": "volume only from fills with non-negative expected markout: never cross the spread for volume, never raise a level's size while its 30-minute markout over the last 48 h is below zero (analytics.py gate), kill switch stays at -1 tick",
+ "pace_at_write_per_day": 107000,
+ "pace_at_write_window": "13 h of fill log to 2026-10-22 11:26 UTC, extrapolated to a day (56.7k in the window: arb 42.4k, tilt 7.4k, mm 3.7k, direction 2.8k, hedge/exit 0.3k); the arb figure is front-loaded by the first deployment of the 70k arb sleeve",
+ "days_left_at_write": 13.2,
+ "review": "python3 -m sigbot.volume_report; model in research_notes/volume_target_model.py; note research_notes/volume_target.md"
+}

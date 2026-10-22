@@ -1,0 +1,826 @@
+{
+ "generated_at": "2026-10-22T00:15:55.177043+00:00",
+ "floor": 0.003,
+ "max_quote_age_h": 336.0,
+ "by_race": {
+  "Alabama Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "Arkansas Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Arizona Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Colorado Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.09
+  },
+  "Connecticut Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Florida Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Georgia Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Hawaii Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.15
+  },
+  "Iowa Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Idaho Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Illinois Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "Kansas Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Massachusetts Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Maryland Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Maine Governor": {
+   "x": 0.01,
+   "pm": 0.0,
+   "kalshi": 0.01,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "Michigan Governor": {
+   "x": 0.003,
+   "pm": 0.001,
+   "kalshi": 0.001,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "Minnesota Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.14
+  },
+  "Nebraska Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "New Hampshire Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "New Mexico Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Nevada Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "New York Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Oklahoma Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Oregon Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Pennsylvania Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "Rhode Island Governor": {
+   "x": 0.05,
+   "pm": 0.027,
+   "kalshi": 0.05,
+   "source": "outside",
+   "age_h": 0.09
+  },
+  "South Carolina Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "South Dakota Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "Tennessee Governor": {
+   "x": 0.03,
+   "pm": 0.0,
+   "kalshi": 0.03,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Texas Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Vermont Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Wisconsin Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Wyoming Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "AZ-01 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.13
+  },
+  "AZ-06 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "CA-22 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "CO-03 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "CO-08 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "FL-13 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "IA-01 House race": {
+   "x": 0.01,
+   "pm": 0.0,
+   "kalshi": 0.01,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "IA-03 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "ME-02 House race": {
+   "x": 0.003,
+   "pm": null,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "MI-10 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "MI-07 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "MN-02 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.12
+  },
+  "MT-01 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "NE-02 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "NH-01 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "NJ-07 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "NY-17 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.12
+  },
+  "PA-01 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "PA-10 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "PA-07 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "PA-08 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "TX-15 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "TX-28 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "VA-01 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "VA-02 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "VA-07 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "WA-03 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "WI-01 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.09
+  },
+  "WI-03 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "U.S. House": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Alaska Governor": {
+   "x": 0.01,
+   "pm": 0.0,
+   "kalshi": 0.01,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "California Governor": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "AL-02 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.16
+  },
+  "CA-48 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "CO-04 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "FL-07 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "FL-09 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "FL-16 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "FL-20 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.12
+  },
+  "FL-22 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "IA-02 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "KY-04 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "MN-01 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "MN-05 House race": {
+   "x": 0.01,
+   "pm": 0.0,
+   "kalshi": 0.01,
+   "source": "outside",
+   "age_h": 0.09
+  },
+  "NY-13 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "SC-01 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "TN-05 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "TX-23 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "VA-05 House race": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Louisiana Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Alaska Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Alabama Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.13
+  },
+  "Arkansas Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "Colorado Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Delaware Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "Florida Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Georgia Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Iowa Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Idaho Senate": {
+   "x": 0.06,
+   "pm": 0.04,
+   "kalshi": 0.06,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Illinois Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.15
+  },
+  "Kansas Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Massachusetts Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Maine Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Michigan Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Minnesota Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Mississippi Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Montana Senate": {
+   "x": 0.081,
+   "pm": 0.079,
+   "kalshi": 0.081,
+   "source": "outside",
+   "age_h": 0.09
+  },
+  "North Carolina Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Nebraska Senate": {
+   "x": 0.3,
+   "pm": 0.3,
+   "kalshi": 0.28,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "New Hampshire Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "New Jersey Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.12
+  },
+  "New Mexico Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.08
+  },
+  "Oklahoma Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Oregon Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.13
+  },
+  "Rhode Island Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "South Carolina Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "South Dakota Senate": {
+   "x": 0.075,
+   "pm": 0.075,
+   "kalshi": 0.07,
+   "source": "outside",
+   "age_h": 0.09
+  },
+  "Tennessee Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "Texas Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Virginia Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.1
+  },
+  "West Virginia Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.09
+  },
+  "Wyoming Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": 0.0,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "U.S. Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": null,
+   "source": "outside",
+   "age_h": 0.17
+  },
+  "Kentucky Senate": {
+   "x": 0.003,
+   "pm": 0.0,
+   "kalshi": null,
+   "source": "outside",
+   "age_h": 0.13
+  }
+ }
+}

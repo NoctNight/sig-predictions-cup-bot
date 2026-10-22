@@ -1,0 +1,691 @@
+{
+ "half_life_years": 16.0,
+ "ref_year": 2026,
+ "x": {
+  "senate": 0.01564,
+  "governor": 0.00942,
+  "house": 0.00067,
+  "chamber": 0.0
+ },
+ "sensitivity": {
+  "8": {
+   "senate": 0.01997,
+   "governor": 0.00707,
+   "house": 0.00039
+  },
+  "12": {
+   "senate": 0.0172,
+   "governor": 0.00866,
+   "house": 0.00057
+  },
+  "16": {
+   "senate": 0.01564,
+   "governor": 0.00942,
+   "house": 0.00067
+  },
+  "24": {
+   "senate": 0.01406,
+   "governor": 0.01006,
+   "house": 0.00075
+  },
+  "inf": {
+   "senate": 0.0114,
+   "governor": 0.01071,
+   "house": 0.00082
+  }
+ },
+ "raw_counts": {
+  "senate": {
+   "wins": 11,
+   "races": 965
+  },
+  "governor": {
+   "wins": 8,
+   "races": 747
+  },
+  "house": {
+   "wins": 10,
+   "races": 12180
+  }
+ },
+ "wins_by_state": {
+  "senate": {
+   "NY": 1,
+   "VA": 2,
+   "CT": 1,
+   "VT": 4,
+   "ME": 3
+  },
+  "governor": {
+   "ME": 3,
+   "AK": 2,
+   "CT": 1,
+   "MN": 1,
+   "RI": 1
+  },
+  "house": {
+   "VT": 8,
+   "MO": 1,
+   "VA": 1
+  }
+ },
+ "notes": "x = P(non-D/R winner). Independent-win history concentrates in ME, AK, VT, CT, MN, RI; races with an explicit Independent market use the 3-way set instead of x.",
+ "by_state": {
+  "senate": {
+   "AL": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "AK": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "AZ": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "AR": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "CA": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "CO": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "CT": {
+    "x": 0.0407,
+    "wins_w": 0.42,
+    "races_w": 7.0
+   },
+   "DE": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "FL": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "GA": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "HI": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "ID": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "IL": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "IN": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "IA": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "KS": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "KY": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "LA": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "ME": {
+    "x": 0.18166,
+    "wins_w": 2.169,
+    "races_w": 7.0
+   },
+   "MD": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "MA": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "MI": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "MN": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "MS": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "MO": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "MT": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "NE": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "NV": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "NH": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "NJ": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "NM": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "NY": {
+    "x": 0.01394,
+    "wins_w": 0.088,
+    "races_w": 7.0
+   },
+   "NC": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "ND": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "OH": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "OK": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "OR": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "PA": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "RI": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "SC": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "SD": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "TN": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "TX": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "UT": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "VT": {
+    "x": 0.21555,
+    "wins_w": 2.59,
+    "races_w": 7.0
+   },
+   "VA": {
+    "x": 0.02318,
+    "wins_w": 0.203,
+    "races_w": 7.0
+   },
+   "WA": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "WV": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "WI": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   },
+   "WY": {
+    "x": 0.00682,
+    "wins_w": 0.0,
+    "races_w": 7.0
+   }
+  },
+  "governor": {
+   "AL": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "AK": {
+    "x": 0.00942,
+    "wins_w": 0.805,
+    "races_w": 4.96
+   },
+   "AZ": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "AR": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 6.45
+   },
+   "CA": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "CO": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "CT": {
+    "x": 0.00942,
+    "wins_w": 0.21,
+    "races_w": 4.96
+   },
+   "DE": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "FL": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "GA": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "HI": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "ID": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "IL": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "IN": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "IA": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "KS": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "KY": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "LA": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "ME": {
+    "x": 0.00942,
+    "wins_w": 0.652,
+    "races_w": 4.96
+   },
+   "MD": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "MA": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "MI": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "MN": {
+    "x": 0.00942,
+    "wins_w": 0.297,
+    "races_w": 4.96
+   },
+   "MS": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "MO": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "MT": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "NE": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "NV": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "NH": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 9.92
+   },
+   "NJ": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "NM": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "NY": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "NC": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "ND": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "OH": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "OK": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "OR": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "PA": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "RI": {
+    "x": 0.00942,
+    "wins_w": 0.5,
+    "races_w": 7.19
+   },
+   "SC": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "SD": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "TN": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "TX": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "UT": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "VT": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 9.92
+   },
+   "VA": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "WA": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "WV": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "WI": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   },
+   "WY": {
+    "x": 0.00942,
+    "wins_w": 0.0,
+    "races_w": 4.96
+   }
+  }
+ },
+ "by_race": {
+  "Alabama Senate": 0.00682,
+  "Alaska Senate": 0.00682,
+  "Arizona Senate": 0.00682,
+  "Arkansas Senate": 0.00682,
+  "California Senate": 0.00682,
+  "Colorado Senate": 0.00682,
+  "Connecticut Senate": 0.0407,
+  "Delaware Senate": 0.00682,
+  "Florida Senate": 0.00682,
+  "Georgia Senate": 0.00682,
+  "Hawaii Senate": 0.00682,
+  "Idaho Senate": 0.00682,
+  "Illinois Senate": 0.00682,
+  "Indiana Senate": 0.00682,
+  "Iowa Senate": 0.00682,
+  "Kansas Senate": 0.00682,
+  "Kentucky Senate": 0.00682,
+  "Louisiana Senate": 0.00682,
+  "Maine Senate": 0.18166,
+  "Maryland Senate": 0.00682,
+  "Massachusetts Senate": 0.00682,
+  "Michigan Senate": 0.00682,
+  "Minnesota Senate": 0.00682,
+  "Mississippi Senate": 0.00682,
+  "Missouri Senate": 0.00682,
+  "Montana Senate": 0.00682,
+  "Nebraska Senate": 0.00682,
+  "Nevada Senate": 0.00682,
+  "New Hampshire Senate": 0.00682,
+  "New Jersey Senate": 0.00682,
+  "New Mexico Senate": 0.00682,
+  "New York Senate": 0.01394,
+  "North Carolina Senate": 0.00682,
+  "North Dakota Senate": 0.00682,
+  "Ohio Senate": 0.00682,
+  "Oklahoma Senate": 0.00682,
+  "Oregon Senate": 0.00682,
+  "Pennsylvania Senate": 0.00682,
+  "Rhode Island Senate": 0.00682,
+  "South Carolina Senate": 0.00682,
+  "South Dakota Senate": 0.00682,
+  "Tennessee Senate": 0.00682,
+  "Texas Senate": 0.00682,
+  "Utah Senate": 0.00682,
+  "Vermont Senate": 0.21555,
+  "Virginia Senate": 0.02318,
+  "Washington Senate": 0.00682,
+  "West Virginia Senate": 0.00682,
+  "Wisconsin Senate": 0.00682,
+  "Wyoming Senate": 0.00682,
+  "Alabama Governor": 0.00942,
+  "Alaska Governor": 0.00942,
+  "Arizona Governor": 0.00942,
+  "Arkansas Governor": 0.00942,
+  "California Governor": 0.00942,
+  "Colorado Governor": 0.00942,
+  "Connecticut Governor": 0.00942,
+  "Delaware Governor": 0.00942,
+  "Florida Governor": 0.00942,
+  "Georgia Governor": 0.00942,
+  "Hawaii Governor": 0.00942,
+  "Idaho Governor": 0.00942,
+  "Illinois Governor": 0.00942,
+  "Indiana Governor": 0.00942,
+  "Iowa Governor": 0.00942,
+  "Kansas Governor": 0.00942,
+  "Kentucky Governor": 0.00942,
+  "Louisiana Governor": 0.00942,
+  "Maine Governor": 0.00942,
+  "Maryland Governor": 0.00942,
+  "Massachusetts Governor": 0.00942,
+  "Michigan Governor": 0.00942,
+  "Minnesota Governor": 0.00942,
+  "Mississippi Governor": 0.00942,
+  "Missouri Governor": 0.00942,
+  "Montana Governor": 0.00942,
+  "Nebraska Governor": 0.00942,
+  "Nevada Governor": 0.00942,
+  "New Hampshire Governor": 0.00942,
+  "New Jersey Governor": 0.00942,
+  "New Mexico Governor": 0.00942,
+  "New York Governor": 0.00942,
+  "North Carolina Governor": 0.00942,
+  "North Dakota Governor": 0.00942,
+  "Ohio Governor": 0.00942,
+  "Oklahoma Governor": 0.00942,
+  "Oregon Governor": 0.00942,
+  "Pennsylvania Governor": 0.00942,
+  "Rhode Island Governor": 0.00942,
+  "South Carolina Governor": 0.00942,
+  "South Dakota Governor": 0.00942,
+  "Tennessee Governor": 0.00942,
+  "Texas Governor": 0.00942,
+  "Utah Governor": 0.00942,
+  "Vermont Governor": 0.00942,
+  "Virginia Governor": 0.00942,
+  "Washington Governor": 0.00942,
+  "West Virginia Governor": 0.00942,
+  "Wisconsin Governor": 0.00942,
+  "Wyoming Governor": 0.00942
+ },
+ "state_prior": {
+  "senate": {
+   "pooled_mean": 0.01564,
+   "prior_strength_k": 5.41
+  },
+  "governor": {
+   "pooled_mean": 0.00942,
+   "prior_strength_k": 9328093.76
+  }
+ }
+}

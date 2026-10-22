@@ -1,0 +1,28 @@
+# secrets: never commit
+.sig_api_key
+.anthropic_api_key
+*.key
+.env
+
+# local machine / app state
+.claude/
+deploy/SERVER_HOST
+__pycache__/
+*.pyc
+*.bak*
+*.sleeves_wip
+sigbot_wip/
+
+# runtime data: logs, the SQLite log, raw API dumps (rebuildable from the API)
+data/*
+!data/history/
+!data/polymarket_history/
+!data/markets.json
+!data/openapi.json
+!data/realtime_docs.md
+!data/changes.md
+!data/correlation_matrix.csv
+!data/race_map.json
+!data/leaderboard_snapshot.json
+params/*.lock
+data/polymarket_history/raw/

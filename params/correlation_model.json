@@ -1,0 +1,191 @@
+{
+ "built_at": 1792677650.243358,
+ "years": [
+  2006,
+  2024
+ ],
+ "n_races": 4443,
+ "fundamentals": {
+  "senate": {
+   "coef": {
+    "const": -0.233,
+    "pvi": 0.714,
+    "inc": 11.173,
+    "open_held": 1.652,
+    "gb": 0.809,
+    "pres_year": 0.894
+   },
+   "n": 331,
+   "rmse_loyo": 12.0
+  },
+  "governor": {
+   "coef": {
+    "const": -2.357,
+    "pvi": 0.333,
+    "inc": 15.661,
+    "open_held": 2.366,
+    "gb": 0.638,
+    "pres_year": -3.71
+   },
+   "n": 236,
+   "rmse_loyo": 14.91
+  },
+  "house": {
+   "coef": {
+    "const": -0.086,
+    "pvi": 0.339,
+    "inc": 26.43,
+    "open_held": 16.448,
+    "gb": 0.793,
+    "pres_year": 0.748
+   },
+   "n": 3876,
+   "rmse_loyo": 17.88
+  }
+ },
+ "var_u": 13.797,
+ "sd_u": 3.71,
+ "u_by_year": {
+  "2006": 1.64,
+  "2008": 1.42,
+  "2010": -0.04,
+  "2012": 6.51,
+  "2014": -3.21,
+  "2016": -4.71,
+  "2018": -0.55,
+  "2020": -8.2,
+  "2022": 0.17,
+  "2024": -4.96
+ },
+ "n_competitive": 567,
+ "comp_cut": 20.0,
+ "beta": {
+  "senate": 0.913,
+  "governor": 1.122,
+  "house": 0.712
+ },
+ "var_division": 3.65,
+ "var_state": 8.172,
+ "var_state_senate_gov_only": 6.047,
+ "n_state_pairs": 165,
+ "idiosyncratic": {
+  "senate:competitive": {
+   "n": 197,
+   "sd_total": 7.87,
+   "sd_idio": 6.21,
+   "mean_res": 0.03
+  },
+  "senate:competitive_polled": {
+   "n": 172,
+   "sd_total": 6.04,
+   "sd_idio": 3.62,
+   "mean_res": 0.03
+  },
+  "senate:competitive_polled3": {
+   "n": 154,
+   "sd_total": 5.56,
+   "sd_idio": 2.76,
+   "mean_res": 0.02
+  },
+  "senate:safe": {
+   "n": 134,
+   "sd_total": 9.49,
+   "sd_idio": 8.17,
+   "mean_res": -1.47
+  },
+  "governor:competitive": {
+   "n": 178,
+   "sd_total": 9.0,
+   "sd_idio": 7.2,
+   "mean_res": -0.67
+  },
+  "governor:competitive_polled": {
+   "n": 158,
+   "sd_total": 6.42,
+   "sd_idio": 3.46,
+   "mean_res": 0.06
+  },
+  "governor:competitive_polled3": {
+   "n": 125,
+   "sd_total": 5.0,
+   "sd_idio": 2.5,
+   "mean_res": 0.27
+  },
+  "governor:safe": {
+   "n": 58,
+   "sd_total": 10.98,
+   "sd_idio": 9.56,
+   "mean_res": -3.02
+  },
+  "house:competitive": {
+   "n": 1041,
+   "sd_total": 16.16,
+   "sd_idio": 15.56,
+   "mean_res": -1.92
+  },
+  "house:competitive_polled": {
+   "n": 439,
+   "sd_total": 11.94,
+   "sd_idio": 11.12,
+   "mean_res": -0.48
+  },
+  "house:competitive_polled3": {
+   "n": 92,
+   "sd_total": 7.68,
+   "sd_idio": 6.33,
+   "mean_res": -0.09
+  },
+  "house:safe": {
+   "n": 2835,
+   "sd_total": 16.87,
+   "sd_idio": 16.31,
+   "mean_res": 0.5
+  }
+ },
+ "variance_share_polled": {
+  "senate": {
+   "national": 0.372,
+   "division": 0.118,
+   "state": 0.264,
+   "idiosyncratic": 0.246,
+   "bucket": "senate:competitive_polled3"
+  },
+  "governor": {
+   "national": 0.49,
+   "division": 0.103,
+   "state": 0.231,
+   "idiosyncratic": 0.176,
+   "bucket": "governor:competitive_polled3"
+  },
+  "house": {
+   "national": 0.119,
+   "division": 0.062,
+   "state": 0.139,
+   "idiosyncratic": 0.681,
+   "bucket": "house:competitive_polled3"
+  }
+ },
+ "gb_error_by_year": {
+  "1998": -2.8,
+  "2000": -2.3,
+  "2002": -5.3,
+  "2004": -4.7,
+  "2006": -6.3,
+  "2008": 1.8,
+  "2010": 0.3,
+  "2012": 0.8,
+  "2014": -3.1,
+  "2016": -3.6,
+  "2018": 1.2,
+  "2020": -4.8,
+  "2022": -2.3,
+  "2024": -3.4
+ },
+ "u_on_gb_error_slope": 0.806,
+ "u_gb_error_corr": 0.537,
+ "notes": [
+  "margin = D% - R% of total vote; E = 0.75*sqrt(min(1,n/4)) poll blend where polled else fundamentals (LOYO)",
+  "var_u is the variance of the race-weighted year mean of residuals net of sampling noise; betas are leave-office-out slopes, normalised to mean 1",
+  "var_division from division-year means net of noise; var_state from products of residuals of different races in one state-year"
+ ]
+}
