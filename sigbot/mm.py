@@ -305,18 +305,28 @@ class MarketMaker:
         market_id = self.market_id_of(ex)
         n_levels = self.cfg.levels if self.hours_to_end() >= 24 else min(self.cfg.levels, 4)
         paused = self.paused_sides(ex)
+        # outside-fair gate (research_notes/mm_upgrade.md, verified on realised fills): when the fresh Polymarket/Kalshi
+        # fair sits >= xv_gate_ticks away from our mid, stop taking the other side of that convergence on every level
+        xv = getattr(self, "xv_fair", {}).get(ex)
+        if xv and self.cfg.xv_gate_ticks > 0:
+            from .proposals.mm_upgrade import xv_gate
+            ok_bid, ok_ask = xv_gate(mid, xv[0], xv[1], xv[2], time.time() - xv[3], gap_ticks=self.cfg.xv_gate_ticks)
+            if not ok_bid:
+                paused = set(paused) | {"yes_all"}
+            if not ok_ask:
+                paused = set(paused) | {"no_all"}
         for k, dticks in enumerate(self.cfg.level_ticks[:n_levels]):
             dt = dticks + spread_add
             improve = TICK if (k == 0 and spread_ticks >= self.cfg.improve_when_spread_ticks_ge) else 0.0
             bid_px = min(round_tick(reserve - dt * TICK), round_tick(bb + improve), round_tick(ba - TICK), round(bid_cap, 3))
             qb = int(base_bid[k] * sb)
-            if k == 0 and "yes" in paused:
+            if (k == 0 and "yes" in paused) or "yes_all" in paused:
                 qb = 0
             if qb >= 1 and PRICE_MIN <= bid_px <= PRICE_MAX:
                 quotes.append(Quote(ex, market_id, "yes", bid_px, bid_px, qb, k + 1, (mid - bid_px) / TICK))
             ask_px = max(round_tick(reserve + dt * TICK), round_tick(ba - improve), round_tick(bb + TICK), round(ask_floor, 3))
             qa = int(base_ask[k] * sa)
-            if k == 0 and "no" in paused:
+            if (k == 0 and "no" in paused) or "no_all" in paused:
                 qa = 0
             if qa >= 1 and PRICE_MIN <= ask_px <= PRICE_MAX:
                 quotes.append(Quote(ex, market_id, "no", round_tick(1 - ask_px), ask_px, qa, k + 1, (ask_px - mid) / TICK))

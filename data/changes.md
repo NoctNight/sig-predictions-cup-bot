@@ -243,3 +243,18 @@
   one unwind per 3-s check, and tilt's unfunded list cleared after each. Because unwinds stop once cash reaches the 20k
   reserve and arbs only buy above it, sets cannot ping-pong. Stub replay of the 19:41 churn: 60 offers of one trade -> 1
   unwind; cash above reserve -> 0; tilt with room -> 0. Dry run OK, restarted.
+- 20:18 Research results wired (one-time mandate, memory sig-implement-permission):
+  * MM outside-fair gate (research_notes/mm_upgrade.md section 4.1, verified on realised fills, Fable-checked): when the
+    fresh Polymarket/Kalshi fair (<= 10 min old, venues within 8 points) is >= mm.xv_gate_ticks (3) above our mid the MM
+    posts no ask on any level, when >= 3 below no bid. Expected about +1.6 to +3.1 per 1,000 MM shares (+45 to +90/day),
+    at the cost of ~half the MM volume. Re-test after 48 h. Not yet wired: the one-sided-flow pause (the note says wire it
+    after the gate and re-measure) and the tuner fixes (being implemented with tests by the mm-upgrade session).
+  * high_upside.md: 5-minute market watcher (MARKET WATCH log line on any new or voided exchange; was an hourly refresh);
+    3-leg races (RI Governor, NE Senate, MT Senate) get their own 25% per-race ceiling (arb.three_leg_race_frac), not the
+    allocator's proportional cap.
+  * election_night.md: the sleeve is wired (Bot.election_loop, purpose 'election', 4-s outside polls from 18:00 ET on
+    3 Nov, fills fed back via Bot.election_fills) and OFF by default (config election_enabled false; caps 5,000 per race and
+    90,000 total as the study asked). Before switching it on: run `python3 -m sigbot.proposals.election_night --replay`
+    on a recorded stream and check fill-price units in on_fill (fills are stored in YES terms).
+  * Not done, by design: the late punt / correlated roll (Sizhe's call on 3 Nov 17:00 ET).
+  Dry runs OK (including one with the election sleeve on); restarted via botctl.

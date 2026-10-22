@@ -157,6 +157,11 @@ class ArbEngine:
         """Capital still allowed in `race`: the per-race ceiling (max_race_frac), tightened by the allocator's edge-based
         cap when one is loaded (`race_caps`, floored at `race_cap_floor` so a new opportunity can still be taken small)."""
         lim = self.cfg.max_race_frac * self.starting_cash
+        r = self.u.races.get(race)
+        if r is not None and r.has_independent and self.cfg.three_leg_race_frac > 0:
+            # high_upside.md: the three 3-leg sell-sets (RI Governor, NE Senate, MT Senate) are riskless and carry the most
+            # edge per set; they get their own ceiling and are not cut by the allocator's proportional cap
+            return max(0.0, self.cfg.three_leg_race_frac * self.starting_cash - self.committed.get(race, 0.0))
         caps = getattr(self, "race_caps", None)
         if caps:
             cap = caps.get(race, getattr(self, "race_cap_default", lim))

@@ -13,6 +13,9 @@ the candidate knobs; `python3 -m sigbot.proposals.mm_upgrade` checks it reproduc
   on the wrong side of the Polymarket/Kalshi fair (selling favourites / buying longshots into SIG's compression). SIG then drifted
   toward the outside fair: those fills mark -0.71 tick at 3 h and -1.01 at 6 h (market-clustered 90% CIs [-0.99,-0.41], 21
   markets, and [-2.20,-0.07], 17 markets); fills >= 3 ticks on the fair's side mark +0.46 / +1.16. At 30 min: -0.62 (CI spans 0).
+  The premise holds venue-wide (Fable, venue_fair, 207-216 markets): a gap >= 3 ticks predicts SIG moving +0.10 / +0.61 / +1.24
+  ticks toward the outside fair at 30 min / 3 h / 6 h (two-way clustered t 5-7), ~0 for smaller gaps; even the 3% of big gaps
+  that run against the favourite converge. One day of data.
 * **Two rules clear on realised fills.** The outside-fair gate (do not quote the side that trades against a fresh outside fair by
   >= 3 ticks) at 3-6 h marks, and a one-sided-flow pause (no level 1 on the side that >= 80% of the last 10 min of public volume,
   ending 30 s ago, traded into) at 5 min. In the fill-model replay nothing clears the tuner's bar, and the bar itself is broken
@@ -76,7 +79,7 @@ notes folder, `mm-upgrade-literature-academic.md` and `mm-upgrade-literature-pra
 **A. Realised fills, no fill model** (`settle`, `converge`, `robust`): remove the fills a rule would have prevented, re-sum P&L.
 | rule (state at fill) | dropped share of MM volume | P&L removed, 30-min mark | 3-h / 6-h SIG mark | fit / test halves | market-clustered 90% CI | verdict |
 |---|---|---|---|---|---|---|
-| outside-fair gate, gap >= 3 ticks | 52% | +27 | +0.71 / +1.01 tick per dropped share | +0.50 / +1.68 tick (3 h) | 3 h [-0.99,-0.41], 6 h [-2.20,-0.07] tick (dropped fills) | **clears** |
+| outside-fair gate, gap >= 3 ticks | 52% | +27 | +0.71 / +0.91 tick per dropped share | +0.50 / +1.68 tick (3 h; test = 6 fills) | 3 h two-way [-1.12,-0.29], ex-1057/1033 [-1.04,-0.32]; 6 h [-1.92,+0.10] | **clears at 3 h**; venue-wide premise t 5-7 |
 | pull side vs outside fair >= 2 ticks (30-min mark only) | 56% | +31 | - | +3.7 / +27.5 | [-2.7, +74.7] | noise (2 markets) |
 | drop meanrev-aided fills | 42% | +22 | - | +1.6 / +20.2 | [-5.4, +60.5] | noise |
 | drop L1 at a thin touch (< 1,500) | 55% | +30 | - | -1.5 / +31.4 | [-4.1, +75.1] | noise: thick-thin +0.64 tick overall but +0.06 ex-1057/1033 |
@@ -110,12 +113,13 @@ that touches 40-60% of volume needs 300-560 h, i.e. more than the 281 h left bef
 1. **Outside-fair gate in `MarketMaker.build_quotes`** (`sigbot/proposals/mm_upgrade.py: xv_gate`, ready to call): with `xv = venue_fair` for the leg (age <= 10 min,
    Polymarket/Kalshi within 8 points as the directional sleeve requires), `gap = xv - mid`; if `gap >= 3 ticks` set `base_ask = 0`
    on all levels, if `gap <= -3 ticks` set `base_bid = 0`; keep the other side. Config `mm.xv_gate_ticks: 3`. Expected: -52% of MM
-   shares (about -15k/day), +1.0-1.2 tick on the dropped flow at 6-h marks, i.e. **about +2.6 per 1,000 MM shares and +75/day**
-   at SIG marks; **about +28 per 1,000 and +800/day if the outside fair is right at settlement**. Re-test after 48 h of fills with
+   shares (about -15k/day), +0.6 tick (3 h) to +1.2 tick (6 h) on the dropped flow at the venue-wide convergence rate, i.e.
+   **about +1.6 to +3.1 per 1,000 MM shares and +45 to +90/day** at SIG marks; **about +28 per 1,000 and +800/day if the outside fair is right at settlement**. Re-test after 48 h of fills with
    `converge`. Same bet as the directional sleeve (favourite_drift.md): the MM stops taking the other side of it.
-   Caveat: one day of data, and 85% of the gated shares are the same trade (selling favourites / buying longshots into SIG's
-   compression), so a common factor (SIG decompressing on 22 Oct) is not removed by clustering on markets; legs of one race are
-   not independent either.
+   Caveats (Fable): one day (4-5 six-hour blocks); about half the 3-6 h move on our fills is the day's venue-wide decompression
+   (which is the convergence the rule bets on); at 30 min and 6 h the fill-level effect is still mostly 1057/1033; 92 gated fills
+   are 29 independent 3-h episodes; the walk-forward test half is too short to confirm (6 fills with 3-h marks). The settlement
+   valuation (+28 per 1,000) is an identity once the outside fair is assumed right, not evidence.
 2. **One-sided-flow pause** (small, real): in `paused_sides`, also pause level 1 on a side when >= 80% of that market's public
    volume in [now-630 s, now-30 s] traded into it (taker sells for our bid). Removes ~39% of MM shares that averaged -0.6 tick at
    5 min and -0.4 at 30 min relative to the rest: **about +0.7 per 1,000 MM shares, +19/day** at 30-min marks. It overlaps the

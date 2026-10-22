@@ -40,6 +40,7 @@ class ArbConfig:
     min_ret: float = 0.0                 # new baskets must return at least this per unit of capital
     min_ret_sell: float = -1.0           # sell-sets only (riskless to settlement); < 0 means use min_ret
     cash_reserve: float = 0.0            # arbs never take cash below this (keeps MM, tilt and directional funded)
+    three_leg_race_frac: float = 0.25    # per-race ceiling for races with an Independent leg (3-leg sets: riskless, deepest edge)
     recycle_min_gain: float = 0.01       # new return minus forgone return, per unit of capital
     recycle_min_new_ret: float = 0.02    # only recycle into sets returning at least this much
 
@@ -64,6 +65,7 @@ class MMConfig:
     base_qty: int = 40                   # level-1 size in shares before scaling by budget and price
     batch_size: int = 15                 # orders per batch write (the engine throttles long serial batches)
     join_touch: bool = True              # if our level-1 price would cross the touch, sit at the touch instead
+    xv_gate_ticks: float = 3.0           # outside-fair gate: no ask when Polymarket/Kalshi fair >= this many ticks above mid, no bid when below (0 = off)
     improve_when_spread_ticks_ge: int = 2  # improve the best quote by one tick when spread >= this many ticks
     max_inventory_notional: float = 1500.0  # per race, in SUSQies at risk (|net delta| * price)
     hard_inventory_stop: bool = True     # at the per-race cap, post nothing on the accumulating side
@@ -184,6 +186,11 @@ class BotConfig:
     inside_qty: int = 100
     inside_max_markets: int = 12         # markets re-posted per cycle (each costs a cancel + a share of one batch write)
     inside_ttl_sec: int = 300
+    election_enabled: bool = False       # election-night sleeve (proposals/election_night): Sizhe switches it on for 3 Nov
+    election_per_race_cap: float = 5000.0
+    election_total_cap: float = 90000.0
+    election_poll_sec: float = 4.0
+    market_watch_sec: float = 300.0      # new / voided market watcher (high_upside.md): one /markets read every 5 min
     mm_fast_requotes_per_min: int = 3    # scanner-thread requotes of a quoted market whose touch moved since we last quoted (2 writes each)
     offload_scan_sec: float = 3.0        # scanner runs the cross-sleeve offload check this often (it reads the fills table)
     free_unwind_scan_sec: float = 10.0   # scanner checks held sets for a free unwind (asks sum <= payout) this often, from feed books

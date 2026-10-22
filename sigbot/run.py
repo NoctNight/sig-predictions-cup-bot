@@ -47,6 +47,7 @@ from .allocator import build_state_from_bot, offload_check
 from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
+from .proposals import election_night as EN
 
 
 class ExplainedDirection(DirectionTrader):
@@ -365,6 +366,19 @@ class Bot:
         self.inside = (InsideQuoter(universe=self.universe, qty=cfg.inside_qty, min_dmm_spread_ticks=3, min_price=cfg.mm.min_price,
                                     max_price=cfg.mm.max_price, inv_cap=300, ttl_sec=cfg.inside_ttl_sec, max_markets=cfg.inside_max_markets)
                        if cfg.inside_enabled else None)
+        self.election = None
+        if cfg.election_enabled:
+            try:
+                ecfg = EN.Config(per_race_cap=cfg.election_per_race_cap, total_cap=cfg.election_total_cap, paper=dry_run)
+                self.election = EN.ElectionNight(ecfg, legs=EN.universe_legs(self.universe))
+                self.election_stream = EN.OutsideStream()
+                self.election_orders: dict = {}
+                threading.Thread(target=self.election_loop, name="election-night", daemon=True).start()
+                log.warning("ELECTION sleeve enabled: per race %.0f, total %.0f, from %s", ecfg.per_race_cap, ecfg.total_cap,
+                            EN.et_str(ecfg.day0() + ecfg.start_et * 3600))
+            except Exception as e:
+                log.warning("election sleeve disabled: %s", e)
+                self.election = None
         self.move_detector = MoveDetector()
         self.volatile_paper = VolatileMoves()
         self.inside_posted: dict = {}            # ex -> time of our last inside post (re-post before the venue TTL expires)
@@ -727,6 +741,56 @@ class Bot:
                 for o in paper:
                     f.write(json.dumps({"ts": now, "paper_order": o}, default=str) + "\n")
 
+    # --------------------------------------------------------------- election night (research_notes/election_night.md)
+    def election_loop(self):
+        """From 18:00 ET on election day: poll Polymarket/Kalshi every election_poll_sec for the races whose polls are
+        closing, let ElectionNight decide calls and moves against the feed books, and send its orders (purpose
+        'election', short TTL). Fills are reported back to the sleeve from the fills table each cycle."""
+        en = self.election
+        start = en.cfg.day0() + en.cfg.start_et * 3600
+        while not getattr(self, "stop", False):
+            now = time.time()
+            if now < start - 60:
+                time.sleep(min(600.0, start - 60 - now))
+                continue
+            if now > en.cfg.day0() + en.cfg.flatten_et * 3600 + 3600 or not self.feed_ok():
+                time.sleep(self.cfg.election_poll_sec)
+                continue
+            try:
+                rows = self.election_stream.poll(en.watched(now))
+                orders = en.cycle(now, rows, self.feed.books())
+            except Exception as e:
+                log.warning("election cycle: %s", e)
+                time.sleep(self.cfg.election_poll_sec)
+                continue
+            ttl = (datetime.now(timezone.utc) + timedelta(seconds=en.cfg.ttl_sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            for o in orders:
+                log.info("ELECTION %s %s %s x%s at %s: %s", o.get("kind"), o.get("exchangeId"), o.get("side"), o.get("quantity"), o.get("price"), o.get("reason"))
+                if self.dry_run:
+                    continue
+                try:
+                    with self.trade_lock:
+                        resp = self.api.place_order(str(o["exchangeId"]), o["side"], "buy", int(o["quantity"]), float(o["price"]),
+                                                    expiration=ttl, key=self.api.new_key("elec"))
+                    oid = resp.get("orderId")
+                    self.store.record_order(oid, str(o["exchangeId"]), None, o["side"], "buy", float(o["price"]), int(o["quantity"]), "election", response=resp)
+                    if oid:
+                        self.election_orders[str(oid)] = o
+                except ApiError as e:
+                    log.warning("election order %s failed: %s", o.get("exchangeId"), e)
+            time.sleep(max(0.5, self.cfg.election_poll_sec - (time.time() - now)))
+
+    def election_fills(self):
+        if self.election is None or not getattr(self, "election_orders", None):
+            return
+        seen = getattr(self, "_election_seen", set())
+        self._election_seen = seen
+        for f in self.store.rows("SELECT id, order_id, quantity, price FROM fills WHERE order_id IS NOT NULL AND filled_at >= datetime('now','-1 day')"):
+            o = self.election_orders.get(str(f["order_id"]))
+            if o is not None and f["id"] not in seen:
+                seen.add(f["id"])
+                self.election.on_fill(o, abs(int(f["quantity"])), float(f["price"]))
+
     # --------------------------------------------------------------- allocator hooks
     def load_allocation(self):
         """Per-race arb caps from params/allocation.json (edge-based, written by the allocator every 12 h): applied to
@@ -1017,6 +1081,7 @@ class Bot:
         fills_count = self.ingest_fills()
         quoted = self.mm.quoted or self.pick_markets(prices)
         arb_exs = [ex for r in self.universe.races.values() for ex in r.exchange_ids if r.name in self.arb.committed]
+        self.election_fills()
         feed_trades: list = []
         if self.feed is not None:
             feed_trades = self.feed.drain_trades()
@@ -1115,6 +1180,10 @@ class Bot:
                 log.info("DIRECTION traded %d skipped %d blocked=%s", dir_summary.get("traded", 0), dir_summary.get("skipped", 0),
                          dir_summary.get("blocked"))
 
+        # ---- outside fair for the MM's gate (fresh directional rows: fair, Polymarket, Kalshi, timestamp)
+        self.mm.xv_fair = {r["exchange_id"]: (r.get("fair"), r.get("pm"), r.get("kalshi"), r.get("ts") or time.time())
+                           for r in (getattr(self.direction, "rows", None) or []) if r.get("fair") is not None and r.get("exchange_id")}
+
         # ---- volatile moves: pause the MM's retrace side after a 5+ tick move (verified), paper-log the move trades
         if self.feed_ok():
             try:
@@ -1156,9 +1225,15 @@ class Bot:
                 self.last_analytics = time.time()
             except Exception as e:  # analytics must never kill the loop
                 log.exception("analytics failed: %s", e)
-        if time.time() - self.last_universe_refresh > 3600:
+        if time.time() - self.last_universe_refresh > self.cfg.market_watch_sec:
             try:
-                self.universe = Universe.from_markets(self.api.markets())
+                mk_now = self.api.markets()
+                old = set(self.universe.all_exchanges())
+                new_u = Universe.from_markets(mk_now)
+                added, gone = set(new_u.all_exchanges()) - old, old - set(new_u.all_exchanges())
+                if added or gone:
+                    log.warning("MARKET WATCH: %d new exchange(s) %s, %d closed/voided %s", len(added), sorted(added)[:10], len(gone), sorted(gone)[:10])
+                self.universe = new_u
                 self.arb.u = self.mm.u = self.tilt.u = self.universe
                 if self.news is not None:
                     self.news.u = self.universe
