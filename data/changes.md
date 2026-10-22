@@ -175,3 +175,26 @@
   no change, thin or inconsistent evidence). Offload is now LIVE (config allocator.offload_live): a capital-blocked trade
   that beats the cheapest holding's forgone edge + exit cost by recycle_min_gain exits that holding at the touch
   (tilt/direction; arb sets via the atomic recycle path), max 2 per check. Dry run OK; restarted via botctl.
+- 15:47 Kill switch fired falsely at 15:39 (drawdown 1,120): the scanner executed a WI-03 arb basket between the cycle's
+  cash read and the health check, so cash had dropped but the new sets were not yet in pos_value. Fix: cash and
+  positions are read together under trade_lock and the health check / cycles table use that matched cash. Kill switch
+  thresholds unchanged. Bot stopped ~8 min (already halted by the false kill), restarted via botctl.
+- 16:05 Battery mode for ~3 h (Sizhe on battery, lid closed): news sweeper off (it ran dry anyway: 21 fetches plus LLM
+  calls every 90 s), main cycle 30 -> 60 s, feed arb scan 1 -> 3 s, free-unwind check 10 -> 30 s. Backup
+  config.json.bak_battery; restore it (and restart) to return to normal speed.
+- 16:17 Battery 13% (~36 min) on battery: started deploy/mac/battery_guard.sh, which runs botctl stop (cancels all orders) at <= 7% so the Mac dying cannot leave quotes resting.
+- 16:31 At Sizhe's request stopped the Remotion render batch loop in dashboard-shelf/yt-pipeline (last spec night-before-electricity; its out/ mp4 from 15:09 is untouched) and 16 idle leftover headless Chrome processes, to save battery.
+- 16:29 Battery guard stopped the bot at 7% (book empty). 16:32 a new render (build.mjs night-before-electricity, detached, under caffeinate) was relaunched by another process; stopped it again.
+- 16:38 Normal-speed settings restored in config.json (news on, 30 s cycle, 1 s feed scan, 10 s free-unwind). The Mac still reports battery power (5%), so the bot was not started; deploy/mac/start_on_ac.sh starts it automatically once AC power is detected, then re-arms the battery guard.
+- 18:50 Verified changes from the side sessions (Sizhe: "implement any of the changes that each of the subconversations verified"):
+  * favourite drift (research_notes/favourite_drift.md): the gap legs beat arbs per unit of capital and the explained
+    directional sleeve was capped out (overall cap 8% of a 26k cash balance = ~2.1k): direction.overall_cash_frac 0.08 -> 0.17
+    (~4.5k, the study's figure), allocator ceiling 0.10 -> 0.20. Only explained verdict legs trade (RI Governor D and TN
+    Governor R are verdict legs not yet held); NH-01 D, FL Senate R, Maine Gov D stay out (model disagrees or low confidence).
+    A verdict refresh dropped 6 legs from the allowlist on thin post-outage data, so params/fair_explained.json was restored.
+  * volatile moves (research_notes/volatile_moves.md 6.2-6.3): after a 5+ tick sweep on a quoted market the MM pauses its
+    level-1 retrace-side quote for 1 h (retrace quotes lost ~1 tick, t -5.4): `Bot.volatile_cycle`, MarketMaker.retrace_pause,
+    logged RETRACE PAUSE. Fade/catch-up trades are paper-logged to data/volatile_paper.jsonl for a re-test after 3+ nights.
+  * correlation (research_notes/correlation_arbs.md): no trading change (no riskless arb); noted for sizing that same-state
+    legs (GA, FL, MI Senate + Governor) behave as one position.
+  Dry run OK; restarted via botctl.

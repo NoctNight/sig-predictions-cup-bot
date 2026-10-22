@@ -46,6 +46,7 @@ from .tracker import Tracker
 from .allocator import build_state_from_bot, offload_check
 from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
+from .proposals.volatile_moves import MoveDetector, VolatileMoves
 
 
 class ExplainedDirection(DirectionTrader):
@@ -293,6 +294,8 @@ class Bot:
         self.inside = (InsideQuoter(universe=self.universe, qty=cfg.inside_qty, min_dmm_spread_ticks=3, min_price=cfg.mm.min_price,
                                     max_price=cfg.mm.max_price, inv_cap=300, ttl_sec=cfg.inside_ttl_sec, max_markets=cfg.inside_max_markets)
                        if cfg.inside_enabled else None)
+        self.move_detector = MoveDetector()
+        self.volatile_paper = VolatileMoves()
         self.inside_posted: dict = {}            # ex -> time of our last inside post (re-post before the venue TTL expires)
         self.tracker = None
         try:
@@ -624,6 +627,35 @@ class Bot:
             log.info("INSIDE posted %d orders on %d markets (%d writes)", summary["orders"], summary["markets"], summary["writes"])
         return summary
 
+    def volatile_cycle(self):
+        """research_notes/volatile_moves.md: after a sweep of 5+ ticks, quotes on the retrace side lost about 1 tick over the
+        next hour (t -5.4), so the MM's level-1 quote on that side is paused for an hour (after an up move: the ask). The
+        fade/catch-up trades had no robust edge, so they are only paper-logged to data/volatile_paper.jsonl for a re-test."""
+        now = time.time()
+        books = self.feed.books()
+        events = list(self.move_detector.on_books(now, books))
+        rows = getattr(self.direction, "rows", None) or []
+        if rows:
+            events += list(self.move_detector.on_outside(now, rows))
+        quoted = set(self.mm.quoted)
+        if not hasattr(self.mm, "retrace_pause"):
+            self.mm.retrace_pause = {}           # ex -> (side to pause at level 1, until); set after 5+ tick moves
+        for ev in events:
+            ex = str(ev.get("exchange_id"))
+            if ev.get("kind") == "sweep" and ex in quoted:
+                side = "no" if (ev.get("direction") or 0) > 0 else "yes"
+                if self.mm.retrace_pause.get(ex, ("", 0))[1] < now:
+                    log.info("RETRACE PAUSE %s: %+.3f move, pausing level-1 %s for 1 h", ex, ev.get("size_pts") or 0.0, "ask" if side == "no" else "bid")
+                self.mm.retrace_pause[ex] = (side, now + 3600)
+        fair = {r["exchange_id"]: r.get("fair") for r in rows if r.get("fair") is not None}
+        paper = self.volatile_paper.cycle(now, events, books, fair)
+        if events or paper:
+            with open(os.path.join(HERE, "data", "volatile_paper.jsonl"), "a") as f:
+                for ev in events:
+                    f.write(json.dumps({"ts": now, "event": dict(ev)}, default=str) + "\n")
+                for o in paper:
+                    f.write(json.dumps({"ts": now, "paper_order": o}, default=str) + "\n")
+
     # --------------------------------------------------------------- allocator hooks
     def load_allocation(self):
         """Per-race arb caps from params/allocation.json (edge-based, written by the allocator every 12 h): applied to
@@ -776,18 +808,23 @@ class Bot:
     # --------------------------------------------------------------- cycle
     def cycle(self):
         t0 = time.time()
-        try:
-            acct = self.api.account()
-            self.cash = float(acct.get("balance") or self.cash)
-        except ApiError as e:
-            log.warning("account: %s", e)
-        positions, pos_value, n_pos = self.positions_map()
+        # Read cash and positions together under the trade lock: an arb basket executed by the scanner thread between
+        # the two reads (or between them and the health check) made the account look ~1,100 lower for one cycle and
+        # tripped the drawdown kill switch on 22 Oct 15:39. cycle_cash is the cash that matches pos_value.
+        with self.trade_lock:
+            try:
+                acct = self.api.account()
+                self.cash = float(acct.get("balance") or self.cash)
+            except ApiError as e:
+                log.warning("account: %s", e)
+            positions, pos_value, n_pos = self.positions_map()
+            cycle_cash = self.cash
         self.positions_snapshot = positions      # read by the scanner thread (free unwinds between cycles)
         open_orders = self.open_orders_map()
         self.open_orders_cache = open_orders
         self.load_allocation()
         self.feed_watchdog()
-        cycle_id = self.store.new_cycle(self.cash, pos_value, n_pos, sum(len(v) for v in open_orders.values()),
+        cycle_id = self.store.new_cycle(cycle_cash, pos_value, n_pos, sum(len(v) for v in open_orders.values()),
                                         self.api.stats["reads"], self.api.stats["writes"])
         self.last_cycle_id = cycle_id
         snap, snap_ts = self.latest_prices
@@ -895,7 +932,7 @@ class Bot:
         self.update_bars(prices)
         self.mm.meanrev_pred = self.meanrev_predictions(self.mm.quoted)
         self.mm.prices = prices
-        hl = self.health(self.cash + pos_value, cycle_id)
+        hl = self.health(cycle_cash + pos_value, cycle_id)
         killed = time.time() < self.killed_until
         if not killed and (hl["drawdown"] > self.cfg.kill_drawdown or (hl["n_markout"] >= 20 and hl["markout30"] is not None and hl["markout30"] < self.cfg.kill_markout_ticks)):
             self.killed_until = time.time() + self.cfg.kill_pause_sec
@@ -969,6 +1006,13 @@ class Bot:
             if dir_summary.get("traded"):
                 log.info("DIRECTION traded %d skipped %d blocked=%s", dir_summary.get("traded", 0), dir_summary.get("skipped", 0),
                          dir_summary.get("blocked"))
+
+        # ---- volatile moves: pause the MM's retrace side after a 5+ tick move (verified), paper-log the move trades
+        if self.feed_ok():
+            try:
+                self.volatile_cycle()
+            except Exception as e:
+                log.warning("volatile moves: %s", e)
 
         # ---- outside-move follower: take the DMM touch when Polymarket/Kalshi moved and SIG has not (exploit 2.1)
         if self.lag is not None and not killed:

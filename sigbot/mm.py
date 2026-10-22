@@ -190,6 +190,9 @@ class MarketMaker:
         for r in rows:
             if r["n"] >= 3:
                 out.add(r["side"])
+        rp = getattr(self, "retrace_pause", {}).get(ex)
+        if rp and rp[1] > time.time():
+            out.add(rp[0])
         return out
 
     def market_id_of(self, ex: str) -> Optional[str]:

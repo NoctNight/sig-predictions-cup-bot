@@ -99,7 +99,7 @@
     "enabled": true,
     "allow_live": true,
     "per_market_cap": 600,
-    "overall_cash_frac": 0.08,
+    "overall_cash_frac": 0.17,
     "per_poll_budget": 900.0,
     "min_edge_take": 0.06,
     "move_reserve_frac": 0.0,

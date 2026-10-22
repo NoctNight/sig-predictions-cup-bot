@@ -132,6 +132,17 @@ def binom_two_sided_p(k, n, p):
     return min(1.0, sum(x for x in pk if x <= obs * (1 + 1e-9)))
 
 
+def poisson_binomial_upper(k, probs):
+    """Exact P(X >= k) for X = sum of independent Bernoulli(p_i)."""
+    dist = [1.0]
+    for q in probs:
+        nd = [0.0] * (len(dist) + 1)
+        for i, v in enumerate(dist):
+            nd[i] += v * (1 - q); nd[i + 1] += v * q
+        dist = nd
+    return sum(dist[k:])
+
+
 def poisson_binomial_z(k, probs):
     mu = sum(probs); var = sum(q * (1 - q) for q in probs)
     if var <= 0:
@@ -220,11 +231,22 @@ def logistic_fit(xs, ys, iters=50):
 PRIOR_SD = 0.25   # prior on calibration: a ~ N(0, 0.25^2), b ~ N(1, 0.25^2); b in 1.0-1.5 spans the FLB literature
 
 
-def shrink(a, b, sa, sb):
-    """Precision-weighted posterior means of a and b under the prior above (covariance ignored)."""
-    wa = (1 / sa ** 2) / (1 / sa ** 2 + 1 / PRIOR_SD ** 2)
-    wb = (1 / sb ** 2) / (1 / sb ** 2 + 1 / PRIOR_SD ** 2)
-    return wa * a, 1 + wb * (b - 1)
+def map_fit(xs, ys, iters=60):
+    """Penalised (MAP) logistic fit: priors a ~ N(0, PRIOR_SD^2), b ~ N(1, PRIOR_SD^2) added to the Newton step, so the
+    strong a-b correlation of the uncentred fit is respected (separate shrinkage of a and b is not the posterior)."""
+    a, b, lam = 0.0, 1.0, 1 / PRIOR_SD ** 2
+    for _ in range(iters):
+        g0, g1, h00, h01, h11 = -lam * a, -lam * (b - 1), lam, 0.0, lam
+        for x, y in zip(xs, ys):
+            q = 1 / (1 + math.exp(-(a + b * x)))
+            w = q * (1 - q)
+            g0 += y - q; g1 += (y - q) * x; h00 += w; h01 += w * x; h11 += w * x * x
+        det = h00 * h11 - h01 * h01
+        da, db = (h11 * g0 - h01 * g1) / det, (-h01 * g0 + h00 * g1) / det
+        a += da; b += db
+        if abs(da) + abs(db) < 1e-10:
+            break
+    return a, b
 
 
 def fmt(x, d=3, sign=False):
@@ -405,16 +427,19 @@ def calibration_rows(favs_by_h, rng):
             sel = favs if name == "all 75-95" else [l for l in favs if bucket_of(l[h]) == name]
             n = len(sel)
             if n == 0:
-                rows.append([f"{h}d", name, 0] + ["n/a"] * 6)
+                rows.append([f"{h}d", name, 0] + ["n/a"] * 7)
                 continue
             wins = sum(l["outcome"] for l in sel)
             pbar = mean([l[h] for l in sel])
             buy = [1000 * (l["outcome"] - l[h]) / l[h] for l in sel]
             sell = [1000 * (l[h] - l["outcome"]) / (1 - l[h]) for l in sel]
             # exact test of wins against the Poisson-binomial mean, approximated by a binomial at the mean price
-            p_bin = binom_two_sided_p(wins, n, pbar)
+            p_bin = poisson_binomial_upper(wins, [l[h] for l in sel])     # one-sided: favourites win this often or more
+            losses = n - wins
+            upset_hi = 3 / n if losses == 0 else None
             blo, bhi = boot_ci(buy, rng)
             rows.append([f"{h}d", name, n, fmt(pbar), f"{wins}/{n} = {wins / n:.3f}", pfmt(p_bin),
+                         f"<= {upset_hi:.3f}" if upset_hi is not None else f"{losses / n:.3f}",
                          f"{mean(buy):+.0f} [{blo:+.0f}, {bhi:+.0f}]", f"{mean(sell):+.0f}",
                          f"{wins / n - pbar:+.3f}"])
             if name != "all 75-95":
@@ -442,7 +467,8 @@ def slope_rows(race_map):
         if len(xs) < 10:
             continue
         a, b, sa, sb = logistic_fit(xs, ys)
-        rows.append((h, len(xs), a, b, sa, sb, sum(ys)))
+        ma, mb = map_fit(xs, ys)
+        rows.append((h, len(xs), a, b, sa, sb, sum(ys), ma, mb))
     return rows
 
 
@@ -555,16 +581,17 @@ def main():
     # calibration
     cal, hl = calibration_rows(favs_by_h, rng)
     out.append("\n### Calibration: favourite's win rate vs price, and P&L per 1,000 held to resolution\n")
-    out.append(table(["horizon", "bucket", "n", "mean price", "won", "binomial p", "buy fav per 1k [95% CI]", "sell fav per 1k",
-                      "win - price"], cal))
+    out.append(table(["horizon", "bucket", "n", "mean price", "won", "P(wins >= obs) exact", "upset rate (rule of 3 if 0)",
+                      "buy fav per 1k [price-only CI]", "sell fav per 1k", "win - price"], cal))
     out.append("\nHosmer-Lemeshow over the three buckets (df = groups, prices are not fitted): " +
                "; ".join(f"{h}d chi2 {s:.2f} df {g} p {pfmt(p)}" for h, s, g, p in hl))
     sl = slope_rows(rmap)
     out.append("\n### Logistic calibration slope, all races with a 50-99 favourite: logit P(win) = a + b logit(price)\n")
-    out.append(table(["horizon", "n", "fav won", "a (se)", "b (se)", "b = 1 test p", "implied P(win) at 0.80 / 0.90 / 0.95"],
+    out.append(table(["horizon", "n", "fav won", "a (se)", "b (se)", "b = 1 test p", "implied P(win) at 0.80 / 0.90 / 0.95", "MAP a / b"],
                      [[f"{h}d", n, w, f"{a:+.2f} ({sa:.2f})", f"{b:.2f} ({sb:.2f})", pfmt(2 * (1 - norm_cdf(abs((b - 1) / sb)))),
-                       " / ".join(f"{1 / (1 + math.exp(-(a + b * logit(p)))):.3f}" for p in (0.8, 0.9, 0.95))]
-                      for h, n, a, b, sa, sb, w in sl]))
+                       " / ".join(f"{1 / (1 + math.exp(-(a + b * logit(p)))):.3f}" for p in (0.8, 0.9, 0.95)),
+                       f"{_ma:+.2f} / {_mb:.2f}"]
+                      for h, n, a, b, sa, sb, w, _ma, _mb in sl]))
     # robustness
     out.append("\n### Robustness: drift 20d->1d and calibration at 13d by cycle and office\n")
     out.append(table(["subset", "n drift", "mean chg 20d->1d", "t p", "n at 13d", "mean price", "win rate", "buy per 1k"],
@@ -578,21 +605,21 @@ def main():
     out.append(table(["window", "bucket", "n", "mean chg", "median chg", "rose", "sign p (vs 50%)", "E[rose] if martingale",
                       "sign p (vs martingale)", "t / p", "bootstrap 95% CI", "cluster CI (cycle x office)"], krows))
     out.append("")
-    out.append(table(["horizon", "bucket", "n", "mean price", "won", "binomial p", "buy fav per 1k [95% CI]", "sell fav per 1k",
-                      "win - price"], [r for r in kcal if r[1] == "all 75-95"]))
+    out.append(table(["horizon", "bucket", "n", "mean price", "won", "P(wins >= obs) exact", "upset rate (rule of 3 if 0)",
+                      "buy fav per 1k [price-only CI]", "sell fav per 1k", "win - price"], [r for r in kcal if r[1] == "all 75-95"]))
     # SIG
     s13 = [r for r in sl if r[0] == 13] or sl
-    h, n, a, b, sa, sb, w = s13[0]
-    fit_ab, shrunk_ab = (a, b), shrink(a, b, sa, sb)
-    out.append(f"\nCalibration used for SIG (13d fit): raw a {a:+.2f} b {b:.2f}; shrunk toward a=0, b=1 with prior sd {PRIOR_SD}: "
+    h, n, a, b, sa, sb, w, ma, mb = s13[0]
+    fit_ab, shrunk_ab = (a, b), (ma, mb)
+    out.append(f"\nCalibration used for SIG (13d fit): raw a {a:+.2f} b {b:.2f}; MAP with priors a~N(0,{PRIOR_SD}^2), b~N(1,{PRIOR_SD}^2): "
                f"a {shrunk_ab[0]:+.2f} b {shrunk_ab[1]:.2f}.")
     ts, srows, per_leg = sig_rows(fit_ab, shrunk_ab)
     import time as _t
     out.append(f"\n### SIG legs with ask in 75-95 (snapshot {_t.strftime('%Y-%m-%d %H:%M UTC', _t.gmtime(ts))}): EV per 1,000 bought at the ask, held to 4 Nov\n")
-    out.append(table(["bucket", "legs", "mean SIG ask", "outside blend", "EV/1k outside calibrated", "EV/1k shrunk FLB",
+    out.append(table(["bucket", "legs", "mean SIG ask", "outside blend", "EV/1k outside calibrated", "EV/1k MAP FLB",
                       "EV/1k raw fit (upper)", "legs >= +50/1k (outside)"], srows))
     out.append("\nTop legs by EV per 1,000 at the outside blend (buy YES at ask):\n")
-    out.append(table(["leg", "SIG bid/ask", "Poly", "Kalshi", "outside", "EV/1k outside", "EV/1k shrunk"],
+    out.append(table(["leg", "SIG bid/ask", "Poly", "Kalshi", "outside", "EV/1k outside", "EV/1k MAP"],
                      [[f"{x['race']} [{x['party']}]", f"{x['sig_bid']:.3f}/{x['sig_ask']:.3f}", fmt(x['pm']), fmt(x['kalshi']),
                        fmt(x['q_out']), f"{x['ev_out']:+.0f}", f"{x['ev_shr']:+.0f}"] for x in per_leg[:12]]))
     text = "\n".join(out) + "\n"
