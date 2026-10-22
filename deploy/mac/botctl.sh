@@ -45,9 +45,11 @@ case "${1:-status}" in
            for i in $(seq 1 30); do [ "$(running)" = "0" ] && break; sleep 3; done
            (cd "$ROOT" && python3 deploy/cancel_all.py | tail -1) ;;
   restart) "$0" stop; "$0" start ;;
+  deploy)  "$ROOT/deploy/precheck.sh" || { echo "not deployed: precheck failed, the running bot is untouched"; exit 1; }
+           "$0" stop; "$0" start ;;
   status)  launchctl print "$DOMAIN/$LABEL" 2>/dev/null | grep -E "state =|pid =|last exit" || echo "not loaded"
            echo "bot processes: $(running)"; grep -E "HEALTH|cycle [0-9]+ done" "$ROOT/data/live.log" | tail -1 | cut -c1-160 ;;
   logs)    tail -f "$ROOT/data/live.log" ;;
   uninstall) "$0" stop; rm -f "$PLIST"; echo "removed $PLIST" ;;
-  *) echo "usage: $0 install|start|stop|restart|status|logs|uninstall"; exit 2 ;;
+  *) echo "usage: $0 install|start|stop|restart|deploy|status|logs|uninstall"; exit 2 ;;
 esac

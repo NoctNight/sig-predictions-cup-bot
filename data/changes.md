@@ -281,3 +281,17 @@
   (arb.high_ret_min / high_ret_race_frac; ~120k of riskless 4-6.5% sets stand unfilled, Idaho Governor 5.9k alone), funded
   by the 1-s recycler from low-edge sets. Also: exit orders compute their 60-s expiry per order (4 had arrived expired).
   Restarted via botctl.
+- 21:45 PAUSED: Fable review of today's diff confirmed money-losing bugs (offload funding tilt trades that are never placed; exits re-sent while the previous one rests, flipping two positions; recycle follow-through blocked by the cash reserve). Fixing under the new precheck gate.
+- 21:47 POST-DEPLOY WATCH STOPPED THE BOT: 7 unwinds/recycles in 30 s (start value 101917.6, now 101917.6; {'unwinds': 7, 'exits': 0, 'failed_baskets': 1, 'kill': 0, 'traceback': 89, 'arb_fills': 6}).
+- 21:50 Fable review findings fixed (tests in tests/test_guards.py, 25 checks, all pass), deployed through the new gate
+  (`deploy/mac/botctl.sh deploy` -> deploy/precheck.sh: compile, guard tests, tuner tests, one clean dry cycle):
+  (1) arb-set unwinds to fund tilt/directional trades OFF (offload_arb_for_sleeves false: they fired for tilt trades
+  that tilt never placed); (2) recycle follow-through can spend the capital its unwind freed (plan extra_budget; the
+  20k reserve had blocked it, e.g. 21:12 Alaska Governor unwound, Montana target "gone"); (3) scanner pre-filter passes
+  the snapshot return so the 40% high-return ceiling is reachable; (4) exits net of exit orders still resting (two
+  positions had been closed past zero: MA Senate D -759 NO, WV Senate R -626 NO; both closed by hand at the ask, flat,
+  ~+58 EV vs holding NO on heavy favourites); (5) unwind legs recorded as orders; (6) a missing leg book no longer
+  blocks a race forever after a fill; (7) open-order filled field read under either name; (8) scanner survives a missing
+  feed. Not a bug (reviewer refuted by payload): the venue's open-order field is quantityFilled.
+  Post-deploy watch (deploy/watch_deploy.py: every 30 s for 10 min, stops the bot on a 150 settlement drop, >3 unwinds,
+  >40 exits, a traceback or kill) running. A fake-venue pipeline simulation of every sleeve is being built (tests/).

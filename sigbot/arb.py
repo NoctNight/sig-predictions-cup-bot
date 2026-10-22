@@ -171,14 +171,15 @@ class ArbEngine:
             lim = min(lim, max(float(cap), getattr(self, "race_cap_floor", 0.0)))
         return max(0.0, lim - self.committed.get(race, 0.0))
 
-    def plan(self, candidate_books: dict[str, dict[str, dict]], cash: float) -> list[Chunk]:
+    def plan(self, candidate_books: dict[str, dict[str, dict]], cash: float, extra_budget: float = 0.0) -> list[Chunk]:
         """candidate_books: race name -> {exchange_id: orderbook}. Returns chunks to execute in order."""
         allc: list[Chunk] = []
         for rname, books in candidate_books.items():
             race = self.u.races[rname]
             allc.extend(self.chunks_for_race(race, books))
         allc.sort(key=lambda c: -c.ret)
-        budget = self.budget_left(cash)
+        # extra_budget: capital a recycle unwind just freed for this purchase; the cash reserve must not block spending it
+        budget = min(self.budget_left(cash) + max(0.0, extra_budget), cash * 0.95) if extra_budget > 0 else self.budget_left(cash)
         plan: list[Chunk] = []
         race_spent: dict[str, float] = {}
         for c in allc:
@@ -364,6 +365,10 @@ class ArbEngine:
             return None
         self.store.record_arb(rname, "unwind_set", legs, qty, -uq["forgone_edge"], uq["proceeds"], True, resp)
         self.committed[rname] = max(0.0, self.committed.get(rname, 0.0) - qty * uq["proceeds"])
+        for r in resp.get("results", []):      # record the legs so their fills are attributed (they landed as purpose None)
+            d = r.get("data") or {}
+            self.store.record_order(d.get("orderId"), d.get("exchangeId"), None, "yes", "buy", d.get("price"), qty, "arb",
+                                    status="filled" if not d.get("open") else "open", response=d)
         return {"race": rname, "qty": qty, "proceeds": uq["proceeds"]}
 
     def free_unwinds(self, held_books: dict[str, dict[str, dict]], positions: dict[str, float], cycle_id=None) -> list[dict]:

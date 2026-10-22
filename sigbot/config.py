@@ -194,6 +194,7 @@ class BotConfig:
     election_poll_sec: float = 4.0
     market_watch_sec: float = 300.0      # new / voided market watcher (high_upside.md): one /markets read every 5 min
     mm_fast_requotes_per_min: int = 3    # scanner-thread requotes of a quoted market whose touch moved since we last quoted (2 writes each)
+    offload_arb_for_sleeves: bool = False   # review 22 Oct: unwinding arb sets to fund tilt/directional trades kept firing for trades tilt never placed; off
     offload_scan_sec: float = 3.0        # scanner runs the cross-sleeve offload check this often (it reads the fills table)
     free_unwind_scan_sec: float = 10.0   # scanner checks held sets for a free unwind (asks sum <= payout) this often, from feed books
     kill_drawdown: float = 400.0         # marked P&L drop over the trailing hour that pauses MM and tilt

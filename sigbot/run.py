@@ -130,7 +130,11 @@ class ArbScanner(threading.Thread):
             if b.feed_ok():
                 # event-driven: run as soon as the feed delivers a batch (the venue publishes 1-s batches), at most every
                 # arb_scan_min_gap seconds and at least every arb_scan_sec_feed seconds
-                b.feed.wait_update(b.cfg.arb_scan_sec_feed)
+                feed = b.feed
+                if feed is not None:
+                    feed.wait_update(b.cfg.arb_scan_sec_feed)
+                else:
+                    time.sleep(b.cfg.arb_scan_sec_feed)
                 gap = b.cfg.arb_scan_min_gap - (time.time() - last)
                 if gap > 0:
                     time.sleep(gap)
@@ -183,8 +187,16 @@ class ArbScanner(threading.Thread):
             return max(sell, buy)
         # skip races whose arb budget is already used up, and races whose snapshot edge is below the threshold:
         # only then spend reads on books
+        def sell_ret(race):
+            # snapshot return of a sell-set (edge over its cost), so races eligible for the high-return per-race
+            # ceiling are not filtered out at their normal cap before their books are even read (review, 22 Oct)
+            bids = [prices[e]["bestBid"] for e in race.exchange_ids]
+            if not all(x is not None for x in bids):
+                return None
+            cost = len(bids) - sum(bids)
+            return (sum(bids) - 1) / cost if cost > 0 else None
         min_cost = 1.0
-        cands = [r for r in cands if b.arb.race_budget_left(r.name) >= b.cfg.arb.min_set_qty * min_cost
+        cands = [r for r in cands if b.arb.race_budget_left(r.name, sell_ret(r)) >= b.cfg.arb.min_set_qty * min_cost
                  and apparent(r) >= min(b.cfg.arb.min_edge_sell, b.cfg.arb.min_edge_buy)]
         if b.arb.budget_left(b.cash) < b.cfg.arb.min_set_qty * min_cost and not b.cfg.arb.recycle_enabled:
             cands = []
@@ -194,7 +206,7 @@ class ArbScanner(threading.Thread):
         own = OwnLevels()
         for ex_o, lst in (b.open_orders_cache or {}).items():
             for o in lst:
-                rem = float(o.get("quantity") or 0) - float(o.get("quantityFilled") or 0)
+                rem = float(o.get("quantity") or 0) - float(o.get("quantityFilled") or o.get("filledQuantity") or 0)
                 if o.get("priceLimit") is not None:
                     own.upsert(o.get("id"), ex_o, o.get("side"), o.get("action", "buy"), float(o["priceLimit"]), rem)
         last_fill = getattr(self, "last_fill_ts", {})
@@ -202,7 +214,7 @@ class ArbScanner(threading.Thread):
         cand_books, n_rest = {}, 0
         for race in cands[: (b.cfg.arb_scan_books_feed if feed_ok else b.cfg.arb_scan_books)]:
             fb = {ex: b.fresh_book(ex, 30.0) for ex in race.exchange_ids}
-            if race.name in last_fill and any(v is None or v.get("feed_ts", 0) <= last_fill[race.name] for v in fb.values()):
+            if race.name in last_fill and any(v is not None and v.get("feed_ts", 0) <= last_fill[race.name] for v in fb.values()):
                 continue                        # no book newer than our last basket in this race yet
             if all(v is not None for v in fb.values()):
                 cand_books[race.name] = {ex: own.net(ex, bk) for ex, bk in fb.items()}
@@ -320,7 +332,7 @@ class ArbScanner(threading.Thread):
             b.cash = float(b.scan_api.account().get("balance") or b.cash)
             fresh = {ex: b.get_book(ex, 50, b.scan_api, max_age=3.0) for ex in b.universe.races[tgt].exchange_ids}
             with b.trade_lock:
-                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash) if c.race == tgt]
+                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=rec.get("qty", 0) * rec.get("proceeds", 0.0)) if c.race == tgt]
                 if plan:
                     res = b.arb.execute(plan, None)
                     log.info("recycle follow-through %s: %d basket(s) filled", tgt, sum(1 for r in res if r.get("ok")))
@@ -566,13 +578,23 @@ class Bot:
         for r in self.store.rows("SELECT exchange_id, side, SUM(ABS(quantity)) q FROM fills WHERE purpose='exit' GROUP BY 1,2"):
             opp = "no" if r["side"] == "yes" else "yes"      # an exit buying YES closed held NO, and vice versa
             held[(r["exchange_id"], opp)] = held.get((r["exchange_id"], opp), 0.0) - r["q"]
+        # exit orders still resting (60-s TTL vs a 30-s cycle) already cover part of the holding: never send a second one
+        # on top (review 22 Oct: two positions were closed past zero and flipped)
+        exit_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose='exit' AND order_id IS NOT NULL")}
+        resting_exit: dict = {}
+        for ex_o, lst in (getattr(self, "open_orders_cache", None) or {}).items():
+            for o in lst:
+                if str(o.get("id")) in exit_ids:
+                    held_side = "no" if o.get("side") == "yes" else "yes"   # an exit buying YES closes held NO
+                    rem = float(o.get("quantity") or 0) - float(o.get("quantityFilled") or o.get("filledQuantity") or 0)
+                    resting_exit[(str(ex_o), held_side)] = resting_exit.get((str(ex_o), held_side), 0.0) + max(0.0, rem)
         done = 0
         ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
         for (ex, side), q in held.items():
             if done >= write_budget or q < 1 or ex not in fair:
                 continue
             pos = positions.get(ex, 0.0)
-            q = int(min(q, -pos if side == "no" else pos))   # never close more than the venue position on that side
+            q = int(min(q, -pos if side == "no" else pos) - resting_exit.get((ex, side), 0.0))   # never close more than held, net of resting exits
             if q < 1:
                 continue
             f = fair[ex]
@@ -891,7 +913,7 @@ class Bot:
             log.info("OFFLOAD%s: exit %s %s x%d (gives up %.2f%%) to fund %s (%.2f%% net), gain %.2f%%", "" if live else " (report-only)",
                      u.get("race") or u.get("exchange_id"), u.get("side", "set"), u["qty"], 100 * u["forgone_ret"],
                      r["opportunity"].get("race") or r["opportunity"].get("exchange_id"), 100 * r["opportunity"]["ret_net"], 100 * r["gain"])
-            if live and u["kind"] == "arb_set" and r["opportunity"].get("kind") in ("tilt", "direction") and done < 1:
+            if live and self.cfg.offload_arb_for_sleeves and u["kind"] == "arb_set" and r["opportunity"].get("kind") in ("tilt", "direction") and done < 1:
                 # Guards added after the 22 Oct 19:41-20:04 churn (38 unwinds for a handful of tilt trades):
                 #  1. only while cash is genuinely short: below the arb cash reserve, and below the trade's own capital need
                 #  2. each opportunity is funded at most once per 30 min (the tilt candidate list refreshes once per cycle)
@@ -1117,7 +1139,7 @@ class Bot:
                         tgt = best["race"]
                         fresh = {ex: self.get_book(ex, 50) for ex in self.universe.races[tgt].exchange_ids}
                         with self.trade_lock:
-                            plan = [c for c in self.arb.plan({tgt: fresh}, self.cash) if c.race == tgt]
+                            plan = [c for c in self.arb.plan({tgt: fresh}, self.cash, extra_budget=rec.get("qty", 0) * rec.get("proceeds", 0.0)) if c.race == tgt]
                             if plan:
                                 res = self.arb.execute(plan, cycle_id)
                                 arb_summary["recycle_funded"] = sum(1 for r in res if r.get("ok"))
