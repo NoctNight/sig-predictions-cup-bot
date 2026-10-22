@@ -74,8 +74,28 @@ class ExplainedDirection(DirectionTrader):
             self._allow, self._allow_mtime = allow, m
         return self._allow
 
+    CONSENSUS_GAP = 0.05        # Sizhe 2026-10-22: also trade toward the Polymarket/Kalshi consensus when both venues agree
+    CONSENSUS_MAX_DISAGREE = 0.04
+
+    def consensus(self, rows) -> dict:
+        """(race, party) -> side for legs where Polymarket and Kalshi agree within 4 points and this venue's mid is 5+ points
+        away from them, on the favourite's side only (buy the favourite / sell the longshot): favourite_drift.md found
+        favourites at 0.75-0.95 win at least as often as priced and that taking the longshot side was the losing trade."""
+        out = {}
+        for r in rows or []:
+            pm, k, fair, mid = r.get("pm"), r.get("kalshi"), r.get("fair"), r.get("sig_mid")
+            if None in (pm, k, fair, mid) or abs(pm - k) > self.CONSENSUS_MAX_DISAGREE:
+                continue
+            gap = fair - mid
+            if gap >= self.CONSENSUS_GAP and fair >= 0.5:
+                out[(r.get("race"), r.get("party"))] = "yes"     # favourite priced too low here
+            elif gap <= -self.CONSENSUS_GAP and fair <= 0.5:
+                out[(r.get("race"), r.get("party"))] = "no"      # longshot priced too high here
+        return out
+
     def signals(self, rows, ts):
-        allow = self._allowed()
+        allow = dict(self.consensus(rows))
+        allow.update(self._allowed())             # explained verdicts take precedence where they exist
         out, races = [], set()
         for s in super().signals(rows, ts):
             if s["kind"] != "value" or allow.get((s["race"], s["party"])) != s["side"] or s["race"] in races:
@@ -518,9 +538,15 @@ class Bot:
         (only the sleeve's own filled quantity is closed). Exits cross the spread with a 60 s limit order."""
         band = self.cfg.exit_band
         fair = {r["exchange_id"]: r for r in (dir_rows or []) if r.get("fair") is not None and r.get("sig_bid") is not None and r.get("sig_ask") is not None}
-        held = {}
+        held, strict = {}, set()
         for r in self.store.rows("SELECT exchange_id, side, SUM(ABS(quantity)) q FROM fills WHERE purpose IN ('direction','tilt') GROUP BY 1,2"):
             held[(r["exchange_id"], r["side"])] = held.get((r["exchange_id"], r["side"]), 0.0) + r["q"]
+        # market-making inventory too, but only when the exit beats the outside fair by exit_band (inventory left on the
+        # wrong side of the Polymarket/Kalshi consensus): crossing the spread on fair-priced MM inventory would just pay it
+        for r in self.store.rows("SELECT exchange_id, side, SUM(ABS(quantity)) q FROM fills WHERE purpose IN ('mm','inside') GROUP BY 1,2"):
+            key = (r["exchange_id"], r["side"])
+            held[key] = held.get(key, 0.0) + r["q"]
+            strict.add(key)
         for r in self.store.rows("SELECT exchange_id, side, SUM(ABS(quantity)) q FROM fills WHERE purpose='exit' GROUP BY 1,2"):
             opp = "no" if r["side"] == "yes" else "yes"      # an exit buying YES closed held NO, and vice versa
             held[(r["exchange_id"], opp)] = held.get((r["exchange_id"], opp), 0.0) - r["q"]
@@ -534,6 +560,11 @@ class Bot:
             if q < 1:
                 continue
             f = fair[ex]
+            if (ex, side) in strict:
+                if f.get("pm") is None or f.get("kalshi") is None or abs(f["pm"] - f["kalshi"]) > 0.04:
+                    continue
+                if not ((side == "no" and f["sig_ask"] <= f["fair"] - band) or (side == "yes" and f["sig_bid"] >= f["fair"] + band)):
+                    continue
             if side == "no" and f["sig_ask"] <= f["fair"] + band:        # held NO: buy YES at the ask to close
                 order = ("yes", round(f["sig_ask"], 3))
             elif side == "yes" and f["sig_bid"] >= f["fair"] - band:     # held YES: buy NO at 1 - bid to close

@@ -124,7 +124,7 @@ that touches 40-60% of volume needs 300-560 h, i.e. more than the 281 h left bef
    volume in [now-630 s, now-30 s] traded into it (taker sells for our bid). Removes ~39% of MM shares that averaged -0.6 tick at
    5 min and -0.4 at 30 min relative to the rest: **about +0.7 per 1,000 MM shares, +19/day** at 30-min marks. It overlaps the
    existing 3-fills-in-60-s pause; wire it after the gate and re-measure, since both hit the same sweeps.
-3. **Tuner fixes**: ladder grid and bounds sized to `cfg.mm.levels` (2-level shapes) and `simulate_mm` guarded with
+3. **Tuner fixes** (implemented 22 Oct 20:25 BST in sigbot/shadow.py + tests/test_autotune.py, all pass; loads on restart): ladder grid and bounds sized to `cfg.mm.levels` (2-level shapes) and `simulate_mm` guarded with
    `n = min(len(level_ticks), len(level_size_mult))`; read the improve threshold from `cfg.mm.improve_when_spread_ticks_ge`; add a
    3-h-mark MM score (marks capped at the window end, as in `simulate_x`); replace the flat-start 8-block confidence with a
    market/hour-clustered bootstrap of the whole-window gain; scale materiality per filled share; confirmations on disjoint test

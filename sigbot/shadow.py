@@ -41,12 +41,19 @@ that lock capital), worst drawdown of the marked P&L path, and `score` = P&L - H
 Walk-forward: each group's lookback window is split 70/30 by time; every candidate value is scored on the fit window
 (older 70%) with the other parameters at their live values, the fit-best candidate (ties keep the current value) is then
 scored on the test window (newest 30%), and the reported improvement is test-window only.
-Significance: the test window is cut into TEST_BLOCKS (8) equal blocks; per block, candidate score minus current score;
-confidence = bootstrap probability (2,000 resamples of the blocks, fixed seed) that the mean difference is > 0. The
-directional sleeve must pass on both marks (outside fair and SIG mid).
-A change is recommended only if: inside HARD_BOUNDS, not report-only, test gain >= material (max of 10, 50 a day of
-test window, 10% of the current score), confidence >= MIN_CONFIDENCE (0.90), test drawdown not worse than 1.5x + 25,
-and the SAME value was recommended by CONFIRM_RUNS (2) consecutive scheduled runs of its group.
+Significance (arb, direction): the test window is cut into TEST_BLOCKS (8) equal blocks; per block, candidate score minus
+current score; confidence = bootstrap probability (2,000 resamples of the blocks, fixed seed) that the mean difference is
+> 0. The directional sleeve must pass on both marks (outside fair and SIG mid).
+Significance (MM): the whole-test-window replay is split into (market, hour) cells; candidate-minus-current contributions
+are summed per market and per hour and each set is bootstrapped (cluster_confidence); confidence = the smaller of the two.
+Two MM scores must both improve: `score` (marked at the window end) and `score_3h` (each fill marked 3 h later, marks
+never past the window end), because adverse selection from Polymarket/Kalshi leads shows at 3-6 h, not 30 min
+(research_notes/mm_upgrade.md). MM materiality is per filled share: max(2, 0.1 tick x test shares filled, 10% of |score|).
+A change is recommended only if: inside HARD_BOUNDS, not report-only, test gain >= material (arb/direction: max of 10,
+50 a day of test window, 10% of the current score), confidence >= MIN_CONFIDENCE (0.90), test drawdown not worse than
+1.5x + 25, and the SAME value was recommended by CONFIRM_RUNS (2) scheduled runs of its group whose test windows do not
+overlap (a run re-testing the last confirming run's window neither counts nor resets). Ladder grids follow the live
+ladder's length (LADDER_GRIDS); apply() refuses a ladder whose length differs from the live sibling key.
 
 Schedule (SCHEDULE; per-group override in config.json shadow.schedule): arb every 4 h on 24 h, direction every 12 h on
 72 h, mm_quote every 12 h on 48 h, mm_ladder every 24 h on 96 h; the allocator (sigbot/allocator.py) every 12 h on 48 h,
@@ -115,7 +122,11 @@ MM_PRESSURE_SIZE_SKEW = 0.5
 MM_INV_SKEW_TICKS = 3.0
 MM_SIZE_SKEW_AT_MAX = 0.8
 MM_GAMMA = 0.5
-MM_IMPROVE_SPREAD_GE = 2
+MM_IMPROVE_SPREAD_GE = 2           # fallback only: the replay reads cfg.mm.improve_when_spread_ticks_ge
+MM_MARK_SEC = 3 * 3600.0           # second MM score: fill P&L marked 3 h later (cross-venue adverse selection shows at 3-6 h)
+MM_MATERIAL_FLOOR = 2.0            # MM materiality: max(this, MM_MATERIAL_TICKS_PER_SHARE x tick x test shares filled, 10% of |score|)
+MM_MATERIAL_TICKS_PER_SHARE = 0.1
+CLUSTER_BOOT_N = 2000
 MM_VOL_GATE_MOVE_TICKS = 3.0
 MM_VOL_GATE_COOLDOWN = 1800
 MM_VOL_GATE_SPREAD_ADD = 1
@@ -129,6 +140,14 @@ DIR_MAX_DISAGREE = 0.08
 DIR_SINGLE_VENUE_EXTRA = 0.01
 
 # Hard bounds: (min, max) for scalars, or a validator for lists. Anything not listed is never recommended.
+def _ladder_ok_ticks(v) -> bool:
+    return isinstance(v, list) and 1 <= len(v) <= 6 and all(isinstance(x, int) and 1 <= x <= 10 for x in v) and all(a < b for a, b in zip(v, v[1:]))
+
+
+def _ladder_ok_mult(v) -> bool:
+    return isinstance(v, list) and 1 <= len(v) <= 6 and all(0.0 <= float(x) <= 2.0 for x in v) and sum(v) <= 4.0
+
+
 HARD_BOUNDS: dict[str, Any] = {
     "arb.min_ret": (0.0, 0.04),
     "arb.recycle_min_gain": (0.005, 0.05),
@@ -136,8 +155,8 @@ HARD_BOUNDS: dict[str, Any] = {
     "mm.requote_ticks": (0.5, 3.0),
     "mm.meanrev_max_ticks": (0.0, 2.0),
     "mm.vol_gate_fade_mult": (0.0, 1.0),
-    "mm.level_ticks": lambda v: isinstance(v, list) and len(v) == 4 and all(isinstance(x, int) and 1 <= x <= 10 for x in v) and all(a < b for a, b in zip(v, v[1:])),
-    "mm.level_size_mult": lambda v: isinstance(v, list) and len(v) == 4 and all(0.0 <= float(x) <= 2.0 for x in v) and sum(v) <= 4.0,
+    "mm.level_ticks": _ladder_ok_ticks,          # any ladder length 1-6; apply() also requires the live ladder's length
+    "mm.level_size_mult": _ladder_ok_mult,
     "direction.min_edge_take": (0.02, 0.08),
     "exit_band": (0.0, 0.03),
 }
@@ -158,6 +177,22 @@ GRIDS: dict[str, list] = {
     "direction.min_edge_take": [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08],
     "exit_band": [0.0, 0.005, 0.01, 0.015, 0.02],
 }
+# Ladder candidates by ladder length (the live ladder's length picks the grid, so ticks and multipliers always pair up)
+LADDER_GRIDS: dict[str, dict[int, list]] = {
+    "mm.level_ticks": {2: [[1, 2], [1, 3], [2, 3], [2, 4], [1, 4]], 3: [[1, 2, 3], [1, 2, 4], [1, 3, 5], [2, 3, 5]],
+                       4: GRIDS["mm.level_ticks"], 5: [[1, 2, 3, 5, 8], [1, 2, 4, 6, 9], [2, 3, 4, 6, 8]]},
+    "mm.level_size_mult": {2: [[1.0, 0.5], [1.0, 1.0], [1.0, 0.25], [0.5, 1.0], [1.5, 0.5]], 3: [[1.0, 0.5, 0.25], [1.0, 1.0, 1.0], [1.0, 0.75, 0.5], [0.5, 0.75, 1.0]],
+                           4: GRIDS["mm.level_size_mult"], 5: [[1.0, 1.0, 0.75, 0.5, 0.25], [1.5, 1.0, 0.5, 0.25, 0.0], [0.5, 0.75, 1.0, 0.75, 0.5], [1.0, 1.0, 1.0, 1.0, 1.0]]},
+}
+
+
+def grid_for(key: str, current) -> list:
+    """Candidate values for a key; ladder grids follow the live ladder's length."""
+    if key in LADDER_GRIDS and isinstance(current, list):
+        return [list(v) for v in LADDER_GRIDS[key].get(len(current), [])]
+    return list(GRIDS[key])
+
+
 SLEEVE_OF = {k: k.split(".")[0] if "." in k else "direction" for k in GRIDS}
 TUNABLE_KEYS = [k for k in GRIDS if k not in REPORT_ONLY]
 
@@ -404,6 +439,7 @@ class MMData:
                              "WHERE ts>=? AND ts<=? AND mid IS NOT NULL AND microprice IS NOT NULL AND fair IS NOT NULL ORDER BY ts", (t0, t1)):
             self.snaps[r["exchange_id"]].append((r["ts"], r["best_bid"], r["best_ask"], r["bid_qty"], r["ask_qty"], r["mid"], r["microprice"],
                                                  r["fair"], r["pressure"] or 0.0))
+        self.stimes = {ex: [s[0] for s in v] for ex, v in self.snaps.items()}
         self.tape: dict[str, list] = defaultdict(list)
         lo, hi = datetime.fromtimestamp(t0, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"), datetime.fromtimestamp(t1, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         for r in con.execute("SELECT exchange_id, price, quantity, executed_at FROM tape WHERE executed_at>=? AND executed_at<=? ORDER BY executed_at", (lo, hi)):
@@ -574,6 +610,14 @@ class MMData:
         calib["mean_order_qty"] = {str(b): round(self.qref[b]) for b in order}
         return hazard, fillfrac, calib
 
+    def mid_at(self, ex: str, ts: float) -> Optional[float]:
+        """First snapshot mid at or after ts (None past the end of the loaded series)."""
+        tt = self.stimes.get(ex)
+        if not tt:
+            return None
+        i = bisect.bisect_left(tt, ts)
+        return self.snaps[ex][i][5] if i < len(tt) else None
+
     def through(self, ex: str, a: float, b: float, side: str, yes_px: float) -> float:
         """Public tape volume in [a, b) at or through a resting YES price: at or below it for a bid, at or above for an ask."""
         tt = self.tape_t.get(ex)
@@ -596,7 +640,13 @@ def simulate_mm(data: MMData, t_from: float, t_to: float, p: dict) -> dict:
     cfg = data.cfg.mm
     live_mr_cap = float(cfg.meanrev_max_ticks) * TICK
     mr_cap = min(float(p["meanrev_max_ticks"]), float(cfg.meanrev_max_ticks)) * TICK
-    lticks, lmult = list(p["level_ticks"])[:4], list(p["level_size_mult"])[:4]
+    lticks, lmult = list(p["level_ticks"]), list(p["level_size_mult"])
+    nlev = min(len(lticks), len(lmult))          # a ticks/multiplier length mismatch quotes the common levels only
+    lticks, lmult = lticks[:nlev], lmult[:nlev]
+    improve_ge = int(p.get("improve_ge", getattr(cfg, "improve_when_spread_ticks_ge", MM_IMPROVE_SPREAD_GE)))
+    want_cells = bool(p.get("cells"))
+    cells: dict[tuple, list] = defaultdict(lambda: [0.0, 0.0, 0.0])   # (exchange, hour) -> [marked pnl change, collateral-hours, 3-h-mark fill pnl]
+    edge3h = 0.0
     requote = float(p["requote_ticks"]) * TICK
     fade = float(p["vol_gate_fade_mult"])
     cap_frac = float(p.get("capital_frac", cfg.capital_frac))
@@ -666,7 +716,7 @@ def simulate_mm(data: MMData, t_from: float, t_to: float, p: dict) -> dict:
                     reserve = min(reserve, anchor)
             # 3. requote?
             need = (last_reserve is None or abs(reserve - last_reserve) >= requote - 1e-9 or fill_since or ts - last_quote_ts > refresh
-                    or len(orders) < 2 * len(lticks))
+                    or len(orders) < 2 * nlev)
             if need:
                 bbid = [base_qty * m for m in lmult]; bask = list(bbid)
                 if inv_frac > 0:
@@ -678,9 +728,9 @@ def simulate_mm(data: MMData, t_from: float, t_to: float, p: dict) -> dict:
                 elif pressure < 0:
                     bbid = [q * (1 - MM_PRESSURE_SIZE_SKEW * min(1.0, -pressure)) for q in bbid]
                 if inv_frac >= 1.0:
-                    bbid = [0.0] * 4
+                    bbid = [0.0] * nlev
                 elif inv_frac <= -1.0:
-                    bask = [0.0] * 4
+                    bask = [0.0] * nlev
                 if hot:
                     if inv > 0:
                         bbid = [q * fade for q in bbid]; bask = [q * MM_VOL_GATE_SIZE_MULT for q in bask]
@@ -693,7 +743,7 @@ def simulate_mm(data: MMData, t_from: float, t_to: float, p: dict) -> dict:
                 new: dict[tuple, list] = {}
                 for k, dt in enumerate(lticks):
                     dt += spread_add
-                    improve = TICK if (k == 0 and spread_ticks >= MM_IMPROVE_SPREAD_GE) else 0.0
+                    improve = TICK if (k == 0 and spread_ticks >= improve_ge) else 0.0
                     bpx = min(round_tick(reserve - dt * TICK), round_tick(bb + improve), round_tick(ba - TICK))
                     qb = int(bbid[k] * sb)
                     if qb >= 1 and PRICE_MIN <= bpx <= PRICE_MAX:
@@ -753,15 +803,27 @@ def simulate_mm(data: MMData, t_from: float, t_to: float, p: dict) -> dict:
                         markouts.append(mo)
                         mo_w[0] += mo * eq; mo_w[1] += eq
                         lvl_mo[o[3]][0] += mo * eq; lvl_mo[o[3]][1] += eq
+                    # 3-h mark (purged: never a price after t_to, so fit-window scores carry no test-window prices)
+                    tf = 0.5 * (ts + t_next)
+                    m3 = data.mid_at(ex, tf + MM_MARK_SEC) if tf + MM_MARK_SEC <= t_to else None
+                    if m3 is not None:
+                        v3 = eq * ((m3 - px) if side == "yes" else (px - m3))
+                        edge3h += v3
+                        if want_cells:
+                            cells[(ex, int(tf // 3600))][2] += v3
                 orders = [o for o in orders if o[2] >= 1]
                 inv_coll = abs(inv) * (mid if inv > 0 else (1 - mid))
                 collateral = inv_coll + sum(o[2] * (o[1] if o[0] == "yes" else 1 - o[1]) for o in orders)
                 cap_hours += collateral * dt_h
+                if want_cells:
+                    cells[(ex, int(ts // 3600))][1] += collateral * dt_h
                 max_inv_shares = max(max_inv_shares, abs(inv)); max_inv_notional = max(max_inv_notional, inv_coll)
                 coll_by_ex[ex] = inv_coll
                 max_coll_total = max(max_coll_total, sum(coll_by_ex.values()))
             ex_pnl = cash + inv * mid
             path[ts] = path.get(ts, 0.0) + (ex_pnl - ex_pnl_prev)
+            if want_cells:
+                cells[(ex, int(ts // 3600))][0] += ex_pnl - ex_pnl_prev
             ex_pnl_prev = ex_pnl
         pnl_total += ex_pnl_prev
     # drawdown of the aggregate marked path (per-exchange increments summed in time order)
@@ -770,7 +832,9 @@ def simulate_mm(data: MMData, t_from: float, t_to: float, p: dict) -> dict:
         cum += path[t]
         peak = max(peak, cum); dd = max(dd, peak - cum)
     cap_days = cap_hours / 24.0
-    return dict(pnl=pnl_total, cap_days=cap_days, drawdown=dd, score=_score(pnl_total, cap_days), fill_events=round(n_fill_events, 1),
+    extra = {"_cells": dict(cells)} if want_cells else {}
+    return dict(pnl=pnl_total, cap_days=cap_days, drawdown=dd, score=_score(pnl_total, cap_days), edge3h=edge3h,
+                score_3h=_score(edge3h, cap_days), **extra, fill_events=round(n_fill_events, 1),
                 fill_qty=round(fill_qty), markout30_ticks=(mo_w[0] / mo_w[1] if mo_w[1] > 0 else None), n_markout=len(markouts),
                 by_level={lv: {"fill_qty": round(lvl_fill[lv]), "markout30_ticks": (round(lvl_mo[lv][0] / lvl_mo[lv][1], 2) if lvl_mo[lv][1] else None)}
                           for lv in sorted(lvl_fill)},
@@ -873,7 +937,7 @@ class ShadowTuner:
             if g in self.schedule and isinstance(v, dict):
                 self.schedule[g].update({k: float(x) for k, x in v.items() if k in ("every_h", "lookback_h")})
         self.last_run: dict[str, float] = {}
-        self.streak: dict[str, tuple] = {}          # key -> (json value, consecutive runs recommending it)
+        self.streak: dict[str, tuple] = {}          # key -> (json value, confirming runs, end of the last counted test window)
         self.bot = None
         self.startup_values: Optional[dict] = None
         self.report: Optional[dict] = None
@@ -905,7 +969,7 @@ class ShadowTuner:
         try:
             st = json.load(open(self._state_path()))
             self.last_run = {g: float(t) for g, t in (st.get("last_run") or {}).items() if g in self.schedule}
-            self.streak = {k: (v[0], int(v[1])) for k, v in (st.get("streak") or {}).items()}
+            self.streak = {k: (v[0], int(v[1]), float(v[2]) if len(v) > 2 else 0.0) for k, v in (st.get("streak") or {}).items()}
         except (OSError, ValueError, TypeError, IndexError):
             pass
 
@@ -965,7 +1029,9 @@ class ShadowTuner:
         rep["groups_last_run"] = groups
         rep["auto_apply"] = self.auto_apply
         rep["rules"] = {"fit_frac": FIT_FRAC, "test_blocks": TEST_BLOCKS, "min_confidence": self.min_confidence, "confirm_runs": self.confirm_runs,
-                        "material": f"max(10, {self.material_per_day}/day of test window, {self.material_frac:.0%} of |current score|)",
+                        "material": f"max(10, {self.material_per_day}/day of test window, {self.material_frac:.0%} of |current score|); "
+                                    f"MM: max({MM_MATERIAL_FLOOR}, {MM_MATERIAL_TICKS_PER_SHARE} tick x test shares filled, {self.material_frac:.0%} of |score|)",
+                        "confirmations": "same value, non-overlapping test windows",
                         "hurdle_per_1k_day": HURDLE_PER_1K_DAY, "schedule": self.schedule}
         rep["limitations"] = LIMITATIONS
         rep["recommendations"] = [r for gg in rep["groups"].values() for r in gg.get("recommendations", [])]
@@ -1033,9 +1099,9 @@ class ShadowTuner:
             fitp, testp = (t0, fit_until), (fit_until, t1)
 
             def runner(params, window):
-                return simulate_mm(md, window[0], window[1], mmp(params))
+                return simulate_mm(md, window[0], window[1], dict(mmp(params), cells=True))
             pick = lambda a, b: (a, b)
-            both = False
+            both = "mm"
             if "mm.meanrev_max_ticks" in keys:
                 out["notes"].append(f"mm.meanrev_max_ticks is report-only: values above the live cap {current['mm.meanrev_max_ticks']} cannot be "
                                     "evaluated (the logged fair carries only the capped skew), so lowering it could never be undone by the tuner")
@@ -1044,12 +1110,20 @@ class ShadowTuner:
             if not budget_left():
                 out["skipped"].append(key); continue
             res = self._evaluate(key, current, runner, fitp, testp, blocks, pick, both_marks=both)
-            # confirmation streak: the same value must be recommended by `confirm_runs` consecutive runs of this group
+            # confirmation streak: the same value must be recommended by `confirm_runs` runs of this group whose TEST windows
+            # do not overlap (a run that re-tests the previous confirming run's window neither counts nor resets the streak)
             if res["recommend"]:
                 v = json.dumps(res["best"])
                 prev = self.streak.get(key)
+                if prev and prev[0] == v and fit_until < prev[2] - 1e-6:
+                    n = prev[1]
+                    self.streak[key] = (v, n, prev[2])
+                    res["confirmations"] = n
+                    res["reason"] = f"recommended; test window overlaps the last confirming run's ({n}/{self.confirm_runs})"
+                    out["params"][key] = res
+                    continue
                 n = prev[1] + 1 if prev and prev[0] == v else 1
-                self.streak[key] = (v, n)
+                self.streak[key] = (v, n, t1)
                 res["confirmations"] = n
                 if n >= self.confirm_runs:
                     recs.append({"key": key, "from": res["current"], "to": res["best"], "oos_gain": res["oos_gain"], "confidence": res["confidence"],
@@ -1072,7 +1146,7 @@ class ShadowTuner:
         """Coordinate search for one parameter: pick the fit-window best (ties keep the current value), score it on the test
         window, and test the per-block score differences with a bootstrap (confidence = P(mean difference > 0))."""
         cur_val = current[key]
-        grid = list(GRIDS[key])
+        grid = grid_for(key, cur_val)
         if not any(json.dumps(v) == json.dumps(cur_val) for v in grid):
             grid = [cur_val] + grid
         fit_scores = {}
@@ -1086,11 +1160,18 @@ class ShadowTuner:
         cur_params = dict(current)
         best_params = dict(current); best_params[key] = best_val
         r_cur, r_best = runner(cur_params, test), runner(best_params, test)
+        mm = both_marks == "mm"
+        mark = "score_3h" if mm else "score_mid"
         gain = r_best["score"] - r_cur["score"]
-        gain_mid = (r_best.get("score_mid", r_best["score"]) - r_cur.get("score_mid", r_cur["score"])) if both_marks else gain
+        gain_mid = (r_best.get(mark, r_best["score"]) - r_cur.get(mark, r_cur["score"])) if both_marks else gain
         same = best_key == cur_key
         diffs, diffs_mid = [], []
-        if not same:
+        cluster = None
+        if not same and mm:
+            # MM: test the WHOLE-window gain itself, clustered by market and by hour (flat-start block re-simulations measure a
+            # different path and were found not to agree with the reported gain); both scores must pass
+            cluster = {m: cluster_confidence(r_best["_cells"], r_cur["_cells"], m) for m in ("score", "score_3h")}
+        elif not same:
             for (a, b) in blocks:
                 sub = pick(a, b)
                 rc, rb = runner(cur_params, sub), runner(best_params, sub)
@@ -1100,8 +1181,15 @@ class ShadowTuner:
         if both_marks and diffs:
             confidence = min(confidence, bootstrap_confidence(diffs_mid))
         wins = (sum(1.0 if d > 1e-9 else 0.5 if abs(d) <= 1e-9 else 0.0 for d in diffs) / len(diffs)) if diffs else 0.0
+        if cluster is not None:
+            confidence = min(c["confidence"] for c in cluster.values())
+            wins = cluster["score"]["market_win_share"]
         test_days = max(1e-6, (blocks[-1][1] - blocks[0][0]) / 86400.0)
-        material = max(10.0, self.material_per_day * test_days, self.material_frac * abs(r_cur["score"]))
+        if mm:   # per filled share: a day-sized floor is unreachable for a sleeve that fills ~1k shares an hour
+            material = max(MM_MATERIAL_FLOOR, MM_MATERIAL_TICKS_PER_SHARE * TICK * max(r_cur.get("fill_qty", 0), r_best.get("fill_qty", 0)),
+                           self.material_frac * abs(r_cur["score"]))
+        else:
+            material = max(10.0, self.material_per_day * test_days, self.material_frac * abs(r_cur["score"]))
         dd_ok = r_best["drawdown"] <= 1.5 * r_cur["drawdown"] + 25.0
         bounded = within_bounds(key, best_val)
         recommend = (not same and key not in REPORT_ONLY and bounded and gain >= material and gain_mid >= material
@@ -1110,11 +1198,14 @@ class ShadowTuner:
                   else "worse out of sample" if gain < 0 or gain_mid < 0 else "gain not material" if gain < material or gain_mid < material
                   else "not significant" if confidence < self.min_confidence else "drawdown worse" if not dd_ok else "recommended")
         out = {"current": cur_val, "best": best_val, "fit_scores": {k: round(v, 1) for k, v in fit_scores.items()},
-               "test_current": {k: (round(v, 2) if isinstance(v, float) else v) for k, v in r_cur.items()},
-               "test_best": {k: (round(v, 2) if isinstance(v, float) else v) for k, v in r_best.items()},
+               "test_current": {k: (round(v, 2) if isinstance(v, float) else v) for k, v in r_cur.items() if not k.startswith("_")},
+               "test_best": {k: (round(v, 2) if isinstance(v, float) else v) for k, v in r_best.items() if not k.startswith("_")},
                "oos_gain": round(gain, 1), "material_threshold": round(material, 1), "confidence": round(confidence, 3),
                "block_wins": round(wins, 2), "block_diffs": [round(d, 1) for d in diffs], "recommend": recommend, "reason": reason}
-        if both_marks:
+        if mm:
+            out["oos_gain_3h_mark"] = round(gain_mid, 1)
+            out["cluster"] = cluster
+        elif both_marks:
             out["oos_gain_mid_mark"] = round(gain_mid, 1)
         return out
 
@@ -1185,6 +1276,14 @@ class ShadowTuner:
             key, val = r["key"], r["to"]
             if key in REPORT_ONLY or key not in TUNABLE_KEYS or not within_bounds(key, val):
                 continue
+            if key in LADDER_GRIDS:
+                sib = "mm.level_size_mult" if key == "mm.level_ticks" else "mm.level_ticks"
+                try:
+                    if len(val) != len(tuned.get_value(bot, sib)):
+                        log.warning("SHADOW skip %s: %s does not match the live %s length", key, val, sib)
+                        continue
+                except Exception:
+                    continue
             try:
                 if json.dumps(tuned.get_value(bot, key)) != json.dumps(r["from"]):
                     log.warning("SHADOW skip %s: live value %s changed since the replay used %s", key, tuned.get_value(bot, key), r["from"])
@@ -1226,6 +1325,30 @@ def bootstrap_confidence(diffs: list, n: int = BOOTSTRAP_N, seed: int = 7) -> fl
     return pos / n
 
 
+def cluster_confidence(cells_best: dict, cells_cur: dict, metric: str = "score", n: int = CLUSTER_BOOT_N, seed: int = 7) -> dict:
+    """Confidence that a whole-window MM gain is real: per (market, hour) cell, candidate minus current contribution to
+    `metric` ('score' = marked P&L change, 'score_3h' = 3-h-mark fill P&L, both minus the capital charge); the cell
+    differences are summed per market and per hour and each set of cluster sums is bootstrapped (P(resampled total > 0));
+    the reported confidence is the smaller of the two (two-way-conservative)."""
+    def val(c):
+        base = c[0] if metric == "score" else c[2]
+        return base - HURDLE_PER_1K_DAY * (c[1] / 24.0) / 1000.0
+    keys = set(cells_best) | set(cells_cur)
+    zero = [0.0, 0.0, 0.0]
+    by_m: dict = defaultdict(float)
+    by_h: dict = defaultdict(float)
+    for k in keys:
+        d = val(cells_best.get(k, zero)) - val(cells_cur.get(k, zero))
+        by_m[k[0]] += d
+        by_h[k[1]] += d
+    out = {"total": round(sum(by_m.values()), 2), "markets": len(by_m), "hours": len(by_h),
+           "market_win_share": round(sum(1.0 for x in by_m.values() if x > 1e-9) / max(1, sum(1 for x in by_m.values() if abs(x) > 1e-9)), 2)}
+    for name, d in (("market", by_m), ("hour", by_h)):
+        out[f"{name}_conf"] = bootstrap_confidence(list(d.values()), n=n, seed=seed) if d else 0.0
+    out["confidence"] = min(out["market_conf"], out["hour_conf"])
+    return out
+
+
 def tick(bot) -> list:
     """One-call wiring for run.py: creates the tuner on first use (config.json 'shadow' section), then ticks it."""
     t = getattr(bot, "_shadow_tuner", None)
@@ -1247,7 +1370,8 @@ LIMITATIONS = [
     "direction: taker fills assumed at the logged SIG touch regardless of size; outside depth scaling not replayed; entries limited to the verdict legs "
     "in params/fair_explained.json as the live sleeve is; cumulative entry cost is never credited back on exit (live behaviour); P&L marked at the latest "
     "outside fair (primary) and the latest SIG mid (secondary).",
-    "all: one window of hours, walk-forward 70/30 by time; confidence is block consistency on the test window, not a statistical test.",
+    "all: one window of hours, walk-forward 70/30 by time; arb/direction confidence is block consistency on the test window; MM confidence is a "
+    "market- and hour-clustered bootstrap of the whole-window gain (cells share inventory paths, so it is approximate).",
 ]
 
 
@@ -1278,7 +1402,8 @@ def format_report(rep: dict) -> str:
             tc, tb = p["test_current"], p["test_best"]
             L.append(f"{key:26s} {_fmt_val(p['current']):>16s} {_fmt_val(p['best']):>16s} {tc['score']:9.1f} {tb['score']:9.1f} {p['oos_gain']:+9.1f} "
                      f"{p['material_threshold']:6.0f} {p['confidence']:5.2f} {tc['drawdown']:5.0f}/{tb['drawdown']:<6.0f} {p['reason']}"
-                     + (f" [mid-mark gain {p['oos_gain_mid_mark']:+.1f}]" if "oos_gain_mid_mark" in p else ""))
+                     + (f" [mid-mark gain {p['oos_gain_mid_mark']:+.1f}]" if "oos_gain_mid_mark" in p else "")
+                     + (f" [3h-mark gain {p['oos_gain_3h_mark']:+.1f}]" if "oos_gain_3h_mark" in p else ""))
         c = gr.get("calibration")
         if c:
             L.append(f"   mm fill model: replay of live params over the fit window filled {c.get('replay_fit_fill_qty')} shares vs actual "

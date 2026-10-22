@@ -102,6 +102,12 @@ rec_min_ret = ap["recommend"]
 check(a1 == [] and b.cfg.arb.min_ret == before, "first recommending run: not applied yet (confirmation 1/2)")
 a2 = run_group(t, b, "arb")
 if rec_min_ret:
+    ap2 = json.load(open(os.path.join(tmp, "params", "shadow_report.json")))["groups"]["arb"]["params"]["arb.min_ret"]
+    check(a2 == [] and b.cfg.arb.min_ret == before and ap2.get("confirmations") == 1 and "overlaps" in ap2.get("reason", ""),
+          f"back-to-back run re-tests the same window: not counted ({ap2.get('reason')})")
+    v, n, end = t.streak["arb.min_ret"]
+    t.streak["arb.min_ret"] = (v, n, 0.0)          # pretend the first confirmation's test window ended long ago (disjoint)
+    a2 = run_group(t, b, "arb")
     best = ap["best"]
     check("arb.min_ret" in a2 and abs(b.cfg.arb.min_ret - best) < 1e-12, f"second run: applied arb.min_ret {before} -> {b.cfg.arb.min_ret}")
     stt = tuned.load()
@@ -138,6 +144,40 @@ check(r == ["direction.min_edge_take"] and b.direction.cfg.min_edge_take == 0.05
 r = t.apply([{"key": "mm.level_ticks", "from": b.cfg.mm.level_ticks, "to": [0, 2, 3, 5], "oos_gain": 99, "confidence": 1.0}], b)
 check(r == [], "invalid ladder refused")
 
+# 7b. ladder length must match the live sibling key
+r = t.apply([{"key": "mm.level_ticks", "from": b.cfg.mm.level_ticks, "to": [1, 2, 4, 6], "oos_gain": 99, "confidence": 1.0}], b)
+check(r == [] and b.cfg.mm.level_ticks == raw["mm"]["level_ticks"], "ladder of a different length than level_size_mult refused")
+
+# 7c. MM replay: 2-level ladder grids, length guard, improve threshold from config, cells add up, clustered confidence
+con = shadow.open_ro(os.path.join(REPO, "data", "sigbot.sqlite"))
+bm = new_bot()
+t1_ = con.execute("SELECT MAX(ts) FROM quotes").fetchone()[0]; t0_ = t1_ - 12 * 3600; fu_ = t0_ + 0.7 * (t1_ - t0_)
+md = shadow.MMData(con, t0_, t1_, fu_, bm.cfg)
+lp = {k.split(".", 1)[1]: v for k, v in shadow.live_params(bm.cfg).items() if k.startswith("mm.")}
+ok = True
+try:
+    for key in ("level_ticks", "level_size_mult"):
+        for v in shadow.grid_for("mm." + key, lp[key]):
+            shadow.simulate_mm(md, t0_, fu_, dict(lp, **{key: v}))
+    shadow.simulate_mm(md, t0_, fu_, dict(lp, level_ticks=[1, 2, 4, 6]))          # mismatched lengths: common levels only
+except Exception as e:
+    ok = False; print("   error:", e)
+check(ok and len(shadow.grid_for("mm.level_ticks", lp["level_ticks"])) >= 3, f"2-level ladder grids and a ticks/mult mismatch replay without error")
+r_cfg = shadow.simulate_mm(md, fu_, t1_, dict(lp))
+r_2 = shadow.simulate_mm(md, fu_, t1_, dict(lp, improve_ge=2))
+r_3 = shadow.simulate_mm(md, fu_, t1_, dict(lp, improve_ge=int(bm.cfg.mm.improve_when_spread_ticks_ge)))
+check(r_cfg["fill_qty"] == r_3["fill_qty"] and r_cfg["pnl"] == r_3["pnl"], f"improve threshold read from config ({bm.cfg.mm.improve_when_spread_ticks_ge}); improve 2 fills {r_2['fill_qty']} vs {r_cfg['fill_qty']}")
+rc = shadow.simulate_mm(md, t0_, t1_, dict(lp, cells=True))          # full 12 h so the 3-h marks exist
+cells = rc["_cells"]
+sp, sc, s3 = sum(c[0] for c in cells.values()), sum(c[1] for c in cells.values()) / 24.0, sum(c[2] for c in cells.values())
+check(abs(sp - rc["pnl"]) < 1e-6 and abs(sc - rc["cap_days"]) < 1e-6 and abs(s3 - rc["edge3h"]) < 1e-6,
+      f"(market, hour) cells add up to pnl {rc['pnl']:.2f}, cap-days {rc['cap_days']:.1f}, 3-h mark {rc['edge3h']:.2f}")
+plus = {k: [v[0] + 1.0, v[1], v[2] + 1.0] for k, v in cells.items()}
+minus = {k: [v[0] - 1.0, v[1], v[2] - 1.0] for k, v in cells.items()}
+cp, cm = shadow.cluster_confidence(plus, cells, "score"), shadow.cluster_confidence(minus, cells, "score_3h")
+check(cp["confidence"] == 1.0 and cm["confidence"] == 0.0 and abs(cp["total"] - len(cells)) < 1e-6, "cluster bootstrap: uniform gain -> 1, uniform loss -> 0")
+con.close()
+
 # 8. every group runs within the CPU budget on a fake bot, no exceptions
 write_cfg(False)
 b = new_bot(); t = new_tuner(b)
@@ -169,8 +209,8 @@ check(al.root == tmp and al.auto_apply, "allocator created by the shadow tick wi
 al._thread.join(); t.tick(b)
 check(os.path.exists(os.path.join(tmp, "params", "allocation.json")), "allocation.json written in the temp root")
 check(not os.path.exists(os.path.join(tmp, "params", "allocation.json.tmp")), "no temp file left behind")
-r = al.apply([{"key": "arb.capital_frac", "from": b.cfg.arb.capital_frac, "to": 0.9}], b)
-check(r == [] and b.cfg.arb.capital_frac == raw["arb"]["capital_frac"], "allocator refuses arb.capital_frac above the 0.70 ceiling")
+r = al.apply([{"key": "arb.capital_frac", "from": b.cfg.arb.capital_frac, "to": allocator.HARD_CAPS["arb"] + 0.05}], b)
+check(r == [] and b.cfg.arb.capital_frac == raw["arb"]["capital_frac"], f"allocator refuses arb.capital_frac above its {allocator.HARD_CAPS['arb']} ceiling")
 r = al.apply([{"key": "mm.capital_frac", "from": b.cfg.mm.capital_frac, "to": 0.10, "target": 0.05}], b)
 check(r == ["mm.capital_frac"] and b.cfg.mm.capital_frac == 0.10, "allocator applies an in-bounds change")
 r = al.apply([{"key": "kill_drawdown", "from": 400, "to": 1}], b)

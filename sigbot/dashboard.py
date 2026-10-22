@@ -1269,15 +1269,23 @@ def render(D: dict) -> str:
                      (f'{_pct(lfrac, 0)} of the {_f(R["ceiling"])} limit' + _meter(lfrac, 0.85, 1.0)) if lfrac is not None else "needs an account read")
              + _tile("Sets bought, last 24 hours", str(w24r["entries"]), f'{_f(w24r["entry_capital"])} spent · {_f(w24r["entry_edge"], 0, True)} profit locked')
              + _tile("Failed attempts, last 24 hours", str(w24r["failed"]), "the book moved before every leg could fill", "loss" if w24r["failed"] else "")
-             + '</div><h3>Locked profit by race</h3><div class="tw"><table class="t"><tr><th>Race</th><th class="num">Sets</th><th class="num">Locked profit</th>'
-               '<th class="num">Money in it</th><th class="num">Of its limit</th></tr>')
+             + '</div><h3>Every arb set</h3><div class="tw"><table class="t"><tr><th>Race</th><th class="num">Sets</th><th class="num">Cost</th>'
+               '<th class="num" title="value of the sets at the venue\'s market prices now, minus what they cost">Live P&amp;L<br>at market</th>'
+               '<th class="num" title="what the sets pay out whoever wins, minus what they cost">Locked profit<br>at payout</th>'
+               '<th class="num" title="money in the race against its per-race limit">Of its<br>limit</th></tr>')
     lim = {r["race"]: r for r in R["locked"]}
-    for s in P["sets"][:10]:
+    live_total = cost_total = 0.0
+    for s in P["sets"]:
         lr = lim.get(s["race"], {})
         u = lr["committed"] / lr["limit"] if lr.get("committed") is not None and lr.get("limit") else None
-        o.append(f'<tr><td class="mk">{_e(s["race"])}</td><td class="num">{_f(s["k"])}</td><td class="num {_cls(s["locked"])}">{_f(s["locked"], 0, True)}</td>'
-                 f'<td class="num">{_f(lr.get("committed"))}</td><td class="num {"loss" if u is not None and u > 1.001 else ""}">{_pct(u, 0)}</td></tr>')
-    o.append(f'<tr class="tot"><td>All {len(P["sets"])} races</td><td></td><td class="num">{_f(locked_total, 0, True)}</td><td class="num">{_f(lt)}</td><td></td></tr></table></div>')
+        live_total += s["marked_pnl"] or 0.0
+        cost_total += s["cost"] or 0.0
+        o.append(f'<tr><td class="mk">{_e(s["race"])}</td><td class="num">{_f(s["k"])}</td><td class="num">{_f(s["cost"])}</td>'
+                 f'<td class="num {_cls(s["marked_pnl"])}">{_f(s["marked_pnl"], 0, True)}</td><td class="num {_cls(s["locked"])}">{_f(s["locked"], 0, True)}</td>'
+                 f'<td class="num {"loss" if u is not None and u > 1.001 else ""}">{_pct(u, 0)}</td></tr>')
+    o.append(f'<tr class="tot"><td>All {len(P["sets"])} races</td><td></td><td class="num">{_f(cost_total)}</td><td class="num {_cls(live_total)}">{_f(live_total, 0, True)}</td>'
+             f'<td class="num">{_f(locked_total, 0, True)}</td><td></td></tr></table></div>'
+             '<p class="note">Live P&amp;L moves with market prices; locked profit is what the set pays when the race settles, whoever wins.</p>')
     o.append('<h3>Failed attempts per hour</h3>' + _chart_cols(
         [(a, c) for a, c in R["fail_hours"]], h=120, cls="b-loss", label="Failed arb attempts per hour",
         tipf=lambda r: f'{time.strftime("%a %H:00", time.localtime(r[0]))}|Failed attempts|{r[1]}') + '</section>')

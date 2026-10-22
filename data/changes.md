@@ -258,3 +258,13 @@
     on a recorded stream and check fill-price units in on_fill (fills are stored in YES terms).
   * Not done, by design: the late punt / correlated roll (Sizhe's call on 3 Nov 17:00 ET).
   Dry runs OK (including one with the election sleeve on); restarted via botctl.
+- 20:22 Sizhe: "make more directional trades according to [Polymarket/Kalshi] odds". ExplainedDirection now also trades the
+  outside consensus: legs where Polymarket and Kalshi agree within 4 points and this venue is 5+ points away, favourite side
+  only (buy the favourite / sell the longshot, per favourite_drift.md); explained verdicts still take precedence; one leg
+  per race; min_edge_take 6% and 600 per leg unchanged; direction.overall_cash_frac 0.17 -> 0.60 (allocator ceiling 0.70);
+  partisan cap 5,000 unchanged. 24 legs qualify now (12 buy-favourite, 12 sell-longshot). Zero-EV exits now also close
+  market-making inventory that sits on the wrong side of a two-venue consensus, but only when the exit beats the outside
+  fair by exit_band (e.g. MS Senate R NO, GA Senate R YES). Restarted via botctl.
+- 20:20 KILL SWITCH fired (real, not an artifact): marked drawdown 402 over the trailing hour (> 400), from the 19:41-20:04
+  offload churn, plus a -2.4 tick 30-min MM markout on 12 fills. Left untouched per Sizhe's rule; MM, tilt and arbs pause
+  for 30 min and may pause again until the churn leaves the one-hour window (~21:05).
