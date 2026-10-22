@@ -198,3 +198,12 @@
   * correlation (research_notes/correlation_arbs.md): no trading change (no riskless arb); noted for sizing that same-state
     legs (GA, FL, MI Senate + Governor) behave as one position.
   Dry run OK; restarted via botctl.
+- 19:20 Sizhe: move recycle and offload into the 1-second scanner and compare against every holding.
+  `ArbScanner.recycle_pass` (every scanner pass, ~1 s): when the best arb seen in the last 10 s is capital-blocked, the
+  exit of EVERY held set is priced from its feed book (unwind_quote walks the asks, so spread and depth are in the cost;
+  was: the first 3 held sets, REST books, once per 30-60 s main cycle), the cheapest-to-give-up set is unwound if the new
+  set beats it by recycle_min_gain, and the new set is bought at once from a <=3 s-old book, all under trade_lock.
+  `ArbScanner.offload_pass` runs the cross-sleeve offload check every offload_scan_sec (3 s; was every 5th main cycle).
+  The main-loop recycle path stays as a backstop when the feed is down. Unit-tested with stubs (all held sets priced),
+  dry run OK, restarted via botctl. Expected latency for a capital-blocked swap: ~2-3 s (was 15-40 s); offload ~3-5 s
+  (was 1.5-3 min).

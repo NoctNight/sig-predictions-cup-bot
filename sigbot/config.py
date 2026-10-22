@@ -182,6 +182,7 @@ class BotConfig:
     inside_max_markets: int = 12         # markets re-posted per cycle (each costs a cancel + a share of one batch write)
     inside_ttl_sec: int = 300
     mm_fast_requotes_per_min: int = 3    # scanner-thread requotes of a quoted market whose touch moved since we last quoted (2 writes each)
+    offload_scan_sec: float = 3.0        # scanner runs the cross-sleeve offload check this often (it reads the fills table)
     free_unwind_scan_sec: float = 10.0   # scanner checks held sets for a free unwind (asks sum <= payout) this often, from feed books
     kill_drawdown: float = 400.0         # marked P&L drop over the trailing hour that pauses MM and tilt
     kill_markout_ticks: float = -1.0     # 30-min MM markout (mean ticks, n>=20) below this pauses MM and tilt

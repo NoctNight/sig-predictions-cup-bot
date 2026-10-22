@@ -99,6 +99,7 @@ class ArbScanner(threading.Thread):
         self.stats = {"passes": 0, "candidates": 0, "executed": 0, "errors": 0, "last_pass": 0.0}
         self.best_unfunded = None     # best chunk seen that the arb budget could not pay for (for capital recycling)
         self.fast_log: list = []      # timestamps of fast requotes in the last minute
+        self.last_offload = 0.0
 
     def run(self):
         b = self.bot
@@ -112,6 +113,8 @@ class ArbScanner(threading.Thread):
             time.sleep(max(0.0, target - time.time()))
             try:
                 self.one_pass()
+                self.recycle_pass()
+                self.offload_pass()
                 self.free_unwind_pass()
                 self.fast_requote_pass()
             except Exception as e:
@@ -231,6 +234,64 @@ class ArbScanner(threading.Thread):
                 st.last_touch = (bb, ba)       # reserve did not move enough to requote: do not re-check this move every second
             if len(self.fast_log) >= n_max:
                 break
+
+    def recycle_pass(self):
+        """Capital recycling every scanner pass (was: once per 30-60 s main cycle, against the first 3 held sets only).
+        When the best arb seen is blocked for capital, price the exit of EVERY held set from its feed book (unwind_quote
+        walks the asks, so the spread and depth are in the cost), unwind the one that gives up the least if the new set
+        beats it by recycle_min_gain, and buy the new set at once from a fresh book, all inside the trade lock."""
+        b = self.bot
+        best = self.best_unfunded
+        if (not best or best.get("failed") or time.time() - best.get("ts", 0) > 10 or not b.cfg.arb.recycle_enabled
+                or not b.arb.committed or not b.feed_ok() or time.time() < b.killed_until):
+            return
+        if b.arb.budget_left(b.cash) >= best["cost"] * max(b.cfg.arb.min_set_qty, 1):
+            return                                  # not capital-blocked: the normal scanner path takes it
+        tgt = best["race"]
+        target = {ex: b.fresh_book(ex, 10.0) for ex in b.universe.races[tgt].exchange_ids}
+        if any(v is None for v in target.values()):
+            return
+        held_books = {}
+        for rname in list(b.arb.committed):
+            race = b.universe.races.get(rname)
+            if race is None or rname == tgt:
+                continue
+            fb = {ex: b.fresh_book(ex, 30.0) for ex in race.exchange_ids}
+            if all(v is not None for v in fb.values()):
+                held_books[rname] = fb
+        if not held_books:
+            return
+        with b.trade_lock:
+            rec = b.arb.recycle(dict(best, fresh_books=target), held_books, b.positions_snapshot, b.cash, None)
+        if not rec:
+            return
+        self.stats["recycles"] = self.stats.get("recycles", 0) + 1
+        self.best_unfunded = None
+        if rec.get("dry"):
+            return
+        try:
+            b.cash = float(b.scan_api.account().get("balance") or b.cash)
+            fresh = {ex: b.get_book(ex, 50, b.scan_api, max_age=3.0) for ex in b.universe.races[tgt].exchange_ids}
+            with b.trade_lock:
+                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash) if c.race == tgt]
+                if plan:
+                    res = b.arb.execute(plan, None)
+                    log.info("recycle follow-through %s: %d basket(s) filled", tgt, sum(1 for r in res if r.get("ok")))
+                else:
+                    log.warning("recycle: target %s gone after unwind; capital stays free for the scanner", tgt)
+            b.cash = float(b.scan_api.account().get("balance") or b.cash)
+            b.positions_snapshot = b.positions_map()[0]
+        except ApiError as e:
+            log.warning("recycle follow-through %s: %s", tgt, e)
+
+    def offload_pass(self):
+        """Cross-sleeve offload every offload_scan_sec (was: every 5th main cycle, ~2.5 min): exit costs of every held
+        set and tilt/directional position are recomputed from the latest feed-overlaid prices each run."""
+        b = self.bot
+        if time.time() - self.last_offload < b.cfg.offload_scan_sec or time.time() < b.killed_until:
+            return
+        self.last_offload = time.time()
+        b.offload_report(0)
 
     def free_unwind_pass(self):
         """Every free_unwind_scan_sec, with every leg's feed book fresh: unwind held sets whose asks sum to the payout or
@@ -1057,7 +1118,6 @@ class Bot:
                 self.last_universe_refresh = time.time()
             except ApiError as e:
                 log.warning("universe refresh: %s", e)
-        self.offload_report(cycle_id)
         try:
             shadow_tick(self)       # paper-only parameter tuner on our own logs; applies nothing unless config shadow.auto_apply
         except Exception as e:
