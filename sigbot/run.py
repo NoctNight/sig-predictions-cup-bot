@@ -779,16 +779,32 @@ class Bot:
             log.info("OFFLOAD%s: exit %s %s x%d (gives up %.2f%%) to fund %s (%.2f%% net), gain %.2f%%", "" if live else " (report-only)",
                      u.get("race") or u.get("exchange_id"), u.get("side", "set"), u["qty"], 100 * u["forgone_ret"],
                      r["opportunity"].get("race") or r["opportunity"].get("exchange_id"), 100 * r["opportunity"]["ret_net"], 100 * r["gain"])
-            if live and u["kind"] == "arb_set" and r["opportunity"].get("kind") in ("tilt", "direction") and done < 2:
+            if live and u["kind"] == "arb_set" and r["opportunity"].get("kind") in ("tilt", "direction") and done < 1:
+                # Guards added after the 22 Oct 19:41-20:04 churn (38 unwinds for a handful of tilt trades):
+                #  1. only while cash is genuinely short: below the arb cash reserve, and below the trade's own capital need
+                #  2. each opportunity is funded at most once per 30 min (the tilt candidate list refreshes once per cycle)
+                #  3. the real walked exit cost must still leave recycle_min_gain (checked inside unwind_set)
+                #  4. one unwind per check, and the tilt list is cleared after it until the sleeve re-evaluates
+                opp = r["opportunity"]
+                okey = (opp.get("kind"), opp.get("exchange_id"))
+                funded = getattr(self, "_offload_funded", {})
+                self._offload_funded = funded
+                room = getattr(self.tilt, "free_last", 0.0) if opp.get("kind") == "tilt" else self.cash * 0.9
+                if self.cash >= self.cfg.arb.cash_reserve or room >= opp["capital"] or time.time() - funded.get(okey, 0) < 1800:
+                    continue
                 rname = u.get("race")
                 race = self.universe.races.get(rname)
                 books = {ex: self.fresh_book(ex, 10.0) for ex in race.exchange_ids} if race else {}
                 if race and all(v is not None for v in books.values()):
-                    q = int(min(u["qty"], math.ceil(r["opportunity"]["capital"] / max(u["proceeds"], 0.05))))
+                    q = int(min(u["qty"], math.ceil(opp["capital"] / max(u["proceeds"], 0.05))))
                     with self.trade_lock:
-                        res = self.arb.unwind_set(rname, books, q, why=f"fund {r['opportunity']['kind']} {r['opportunity'].get('exchange_id')}")
+                        res = self.arb.unwind_set(rname, books, q, why=f"fund {opp['kind']} {opp.get('exchange_id')}",
+                                                  new_ret=opp["ret_net"], min_gain=self.cfg.arb.recycle_min_gain)
+                    funded[okey] = time.time()
                     if res:
                         done += 1
+                        if getattr(self, "tilt", None) is not None:
+                            self.tilt.unfunded = []
                         try:
                             self.cash = float(self.api.account().get("balance") or self.cash)
                         except ApiError:

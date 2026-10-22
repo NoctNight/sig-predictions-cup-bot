@@ -332,11 +332,16 @@ class ArbEngine:
                                     status="filled" if not d.get("open") else "open", response=d)
         return {"race": rname, "qty": q, "proceeds": uq["proceeds"], "fund": best_new}
 
-    def unwind_set(self, rname: str, books: dict, qty: int, why: str = "offload") -> Optional[dict]:
-        """Unwind `qty` held sets of `rname` now, all legs or none, at limits from walking the asks."""
+    def unwind_set(self, rname: str, books: dict, qty: int, why: str = "offload", new_ret: Optional[float] = None,
+                   min_gain: float = 0.0) -> Optional[dict]:
+        """Unwind `qty` held sets of `rname` now, all legs or none, at limits from walking the asks. With new_ret, only if
+        the trade being funded beats the REAL exit cost (walked asks, not a snapshot estimate) by min_gain."""
         race = self.u.races[rname]
         uq = self.unwind_quote(race, books, qty)
         if not uq or qty < self.cfg.min_set_qty:
+            return None
+        if new_ret is not None and new_ret - uq["forgone_ret"] < min_gain:
+            log.info("unwind %s skipped: real exit gives up %.2f%%, the trade it would fund returns %.2f%%", rname, 100 * uq["forgone_ret"], 100 * new_ret)
             return None
         legs = [{"exchangeId": e, "side": "yes", "action": "buy", "quantity": qty, "price": lim, "tournamentId": self.api.tournament_id}
                 for e, lim in uq["limits"].items()]

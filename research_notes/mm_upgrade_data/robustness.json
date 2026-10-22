@@ -1,0 +1,169 @@
+{
+ "baseline_realised": {
+  "mo5_pnl": 6.14,
+  "mo30_pnl": -19.99,
+  "shares": 23364,
+  "fills": 262,
+  "hours": 19.8
+ },
+ "xv_pull>=2": {
+  "mo5": {
+   "fit": 2.78,
+   "test": 8.63,
+   "all": 11.41,
+   "without_top2_markets": -2.68,
+   "top2": [
+    "1057",
+    "1033"
+   ],
+   "market_ci90": [
+    -5.42,
+    31.89
+   ],
+   "dropped_share_of_volume": 0.56
+  },
+  "mo30": {
+   "fit": 3.67,
+   "test": 27.48,
+   "all": 31.15,
+   "without_top2_markets": -1.08,
+   "top2": [
+    "1057",
+    "1033"
+   ],
+   "market_ci90": [
+    -2.71,
+    74.69
+   ],
+   "dropped_share_of_volume": 0.6
+  }
+ },
+ "meanrev-aided (mr with us > 0.25)": {
+  "mo5": {
+   "fit": 2.64,
+   "test": 11.9,
+   "all": 14.54,
+   "without_top2_markets": 2.85,
+   "top2": [
+    "1057",
+    "1022"
+   ],
+   "market_ci90": [
+    -0.65,
+    33.18
+   ],
+   "dropped_share_of_volume": 0.44
+  },
+  "mo30": {
+   "fit": 1.61,
+   "test": 20.2,
+   "all": 21.81,
+   "without_top2_markets": -2.73,
+   "top2": [
+    "1057",
+    "1033"
+   ],
+   "market_ci90": [
+    -5.42,
+    60.48
+   ],
+   "dropped_share_of_volume": 0.42
+  }
+ },
+ "thin touch L1 (< 1500)": {
+  "mo5": {
+   "fit": -5.17,
+   "test": 10.85,
+   "all": 5.69,
+   "without_top2_markets": -8.02,
+   "top2": [
+    "1057",
+    "1033"
+   ],
+   "market_ci90": [
+    -11.49,
+    26.21
+   ],
+   "dropped_share_of_volume": 0.55
+  },
+  "mo30": {
+   "fit": -1.53,
+   "test": 31.42,
+   "all": 29.89,
+   "without_top2_markets": -3.08,
+   "top2": [
+    "1057",
+    "1033"
+   ],
+   "market_ci90": [
+    -4.11,
+    75.13
+   ],
+   "dropped_share_of_volume": 0.6
+  }
+ },
+ "one-sided flow into us >= 0.8": {
+  "mo5": {
+   "fit": 0.83,
+   "test": 17.26,
+   "all": 18.09,
+   "without_top2_markets": 3.06,
+   "top2": [
+    "1057",
+    "1022"
+   ],
+   "market_ci90": [
+    0.86,
+    41.24
+   ],
+   "dropped_share_of_volume": 0.46
+  },
+  "mo30": {
+   "fit": 2.7,
+   "test": 31.35,
+   "all": 34.05,
+   "without_top2_markets": 2.62,
+   "top2": [
+    "1057",
+    "1033"
+   ],
+   "market_ci90": [
+    0.97,
+    79.36
+   ],
+   "dropped_share_of_volume": 0.42
+  }
+ },
+ "band 0.25-0.75": {
+  "mo5": {
+   "fit": -0.79,
+   "test": -5.66,
+   "all": -6.45,
+   "without_top2_markets": -18.12,
+   "top2": [
+    "1057",
+    "948"
+   ],
+   "market_ci90": [
+    -28.36,
+    14.6
+   ],
+   "dropped_share_of_volume": 0.58
+  },
+  "mo30": {
+   "fit": -2.23,
+   "test": 14.04,
+   "all": 11.81,
+   "without_top2_markets": -9.57,
+   "top2": [
+    "1057",
+    "1071"
+   ],
+   "market_ci90": [
+    -15.4,
+    51.07
+   ],
+   "dropped_share_of_volume": 0.57
+  }
+ }
+}

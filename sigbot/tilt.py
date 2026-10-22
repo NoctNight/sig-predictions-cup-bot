@@ -130,6 +130,7 @@ class TiltHarvester:
                         resting_by_ex[ex] = resting_by_ex.get(ex, 0.0) + float(o.get("priceLimit") or 0.0) * float(o["quantity"])
         resting = sum(resting_by_ex.values())
         free = max(0.0, min(budget_total - committed - resting, cash * 0.9 - resting))
+        self.free_last = free
         self.unfunded = []                    # candidates this cycle could not fund (offload may free arb capital for them)
         self.unfunded_ts = time.time()
         cands = self.candidates(prices, exclude)

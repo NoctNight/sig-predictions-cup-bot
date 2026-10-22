@@ -17,7 +17,9 @@
                  | 'none'
   band           (lo, hi): quote only when lo <= mid <= hi (favourite-longshot / tail filter)
   pause_windows  list of (t0, t1): no quotes inside (scheduled-event withdrawal)
-Extra outputs: edge5 / edge30 = sum over fills of qty x (signed mid move to +5 / +30 min, in price units) plus the
+`xv_gate` is the one rule that cleared the out-of-sample bar (on realised fills at 3-6 h marks); it is written to be called
+from mm.build_quotes as-is.
+Extra outputs: edge5 / edge30 / edge180 = sum over fills of qty x (signed mid move to +5 / +30 min, in price units) plus the
 concession to the mid at the fill (i.e. P&L of each fill marked 5 / 30 minutes later), and per-fill records when
 p['keep_fills'] is set.
 """
@@ -163,7 +165,7 @@ def simulate_x(data: MMDataX, t_from: float, t_to: float, p: dict) -> dict:
     refresh = float(cfg.refresh_sec)
     pnl_total = cap_hours = 0.0
     n_fill_events = fill_qty = 0.0
-    edge5 = edge30 = 0.0
+    edge5 = edge30 = edge180 = 0.0
     peak = dd = 0.0
     path: dict = {}
     markouts: list = []
@@ -343,17 +345,20 @@ def simulate_x(data: MMDataX, t_from: float, t_to: float, p: dict) -> dict:
                         lvl_mo[o[3]][0] += mo * eq; lvl_mo[o[3]][1] += eq
                     # fill P&L marked 5 / 30 minutes later (fill time ~ the interval midpoint; mark = first snapshot after)
                     tf = 0.5 * (ts + t_next)
-                    for h, acc in ((300.0, 0), (1800.0, 1)):
-                        mh = data.mid_at(ex, tf + h)
-                        if mh is None or tf + h > t_to + 1800.0:
-                            mh = rows[-1][5] if h == 300.0 else mh
+                    for h, acc in ((300.0, 0), (1800.0, 1), (10800.0, 2)):
+                        # purged marks: never look past the end of the replayed window (no test-period prices in fit scores)
+                        mh = data.mid_at(ex, tf + h) if tf + h <= t_to else None
+                        if mh is None and h == 300.0:
+                            mh = rows[-1][5]
                         if mh is None:
                             continue
                         v = eq * ((mh - px) if side == "yes" else (px - mh))
                         if acc == 0:
                             edge5 += v
-                        else:
+                        elif acc == 1:
                             edge30 += v
+                        else:
+                            edge180 += v
                     if keep:
                         fills_out.append((tf, ex, side, px, eq, mid, sc, o[3], bq if side == "yes" else aq, xvf))
                 orders = [o for o in orders if o[2] >= 1]
@@ -377,10 +382,30 @@ def simulate_x(data: MMDataX, t_from: float, t_to: float, p: dict) -> dict:
                by_level={lv: {"fill_qty": round(lvl_fill[lv]), "markout30_ticks": (round(lvl_mo[lv][0] / lvl_mo[lv][1], 2) if lvl_mo[lv][1] else None)}
                          for lv in sorted(lvl_fill)},
                max_inv_shares=round(max_inv_shares), max_inv_notional=round(max_inv_notional), max_inv_collateral_total=round(max_coll_total),
-               edge5=edge5, edge30=edge30, fill_qty_raw=fill_qty)
+               edge5=edge5, edge30=edge30, edge180=edge180, fill_qty_raw=fill_qty)
     if keep:
         out["fills"] = fills_out
     return out
+
+
+def xv_gate(mid: float, fair: Optional[float], pm: Optional[float] = None, kalshi: Optional[float] = None, age_sec: float = 0.0,
+            gap_ticks: float = 3.0, max_age_sec: float = 600.0, max_disagree: float = 0.08) -> tuple:
+    """Outside-fair gate (research_notes/mm_upgrade.md): (allow_bid, allow_ask). When the fresh Polymarket/Kalshi fair is
+    >= gap_ticks above the SIG mid, do not offer (no ask on any level); when it is >= gap_ticks below, do not bid. Stale
+    (> max_age_sec) or disputed fairs (venues > max_disagree apart) never gate. Wiring in mm.build_quotes, after the sizes:
+        ok_bid, ok_ask = xv_gate(mid, fair, pm, kalshi, age)
+        if not ok_bid: base_bid = [0.0 for _ in base_bid]
+        if not ok_ask: base_ask = [0.0 for _ in base_ask]"""
+    if fair is None or age_sec > max_age_sec:
+        return True, True
+    if pm is not None and kalshi is not None and abs(pm - kalshi) > max_disagree:
+        return True, True
+    gap = (fair - mid) / TICK
+    if gap >= gap_ticks - 1e-9:
+        return True, False
+    if gap <= -gap_ticks + 1e-9:
+        return False, True
+    return True, True
 
 
 def selftest(con, cfg, t0, fit_until, t1) -> bool:

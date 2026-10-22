@@ -230,3 +230,16 @@
   tilt trade beats the set's forgone return by recycle_min_gain. Tilt realisation measured on 119 fills: +1.0 tick after
   1 h, +1.6 ticks after 6 h, median 9.8 h from entry to exit on the 12 exited markets. Volume-cache warm-up accepts a cache
   up to 48 h old (it is only the fallback market ranking; a rebuild cost 7 min of startup). Restarted via botctl.
+- 20:05 LOSS, my bug: the tilt-funding offload added at 19:40 unwound arb sets repeatedly (38 unwinds, 29,533 sets, 32k of
+  capital, ~914 of locked arb edge given up between 19:41 and 20:04). Causes: (1) tilt's unfunded list is rebuilt only
+  once per main cycle, but the offload ran every 3 s and kept unwinding for candidates that were already funded by the
+  previous unwind; (2) it never checked that cash was actually short (cash rose from 8.6k to 21k); (3) the go/no-go used
+  a snapshot estimate of the exit cost (~2.06%) while the real walked cost was 2.3-3.6%. Paused, allocator.offload_live
+  set to false (no offload exits at all), restarted. Recycling between arb sets and free unwinds are unaffected.
+- 20:15 Offload fixed and back on (Sizhe: "fix it and put it back on"). Arb-set unwinds that fund tilt/directional trades
+  now require: cash below the 20k arb reserve AND the sleeve's own free budget (tilt.free_last, or 0.9 x cash for
+  directional) short of the trade's capital; each opportunity funded at most once per 30 min; the REAL walked exit cost
+  (unwind_quote) to leave at least recycle_min_gain against the trade's return (checked in ArbEngine.unwind_set); at most
+  one unwind per 3-s check, and tilt's unfunded list cleared after each. Because unwinds stop once cash reaches the 20k
+  reserve and arbs only buy above it, sets cannot ping-pong. Stub replay of the 19:41 churn: 60 offers of one trade -> 1
+  unwind; cash above reserve -> 0; tilt with room -> 0. Dry run OK, restarted.

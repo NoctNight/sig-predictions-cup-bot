@@ -1,0 +1,688 @@
+{
+ "mm_fills": {
+  "all mm": {
+   "mo5": {
+    "mean": 0.062,
+    "lo": -0.238,
+    "hi": 0.275,
+    "n": 243,
+    "shares": 19776,
+    "blocks": 20
+   },
+   "mo30": {
+    "mean": -0.242,
+    "lo": -0.609,
+    "hi": 0.045,
+    "n": 218,
+    "shares": 16501,
+    "blocks": 19
+   }
+  },
+  "after 11:40 fixes": {
+   "mo5": {
+    "mean": -0.029,
+    "lo": -0.733,
+    "hi": 0.34,
+    "n": 61,
+    "shares": 10702,
+    "blocks": 7
+   },
+   "mo30": {
+    "mean": -0.591,
+    "lo": -1.321,
+    "hi": -0.07,
+    "n": 44,
+    "shares": 7769,
+    "blocks": 6
+   }
+  },
+  "spread 1 at fill": {
+   "mo5": {
+    "mean": -0.138,
+    "lo": -0.455,
+    "hi": 0.071,
+    "n": 180,
+    "shares": 14560,
+    "blocks": 20
+   },
+   "mo30": {
+    "mean": -0.274,
+    "lo": -0.551,
+    "hi": -0.038,
+    "n": 159,
+    "shares": 12020,
+    "blocks": 19
+   }
+  },
+  "spread 2 at fill": {
+   "mo5": {
+    "mean": 0.591,
+    "lo": 0.208,
+    "hi": 0.856,
+    "n": 60,
+    "shares": 4553,
+    "blocks": 15
+   },
+   "mo30": {
+    "mean": -0.157,
+    "lo": -0.991,
+    "hi": 0.574,
+    "n": 59,
+    "shares": 4481,
+    "blocks": 15
+   }
+  },
+  "spread 3+ at fill": {
+   "mo5": null,
+   "mo30": null
+  },
+  "level 1": {
+   "mo5": {
+    "mean": 0.017,
+    "lo": -0.27,
+    "hi": 0.227,
+    "n": 226,
+    "shares": 18211,
+    "blocks": 20
+   },
+   "mo30": {
+    "mean": -0.35,
+    "lo": -0.754,
+    "hi": -0.028,
+    "n": 202,
+    "shares": 15016,
+    "blocks": 19
+   }
+  },
+  "level 2+": {
+   "mo5": {
+    "mean": 0.592,
+    "lo": 0.038,
+    "hi": 0.98,
+    "n": 17,
+    "shares": 1565,
+    "blocks": 10
+   },
+   "mo30": {
+    "mean": 0.848,
+    "lo": 0.445,
+    "hi": 1.341,
+    "n": 16,
+    "shares": 1485,
+    "blocks": 10
+   }
+  },
+  "touch queue >= 1500": {
+   "mo5": {
+    "mean": 0.228,
+    "lo": -0.075,
+    "hi": 0.489,
+    "n": 107,
+    "shares": 8053,
+    "blocks": 17
+   },
+   "mo30": {
+    "mean": 0.178,
+    "lo": 0.041,
+    "hi": 0.324,
+    "n": 92,
+    "shares": 5664,
+    "blocks": 15
+   }
+  },
+  "touch queue < 1500": {
+   "mo5": {
+    "mean": -0.052,
+    "lo": -0.481,
+    "hi": 0.265,
+    "n": 136,
+    "shares": 11723,
+    "blocks": 19
+   },
+   "mo30": {
+    "mean": -0.462,
+    "lo": -0.97,
+    "hi": 0.009,
+    "n": 126,
+    "shares": 10837,
+    "blocks": 19
+   }
+  },
+  "outside fair with us >= 1 tick": {
+   "mo5": {
+    "mean": 0.536,
+    "lo": 0.068,
+    "hi": 0.794,
+    "n": 57,
+    "shares": 4761,
+    "blocks": 12
+   },
+   "mo30": {
+    "mean": 0.436,
+    "lo": 0.314,
+    "hi": 0.562,
+    "n": 51,
+    "shares": 3665,
+    "blocks": 11
+   }
+  },
+  "outside fair against us >= 1 tick": {
+   "mo5": {
+    "mean": -0.171,
+    "lo": -0.524,
+    "hi": 0.108,
+    "n": 143,
+    "shares": 11926,
+    "blocks": 17
+   },
+   "mo30": {
+    "mean": -0.566,
+    "lo": -1.052,
+    "hi": -0.125,
+    "n": 134,
+    "shares": 11013,
+    "blocks": 16
+   }
+  },
+  "outside fair within 1 tick": {
+   "mo5": {
+    "mean": 0.186,
+    "lo": -0.506,
+    "hi": 0.812,
+    "n": 11,
+    "shares": 1488,
+    "blocks": 5
+   },
+   "mo30": {
+    "mean": 0.492,
+    "lo": 0.353,
+    "hi": 0.783,
+    "n": 6,
+    "shares": 875,
+    "blocks": 3
+   }
+  },
+  "outside moved against us >= 2 ticks / 10 min": {
+   "mo5": {
+    "mean": -0.93,
+    "lo": -1.258,
+    "hi": -0.721,
+    "n": 8,
+    "shares": 744,
+    "blocks": 3
+   },
+   "mo30": {
+    "mean": -0.645,
+    "lo": -0.661,
+    "hi": -0.5,
+    "n": 6,
+    "shares": 511,
+    "blocks": 2
+   }
+  },
+  "outside moved with us >= 2 ticks / 10 min": {
+   "mo5": null,
+   "mo30": null
+  },
+  "SIG moved against us >= 2 ticks / 10 min": {
+   "mo5": {
+    "mean": -0.223,
+    "lo": -1.191,
+    "hi": 0.468,
+    "n": 15,
+    "shares": 617,
+    "blocks": 5
+   },
+   "mo30": {
+    "mean": 0.076,
+    "lo": -0.836,
+    "hi": 0.764,
+    "n": 14,
+    "shares": 519,
+    "blocks": 4
+   }
+  },
+  "meanrev with us (> 0.25 tick)": {
+   "mo5": {
+    "mean": -0.334,
+    "lo": -0.81,
+    "hi": 0.035,
+    "n": 87,
+    "shares": 8719,
+    "blocks": 14
+   },
+   "mo30": {
+    "mean": -0.628,
+    "lo": -1.29,
+    "hi": 0.011,
+    "n": 72,
+    "shares": 6940,
+    "blocks": 14
+   }
+  },
+  "meanrev against us (< -0.25 tick)": {
+   "mo5": {
+    "mean": 1.161,
+    "lo": 0.355,
+    "hi": 1.404,
+    "n": 13,
+    "shares": 1311,
+    "blocks": 7
+   },
+   "mo30": {
+    "mean": 0.52,
+    "lo": 0.11,
+    "hi": 0.769,
+    "n": 12,
+    "shares": 1260,
+    "blocks": 6
+   }
+  },
+  "mid 0.12-0.25 or 0.75-0.88": {
+   "mo5": {
+    "mean": 0.112,
+    "lo": -0.433,
+    "hi": 0.505,
+    "n": 133,
+    "shares": 11544,
+    "blocks": 20
+   },
+   "mo30": {
+    "mean": -0.25,
+    "lo": -0.81,
+    "hi": 0.199,
+    "n": 122,
+    "shares": 9435,
+    "blocks": 19
+   }
+  },
+  "mid 0.25-0.75": {
+   "mo5": {
+    "mean": -0.008,
+    "lo": -0.229,
+    "hi": 0.256,
+    "n": 110,
+    "shares": 8232,
+    "blocks": 16
+   },
+   "mo30": {
+    "mean": -0.231,
+    "lo": -0.497,
+    "hi": 0.083,
+    "n": 96,
+    "shares": 7066,
+    "blocks": 16
+   }
+  }
+ },
+ "inside_fills": {
+  "all inside": {
+   "mo5": {
+    "mean": -0.5,
+    "lo": -0.5,
+    "hi": -0.5,
+    "n": 6,
+    "shares": 400,
+    "blocks": 2
+   },
+   "mo30": {
+    "mean": 0.004,
+    "lo": -0.5,
+    "hi": 1.5,
+    "n": 7,
+    "shares": 401,
+    "blocks": 2
+   }
+  }
+ },
+ "tape_maker": {
+  "all prints (maker side)": {
+   "mo5": {
+    "mean": 0.648,
+    "lo": 0.361,
+    "hi": 0.955,
+    "n": 15722,
+    "shares": 7301097,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.524,
+    "lo": 0.169,
+    "hi": 0.883,
+    "n": 13797,
+    "shares": 6516532,
+    "blocks": 17
+   }
+  },
+  "spread 1": {
+   "mo5": {
+    "mean": 0.452,
+    "lo": 0.328,
+    "hi": 0.604,
+    "n": 13071,
+    "shares": 5522197,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.3,
+    "lo": 0.151,
+    "hi": 0.476,
+    "n": 11480,
+    "shares": 5033337,
+    "blocks": 17
+   }
+  },
+  "spread 2": {
+   "mo5": {
+    "mean": 1.279,
+    "lo": 0.369,
+    "hi": 2.046,
+    "n": 2443,
+    "shares": 1697573,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 1.34,
+    "lo": 0.111,
+    "hi": 2.127,
+    "n": 2124,
+    "shares": 1403639,
+    "blocks": 17
+   }
+  },
+  "spread 3+": {
+   "mo5": {
+    "mean": 0.739,
+    "lo": 0.387,
+    "hi": 1.016,
+    "n": 208,
+    "shares": 81327,
+    "blocks": 11
+   },
+   "mo30": {
+    "mean": 0.254,
+    "lo": 0.176,
+    "hi": 0.375,
+    "n": 193,
+    "shares": 79556,
+    "blocks": 11
+   }
+  },
+  "outside fair with maker >= 2 ticks": {
+   "mo5": {
+    "mean": 0.905,
+    "lo": 0.369,
+    "hi": 1.461,
+    "n": 5558,
+    "shares": 2250170,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 1.128,
+    "lo": 0.473,
+    "hi": 1.733,
+    "n": 4725,
+    "shares": 1860456,
+    "blocks": 17
+   }
+  },
+  "outside fair against maker >= 2 ticks": {
+   "mo5": {
+    "mean": 0.472,
+    "lo": 0.277,
+    "hi": 0.672,
+    "n": 8183,
+    "shares": 3968782,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.15,
+    "lo": -0.064,
+    "hi": 0.38,
+    "n": 7323,
+    "shares": 3659975,
+    "blocks": 17
+   }
+  },
+  "outside within 2 ticks": {
+   "mo5": {
+    "mean": 0.756,
+    "lo": 0.246,
+    "hi": 1.206,
+    "n": 1981,
+    "shares": 1082145,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.766,
+    "lo": 0.084,
+    "hi": 1.242,
+    "n": 1749,
+    "shares": 996101,
+    "blocks": 17
+   }
+  },
+  "outside moved against maker >= 2 ticks / 10 min, SIG lagging": {
+   "mo5": {
+    "mean": -0.371,
+    "lo": -0.503,
+    "hi": -0.211,
+    "n": 176,
+    "shares": 84947,
+    "blocks": 11
+   },
+   "mo30": {
+    "mean": -0.719,
+    "lo": -1.03,
+    "hi": -0.298,
+    "n": 205,
+    "shares": 109769,
+    "blocks": 9
+   }
+  },
+  "outside moved with maker >= 2 ticks / 10 min": {
+   "mo5": {
+    "mean": 0.713,
+    "lo": 0.528,
+    "hi": 0.857,
+    "n": 78,
+    "shares": 23504,
+    "blocks": 8
+   },
+   "mo30": {
+    "mean": 1.212,
+    "lo": 0.682,
+    "hi": 1.8,
+    "n": 61,
+    "shares": 19752,
+    "blocks": 6
+   }
+  },
+  "size <= 50": {
+   "mo5": {
+    "mean": 0.307,
+    "lo": 0.227,
+    "hi": 0.385,
+    "n": 4789,
+    "shares": 85186,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.034,
+    "lo": -0.255,
+    "hi": 0.293,
+    "n": 4133,
+    "shares": 71934,
+    "blocks": 17
+   }
+  },
+  "size 51-999": {
+   "mo5": {
+    "mean": 0.318,
+    "lo": 0.276,
+    "hi": 0.362,
+    "n": 9168,
+    "shares": 2658625,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.146,
+    "lo": 0.073,
+    "hi": 0.222,
+    "n": 8062,
+    "shares": 2344092,
+    "blocks": 17
+   }
+  },
+  "size >= 1000": {
+   "mo5": {
+    "mean": 0.846,
+    "lo": 0.407,
+    "hi": 1.262,
+    "n": 1765,
+    "shares": 4557286,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.748,
+    "lo": 0.21,
+    "hi": 1.232,
+    "n": 1602,
+    "shares": 4100506,
+    "blocks": 17
+   }
+  },
+  "mid < 0.12 or > 0.88": {
+   "mo5": {
+    "mean": 0.486,
+    "lo": 0.332,
+    "hi": 0.612,
+    "n": 3970,
+    "shares": 1545729,
+    "blocks": 17
+   },
+   "mo30": {
+    "mean": 0.206,
+    "lo": 0.04,
+    "hi": 0.381,
+    "n": 3198,
+    "shares": 1289683,
+    "blocks": 16
+   }
+  },
+  "mid 0.12-0.25 or 0.75-0.88": {
+   "mo5": {
+    "mean": 0.927,
+    "lo": 0.358,
+    "hi": 1.492,
+    "n": 5345,
+    "shares": 2693683,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.945,
+    "lo": 0.187,
+    "hi": 1.534,
+    "n": 4742,
+    "shares": 2474123,
+    "blocks": 17
+   }
+  },
+  "mid 0.25-0.75": {
+   "mo5": {
+    "mean": 0.483,
+    "lo": 0.257,
+    "hi": 0.739,
+    "n": 6407,
+    "shares": 3061685,
+    "blocks": 18
+   },
+   "mo30": {
+    "mean": 0.294,
+    "lo": 0.01,
+    "hi": 0.615,
+    "n": 5857,
+    "shares": 2752726,
+    "blocks": 17
+   }
+  }
+ },
+ "n": {
+  "mm_fills": 262,
+  "tape_prints": 16731
+ },
+ "mm_fills_flow": {
+  "into-our-side share >= 0.8 (one-sided flow)": {
+   "mo5": {
+    "mean": -0.395,
+    "lo": -0.782,
+    "hi": -0.073,
+    "n": 115,
+    "shares": 9159,
+    "blocks": 19
+   },
+   "mo30": {
+    "mean": -0.972,
+    "lo": -1.726,
+    "hi": -0.252,
+    "n": 98,
+    "shares": 7008,
+    "blocks": 17
+   }
+  },
+  "share 0.5-0.8": {
+   "mo5": {
+    "mean": 0.327,
+    "lo": -0.106,
+    "hi": 0.45,
+    "n": 21,
+    "shares": 2429,
+    "blocks": 9
+   },
+   "mo30": {
+    "mean": -0.635,
+    "lo": -1.243,
+    "hi": 0.262,
+    "n": 17,
+    "shares": 1323,
+    "blocks": 8
+   }
+  },
+  "share < 0.5": {
+   "mo5": {
+    "mean": 0.75,
+    "lo": 0.495,
+    "hi": 0.941,
+    "n": 67,
+    "shares": 5019,
+    "blocks": 15
+   },
+   "mo30": {
+    "mean": 0.589,
+    "lo": 0.354,
+    "hi": 0.904,
+    "n": 64,
+    "shares": 4911,
+    "blocks": 16
+   }
+  },
+  "no prior flow in 10 min": {
+   "mo5": {
+    "mean": 0.091,
+    "lo": -0.125,
+    "hi": 0.305,
+    "n": 40,
+    "shares": 3169,
+    "blocks": 14
+   },
+   "mo30": {
+    "mean": 0.233,
+    "lo": 0.031,
+    "hi": 0.358,
+    "n": 39,
+    "shares": 3259,
+    "blocks": 14
+   }
+  }
+ }
+}

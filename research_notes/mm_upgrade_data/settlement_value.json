@@ -1,0 +1,126 @@
+{
+ "fills": 227,
+ "shares": 21622,
+ "hours": 18.4,
+ "total_v_fill": -323.1,
+ "total_v_last": -352.2,
+ "total_mo30": -21.0,
+ "rules": {
+  "gap>=2": {
+   "v_fill": {
+    "all": 628.0,
+    "fit": 405.7,
+    "test": 222.3,
+    "market_ci90": [
+     365.5,
+     922.3
+    ],
+    "without_top2": 426.4,
+    "markets_hit": 28,
+    "markets_positive": 28
+   },
+   "v_last": {
+    "all": 628.2,
+    "fit": 409.1,
+    "test": 219.1,
+    "market_ci90": [
+     334.9,
+     973.0
+    ],
+    "without_top2": 396.9,
+    "markets_hit": 28,
+    "markets_positive": 26
+   },
+   "dropped_shares": 12714,
+   "dropped_frac": 0.59,
+   "mo30_given_up": -31.1
+  },
+  "gap>=3": {
+   "v_fill": {
+    "all": 613.5,
+    "fit": 402.8,
+    "test": 210.7,
+    "market_ci90": [
+     350.4,
+     912.0
+    ],
+    "without_top2": 411.9,
+    "markets_hit": 25,
+    "markets_positive": 25
+   },
+   "v_last": {
+    "all": 619.5,
+    "fit": 409.9,
+    "test": 209.6,
+    "market_ci90": [
+     327.6,
+     966.2
+    ],
+    "without_top2": 388.2,
+    "markets_hit": 25,
+    "markets_positive": 23
+   },
+   "dropped_shares": 11285,
+   "dropped_frac": 0.52,
+   "mo30_given_up": -27.4
+  },
+  "gap>=5": {
+   "v_fill": {
+    "all": 582.1,
+    "fit": 390.9,
+    "test": 191.2,
+    "market_ci90": [
+     314.4,
+     885.6
+    ],
+    "without_top2": 380.5,
+    "markets_hit": 20,
+    "markets_positive": 20
+   },
+   "v_last": {
+    "all": 603.6,
+    "fit": 404.2,
+    "test": 199.4,
+    "market_ci90": [
+     309.3,
+     952.4
+    ],
+    "without_top2": 372.3,
+    "markets_hit": 20,
+    "markets_positive": 20
+   },
+   "dropped_shares": 9431,
+   "dropped_frac": 0.44,
+   "mo30_given_up": -24.6
+  },
+  "gap>=8": {
+   "v_fill": {
+    "all": 557.3,
+    "fit": 366.1,
+    "test": 191.2,
+    "market_ci90": [
+     294.4,
+     856.2
+    ],
+    "without_top2": 359.0,
+    "markets_hit": 16,
+    "markets_positive": 16
+   },
+   "v_last": {
+    "all": 572.2,
+    "fit": 372.9,
+    "test": 199.4,
+    "market_ci90": [
+     288.7,
+     905.5
+    ],
+    "without_top2": 350.3,
+    "markets_hit": 16,
+    "markets_positive": 16
+   },
+   "dropped_shares": 8491,
+   "dropped_frac": 0.39,
+   "mo30_given_up": -21.5
+  }
+ }
+}

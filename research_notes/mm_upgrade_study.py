@@ -291,10 +291,13 @@ def fill_table(con):
     for f in con.execute("SELECT f.exchange_id ex, f.side, f.price, ABS(f.quantity) qty, f.filled_at, f.level, f.purpose, "
                          "o.placed_at FROM fills f LEFT JOIN orders o ON o.order_id=f.order_id WHERE f.purpose IN ('mm','inside')"):
         ex = f["ex"]
+        if ex not in q and ex in xv:          # inside-quoter markets are not in our quotes table: use venue_fair SIG polls
+            q[ex] = [(x[0], None, x[3], x[4], 0, 0, x[5], None, None, None) for x in xv[ex] if x[3] is not None and x[4] is not None]
+            qt[ex] = [x[0] for x in q[ex]]
         if ex not in q:
             continue
         ts = S._ts(f["filled_at"])
-        yes_px = f["price"] if f["side"] == "yes" else round(1 - f["price"], 3)
+        yes_px = f["price"]                    # fills are stored in YES terms (orders store the price sent)
         sgn = 1.0 if f["side"] == "yes" else -1.0          # +1 we bought YES
         s0 = _asof(qt[ex], q[ex], ts, 300.0)
         if s0 is None:
@@ -445,3 +448,549 @@ def run_slices():
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "slices":
     os.makedirs(OUT, exist_ok=True)
     run_slices()
+
+
+# ================================================================================================= candidate rules
+CANDIDATES = {   # family -> {name: extra params}; every family also contains the live baseline (empty dict)
+    "xv_pull": {"pull L1 vs outside fair >= 1 tick": dict(xv_pull=1.0), ">= 2 ticks": dict(xv_pull=2.0), ">= 3 ticks": dict(xv_pull=3.0)},
+    "xv_fair": {"reserve += 0.5 x outside gap (cap 2)": dict(xv_w=0.5, xv_cap=2.0), "1.0 x gap (cap 2)": dict(xv_w=1.0, xv_cap=2.0),
+                "1.0 x gap (cap 4)": dict(xv_w=1.0, xv_cap=4.0)},
+    "xv_lead": {"pull side on outside move >= 2 ticks / 10 min": dict(xv_lead=(2.0, 600.0)), ">= 3 ticks / 10 min": dict(xv_lead=(3.0, 600.0)),
+                ">= 2 ticks / 5 min": dict(xv_lead=(2.0, 300.0))},
+    "dmm_queue": {"no L1 on 1-tick spreads": dict(dmm="wide_only"), "no quotes on 1-tick spreads": dict(dmm="wide_all"),
+                  "no L1 behind >= 1500 at touch": dict(dmm=("queue_max", 1500)), "no L1 behind >= 3000": dict(dmm=("queue_max", 3000))},
+    "meanrev": {"meanrev as size skew (k 0.5)": dict(mr_mode="size", mr_size_k=0.5), "size skew (k 1.0)": dict(mr_mode="size", mr_size_k=1.0),
+                "no meanrev": dict(mr_mode="none")},
+    "improve": {"improve on 2+": dict(improve_ge=2), "improve on 4+": dict(improve_ge=4)},
+    "band": {"quote mid 0.20-0.80 only": dict(band=(0.20, 0.80)), "0.25-0.75 only": dict(band=(0.25, 0.75))},
+    "combo": {"xv_pull 1 + xv_lead 2/600": dict(xv_pull=1.0, xv_lead=(2.0, 600.0)), "xv_pull 2 + no meanrev": dict(xv_pull=2.0, mr_mode="none"),
+              "xv_fair 1.0 cap 2 + xv_lead 2/600": dict(xv_w=1.0, xv_cap=2.0, xv_lead=(2.0, 600.0))},
+}
+
+
+def boot_ci(diffs: list, n: int = 4000, seed: int = 3) -> tuple:
+    rng = random.Random(seed)
+    k = len(diffs)
+    ms = sorted(sum(diffs[rng.randrange(k)] for _ in range(k)) / k for _ in range(n))
+    return ms[int(0.05 * n)], ms[int(0.95 * n)]
+
+
+def run_candidates(fit_frac: float = S.FIT_FRAC, fill_models=("bucket", "spread"), t_end: float = None, tag: str = ""):
+    """Walk-forward per family: pick the fit-window best candidate on edge30 (markout P&L at 30 min, the quantity that
+    adverse selection moves) and on the tuner score; report the test-window gain with the tuner's 8-block bootstrap
+    confidence, an hour-block bootstrap 90% CI of the gain, per 1,000 filled shares and per day."""
+    cfg0 = BotConfig.load()
+    con = S.open_ro(os.path.join(ROOT, cfg0.db_path))
+    t0 = con.execute("SELECT MIN(ts) FROM quotes").fetchone()[0]
+    t1 = t_end or con.execute("SELECT MAX(ts) FROM quotes").fetchone()[0]
+    fit_until = t0 + fit_frac * (t1 - t0)
+    cfg, d = cfg_at(t1)
+    md = U.MMDataX(con, t0, t1, fit_until, cfg)
+    res = {"window": {"from": S._iso(t0), "fit_until": S._iso(fit_until), "to": S._iso(t1)}, "calib_spread": md.calib.get("participation_by_spread"),
+           "families": {}}
+    tb = blocks(fit_until, t1, S.TEST_BLOCKS)
+    th = hourly(fit_until, t1)
+    test_days = (t1 - fit_until) / 86400.0
+    for fm in fill_models:
+        base = params_of(d, None, None, fm)
+        sim = lambda extra, w: U.simulate_x(md, w[0], w[1], dict(base, **extra))
+        rb_fit, rb_test = sim({}, (t0, fit_until)), sim({}, (fit_until, t1))
+        res.setdefault("baseline", {})[fm] = {"fit": {k: rb_fit[k] for k in ("edge5", "edge30", "edge180", "score", "fill_qty", "pnl")},
+                                              "test": {k: rb_test[k] for k in ("edge5", "edge30", "edge180", "score", "fill_qty", "pnl")}}
+        for fam, cands in CANDIDATES.items():
+            rows = {}
+            for name, extra in cands.items():
+                rf, rt = sim(extra, (t0, fit_until)), sim(extra, (fit_until, t1))
+                rows[name] = {"fit_edge30": rf["edge30"], "fit_edge180": rf["edge180"], "test_edge180": rt["edge180"], "fit_score": rf["score"], "fit_fill": rf["fill_qty"], "test_edge30": rt["edge30"],
+                              "test_edge5": rt["edge5"], "test_score": rt["score"], "test_fill": rt["fill_qty"], "test_dd": rt["drawdown"]}
+            out = {"candidates": rows}
+            for metric, fk, tk in (("edge30", "fit_edge30", "test_edge30"), ("edge180", "fit_edge180", "test_edge180"), ("score", "fit_score", "test_score")):
+                bfit = rb_fit[metric]
+                best = max(rows, key=lambda n: rows[n][fk])
+                if rows[best][fk] <= bfit + 1e-9:
+                    out[metric] = {"pick": "baseline", "reason": "no candidate beats the live rule on the fit window"}
+                    continue
+                extra = cands[best]
+                gain = rows[best][tk] - rb_test[metric]
+                bd = [sim(extra, b)[metric] - sim({}, b)[metric] for b in tb]
+                hd = [sim(extra, b)[metric] - sim({}, b)[metric] for b in th]
+                lo, hi = boot_ci(hd) if len(hd) >= 3 else (None, None)
+                fills = max(1.0, rb_test["fill_qty"])
+                material = max(10.0, 50.0 * test_days, 0.10 * abs(rb_test[metric]))
+                out[metric] = {"pick": best, "fit_gain": round(rows[best][fk] - bfit, 2), "oos_gain": round(gain, 2),
+                               "conf_8block": S.bootstrap_confidence(bd), "block_diffs": [round(x, 2) for x in bd],
+                               "hour_ci90_per_h": [None if lo is None else round(lo, 3), None if hi is None else round(hi, 3)],
+                               "hour_mean_per_h": round(statistics.mean(hd), 3) if hd else None,
+                               "per_1k_filled_shares": round(1000 * gain / fills, 2), "per_day": round(gain / max(1e-6, test_days), 1),
+                               "test_fill_change": rows[best]["test_fill"] - rb_test["fill_qty"], "material": round(material, 1),
+                               "clears_tuner_bar": bool(gain >= material and S.bootstrap_confidence(bd) >= 0.9)}
+            res["families"].setdefault(fam, {})[fm] = out
+            print(fm, fam, {m: (out[m].get("pick"), out[m].get("oos_gain"), out[m].get("conf_8block"), out[m].get("hour_ci90_per_h")) for m in ("edge30", "edge180", "score")},
+                  flush=True)
+    res["test_days"] = test_days
+    json.dump(res, open(os.path.join(OUT, f"candidates{tag}.json"), "w"), indent=1, default=str)
+    return res
+
+
+def realised_counterfactual():
+    """No fill model: remove the ACTUAL fills a rule would have prevented (state at the fill) and re-sum the realised
+    30-minute markout P&L. Fit/test split as above; hour-block bootstrap CI on the test window."""
+    rows = json.load(open(os.path.join(OUT, "fill_table.json")))["mm"]
+    rows.sort(key=lambda r: r["ts"])
+    t0, t1 = rows[0]["ts"], rows[-1]["ts"]
+    fu = t0 + S.FIT_FRAC * (t1 - t0)
+    rules = {
+        "xv_pull >= 1": lambda r: r["xdev_signed"] is not None and r["xdev_signed"] <= -1,
+        "xv_pull >= 2": lambda r: r["xdev_signed"] is not None and r["xdev_signed"] <= -2,
+        "xv_pull >= 3": lambda r: r["xdev_signed"] is not None and r["xdev_signed"] <= -3,
+        "xv_lead 2/600": lambda r: r["xmove_signed"] is not None and r["xmove_signed"] <= -2,
+        "no L1 behind < 1500 (thin touch)": lambda r: r["level"] == 1 and (r["touch_q"] or 0) < 1500,
+        "no L1 behind >= 1500 (DMM touch)": lambda r: r["level"] == 1 and (r["touch_q"] or 0) >= 1500,
+        "no meanrev-aided fills (mr with us > 0.25)": lambda r: r["mr_signed"] is not None and r["mr_signed"] > 0.25,
+        "band 0.25-0.75": lambda r: not (0.25 <= r["mid"] <= 0.75),
+    }
+    out = {}
+    for name, drop in rules.items():
+        res = {}
+        for h in ("mo5", "mo30"):
+            for part, (a, b) in (("fit", (t0, fu)), ("test", (fu, t1 + 1))):
+                sub = [r for r in rows if a <= r["ts"] < b and r[h] is not None]
+                dropped = [r for r in sub if drop(r)]
+                gain = -sum(r[h] * r["qty"] * S.TICK for r in dropped)      # SUSQies
+                byh = {}
+                for r in dropped:
+                    byh[int(r["ts"] // H)] = byh.get(int(r["ts"] // H), 0.0) - r[h] * r["qty"] * S.TICK
+                hrs = [byh.get(k, 0.0) for k in range(int(a // H), int(b // H) + 1)]
+                lo, hi = boot_ci(hrs) if len(hrs) >= 3 else (None, None)
+                res[f"{part}_{h}"] = {"gain": round(gain, 2), "dropped_fills": len(dropped), "dropped_shares": round(sum(r["qty"] for r in dropped)),
+                                      "kept_shares": round(sum(r["qty"] for r in sub) - sum(r["qty"] for r in dropped)),
+                                      "per_1k_shares": round(1000 * gain / max(1.0, sum(r["qty"] for r in sub)), 2),
+                                      "hour_ci90_per_h": [lo and round(lo, 3), hi and round(hi, 3)], "hours": len(hrs)}
+        out[name] = res
+        print(f"{name:44s}", {k: (v['gain'], v['dropped_fills'], v['per_1k_shares'], v['hour_ci90_per_h']) for k, v in res.items() if k.endswith('mo30')})
+    json.dump(out, open(os.path.join(OUT, "realised_counterfactual.json"), "w"), indent=1)
+    return out
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "candidates":
+    run_candidates()
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "counterfactual":
+    realised_counterfactual()
+
+
+def flow_slice():
+    """Bartlett-O'Hara style toxicity: share of the last 10 minutes' public volume on the market that traded INTO our side
+    (taker sells when we bid), excluding our own fills' prints is not possible from the tape, so they are included."""
+    import bisect as _b
+    cfg0 = BotConfig.load()
+    con = S.open_ro(os.path.join(ROOT, cfg0.db_path))
+    tape = {}
+    for r in con.execute("SELECT exchange_id ex, quantity, executed_at, aggressor FROM tape WHERE aggressor IN ('buy','sell') ORDER BY executed_at"):
+        tape.setdefault(r["ex"], []).append((S._ts(r["executed_at"]), abs(float(r["quantity"])), 1.0 if r["aggressor"] == "buy" else -1.0))
+    rows = json.load(open(os.path.join(OUT, "fill_table.json")))["mm"]
+    for r in rows:
+        tp = tape.get(r["ex"], [])
+        tt = [x[0] for x in tp]
+        i, j = _b.bisect_left(tt, r["ts"] - 600), _b.bisect_left(tt, r["ts"] - 1)
+        win = tp[i:j]
+        tot = sum(x[1] for x in win)
+        # flow into our side: taker sells (-1) hit our bid (sgn +1)
+        into = sum(x[1] for x in win if x[2] == -r["sgn"])
+        r["into_share"] = into / tot if tot > 0 else None
+        r["flow_vol"] = tot
+    conds = {"into-our-side share >= 0.8 (one-sided flow)": lambda r: r["into_share"] is not None and r["into_share"] >= 0.8,
+             "share 0.5-0.8": lambda r: r["into_share"] is not None and 0.5 <= r["into_share"] < 0.8,
+             "share < 0.5": lambda r: r["into_share"] is not None and r["into_share"] < 0.5,
+             "no prior flow in 10 min": lambda r: r["into_share"] is None}
+    res = slice_report(rows, conds)
+    for k, v in res.items():
+        print(f"  {k:50s}", "  ".join(f"{h}: {x['mean']:+.2f} [{x['lo']:+.2f},{x['hi']:+.2f}] n={x['n']}" if x else f"{h}: -" for h, x in v.items()))
+    d = json.load(open(os.path.join(OUT, "slices.json")))
+    d["mm_fills_flow"] = res
+    json.dump(d, open(os.path.join(OUT, "slices.json"), "w"), indent=1)
+
+
+def market_cluster_ci(key="mo30", rule=None, n=4000, seed=9):
+    """Bootstrap over MARKETS (not hours) of the realised markout P&L a rule would remove: checks concentration."""
+    rows = [r for r in json.load(open(os.path.join(OUT, "fill_table.json")))["mm"] if r[key] is not None]
+    by = {}
+    for r in rows:
+        if rule(r):
+            by[r["ex"]] = by.get(r["ex"], 0.0) - r[key] * r["qty"] * S.TICK
+    allex = sorted({r["ex"] for r in rows})
+    vals = [by.get(e, 0.0) for e in allex]
+    rng = random.Random(seed)
+    ms = sorted(sum(vals[rng.randrange(len(vals))] for _ in vals) for _ in range(n))
+    return {"total": round(sum(vals), 2), "markets": len(allex), "markets_hit": len(by), "ci90": [round(ms[int(.05 * n)], 2), round(ms[int(.95 * n)], 2)],
+            "top3": sorted(((round(v, 1), e) for e, v in by.items()), reverse=True)[:3]}
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "flow":
+    flow_slice()
+    for name, fn in {"xv_pull>=1": lambda r: r["xdev_signed"] is not None and r["xdev_signed"] <= -1,
+                     "xv_pull>=2": lambda r: r["xdev_signed"] is not None and r["xdev_signed"] <= -2,
+                     "xv_pull>=3": lambda r: r["xdev_signed"] is not None and r["xdev_signed"] <= -3,
+                     "meanrev-aided": lambda r: r["mr_signed"] is not None and r["mr_signed"] > 0.25,
+                     "thin touch L1": lambda r: r["level"] == 1 and (r["touch_q"] or 0) < 1500}.items():
+        print(name, "mo30", market_cluster_ci("mo30", fn), "mo5", market_cluster_ci("mo5", fn))
+
+
+RULES = {
+    "xv_pull>=2": lambda r: r["xdev_signed"] is not None and r["xdev_signed"] <= -2,
+    "meanrev-aided (mr with us > 0.25)": lambda r: r["mr_signed"] is not None and r["mr_signed"] > 0.25,
+    "thin touch L1 (< 1500)": lambda r: r["level"] == 1 and (r["touch_q"] or 0) < 1500,
+    "one-sided flow into us >= 0.8": lambda r: r.get("into_share") is not None and r["into_share"] >= 0.8,
+    "band 0.25-0.75": lambda r: not (0.25 <= r["mid"] <= 0.75),
+}
+
+
+def robustness():
+    """Per rule: realised P&L removed (30 / 5 min marks), fit vs test halves, market-cluster CI, and leave-out of the two
+    largest-contributing markets."""
+    import bisect as _b
+    flow_rows = json.load(open(os.path.join(OUT, "fill_table.json")))["mm"]
+    # recompute into_share (flow_slice does not persist it)
+    cfg0 = BotConfig.load()
+    con = S.open_ro(os.path.join(ROOT, cfg0.db_path))
+    tape = {}
+    for r in con.execute("SELECT exchange_id ex, quantity, executed_at, aggressor FROM tape WHERE aggressor IN ('buy','sell') ORDER BY executed_at"):
+        tape.setdefault(r["ex"], []).append((S._ts(r["executed_at"]), abs(float(r["quantity"])), 1.0 if r["aggressor"] == "buy" else -1.0))
+    for r in flow_rows:
+        tp = tape.get(r["ex"], []); tt = [x[0] for x in tp]
+        win = tp[_b.bisect_left(tt, r["ts"] - 600):_b.bisect_left(tt, r["ts"] - 1)]
+        tot = sum(x[1] for x in win)
+        r["into_share"] = sum(x[1] for x in win if x[2] == -r["sgn"]) / tot if tot > 0 else None
+    rows = sorted(flow_rows, key=lambda r: r["ts"])
+    t0, t1 = rows[0]["ts"], rows[-1]["ts"]; fu = t0 + S.FIT_FRAC * (t1 - t0)
+    total = {h: -sum(r[h] * r["qty"] * S.TICK for r in rows if r[h] is not None) for h in ("mo5", "mo30")}
+    out = {"baseline_realised": {"mo5_pnl": round(-total["mo5"], 2), "mo30_pnl": round(-total["mo30"], 2),
+                                 "shares": round(sum(r["qty"] for r in rows)), "fills": len(rows), "hours": round((t1 - t0) / H, 1)}}
+    for name, fn in RULES.items():
+        res = {}
+        for h in ("mo5", "mo30"):
+            v = [r for r in rows if r[h] is not None]
+            g = lambda sub: -sum(r[h] * r["qty"] * S.TICK for r in sub if fn(r))
+            by = {}
+            for r in v:
+                if fn(r):
+                    by[r["ex"]] = by.get(r["ex"], 0.0) - r[h] * r["qty"] * S.TICK
+            top2 = [e for _, e in sorted(((x, e) for e, x in by.items()), reverse=True)[:2]]
+            res[h] = {"fit": round(g([r for r in v if r["ts"] < fu]), 2), "test": round(g([r for r in v if r["ts"] >= fu]), 2),
+                      "all": round(g(v), 2), "without_top2_markets": round(g([r for r in v if r["ex"] not in top2]), 2), "top2": top2,
+                      "market_ci90": market_cluster_ci(h, fn)["ci90"] if "into_share" not in name else None,
+                      "dropped_share_of_volume": round(sum(r["qty"] for r in v if fn(r)) / max(1.0, sum(r["qty"] for r in v)), 2)}
+            if "flow" in name:   # market-cluster CI needs the recomputed field
+                vals = {}
+                for r in v:
+                    if fn(r):
+                        vals[r["ex"]] = vals.get(r["ex"], 0.0) - r[h] * r["qty"] * S.TICK
+                allex = sorted({r["ex"] for r in v}); arr = [vals.get(e, 0.0) for e in allex]
+                rng = random.Random(9); ms = sorted(sum(arr[rng.randrange(len(arr))] for _ in arr) for _ in range(4000))
+                res[h]["market_ci90"] = [round(ms[200], 2), round(ms[3800], 2)]
+        out[name] = res
+        print(f"{name:36s}", json.dumps(res))
+    json.dump(out, open(os.path.join(OUT, "robustness.json"), "w"), indent=1)
+    json.dump({"mm": rows}, open(os.path.join(OUT, "fill_table.json"), "w"))
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "robust":
+    robustness()
+
+
+# ================================================================================================= history analysis + figures
+def analyze_history():
+    runs = [r for r in json.load(open(os.path.join(OUT, "tuner_history.json"))) if not r.get("skipped")]
+    out = {"runs": len(runs), "params": {}, "cpu": {}}
+    cpu = [r["cpu"]["tuner_quote_group_est"] for r in runs if "cpu" in r]
+    out["cpu"] = {"quote_group_est_sec": [round(min(cpu), 1), round(statistics.median(cpu), 1), round(max(cpu), 1)],
+                  "load_sec_median": round(statistics.median(r["cpu"]["load"] for r in runs), 2),
+                  "all_study_keys_sec_median": round(statistics.median(r["cpu"]["study_all_keys"] for r in runs), 1)}
+    out["tuner_as_coded_last"] = runs[-1].get("tuner_as_coded")
+    for key in GRIDS:
+        seq = [(r["iso"], r["params"][key]) for r in runs if key in r["params"]]
+        changes, sig_changes, tests = 0, 0, []
+        for (ia, a), (ib, b) in zip(seq, seq[1:]):
+            if str(a["best"]) == str(b["best"]):
+                continue
+            changes += 1
+            fh = b["fit_hourly"]
+            if str(a["best"]) in fh and str(b["best"]) in fh:
+                d = [x - y for x, y in zip(fh[str(b["best"])], fh[str(a["best"])])]
+                lo, hi = boot_ci(d)
+                sig = lo > 0 or hi < 0
+                sig_changes += int(sig)
+                tests.append({"from_run": ia, "to_run": ib, "old_best": a["best"], "new_best": b["best"], "per_h_ci90": [round(lo, 3), round(hi, 3)], "significant": sig})
+        last = seq[-1][1]
+        lit = LITERATURE[key][0]
+        lit_gap = None
+        if lit is not None and str(lit) in last["fit_hourly"] and str(lit) != str(last["current"]):
+            d = [x - y for x, y in zip(last["fit_hourly"][str(lit)], last["fit_hourly"][str(last["current"])])]
+            lo, hi = boot_ci(d)
+            lit_gap = {"fit_score_lit_minus_live": round(last["fit_scores"][str(lit)] - last["fit_scores"][str(last["current"])], 2),
+                       "per_h_ci90": [round(lo, 3), round(hi, 3)], "need": hours_needed(d)}
+        gains = [x["oos_gain"] for _, x in seq]
+        ac = None
+        if len(gains) > 3 and statistics.pstdev(gains) > 0:
+            m = statistics.mean(gains)
+            ac = sum((x - m) * (y - m) for x, y in zip(gains, gains[1:])) / sum((x - m) ** 2 for x in gains)
+        out["params"][key] = {
+            "best_by_run": [(i, x["best"], x["oos_gain"], x["confidence"], round(x["p_argmax"].get(str(x["best"]), 0), 2)) for i, x in seq],
+            "live_last": last["current"], "literature": LITERATURE[key], "changes": changes, "significant_changes": sig_changes,
+            "change_tests": tests, "runs_conf_ge_0.9_and_gain_ge_10": sum(1 for _, x in seq if x["confidence"] >= 0.9 and x["oos_gain"] >= 10),
+            "last_need": last["need"], "last_alt": last["alt"], "lit_gap_last": lit_gap, "oos_gain_lag1_autocorr": None if ac is None else round(ac, 2),
+            "modal_p_argmax_last": max(last["p_argmax"].values())}
+    json.dump(out, open(os.path.join(OUT, "history_analysis.json"), "w"), indent=1, default=str)
+    for k, v in out["params"].items():
+        print(k, "changes", v["changes"], "sig", v["significant_changes"], "need", {a: (round(b, 1) if isinstance(b, float) else b) for a, b in v["last_need"].items()},
+              "lit", v["lit_gap_last"], "ac", v["oos_gain_lag1_autocorr"])
+    print(out["cpu"], out["tuner_as_coded_last"])
+    return out
+
+
+C_BLUE, C_ORANGE, C_AQUA = "#2a78d6", "#eb6834", "#1baf7a"
+INK, INK2, MUTED, GRID, SURF = "#0b0b0b", "#52514e", "#8a8984", "#e4e3df", "#fcfcfb"
+
+
+def _svg(w, h, body, title):
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" font-family="Helvetica, Arial, sans-serif">'
+            f'<rect width="{w}" height="{h}" fill="{SURF}"/><text x="16" y="24" font-size="15" font-weight="600" fill="{INK}">{title}</text>{body}</svg>')
+
+
+def _esc(s):
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def fig_history():
+    runs = [r for r in json.load(open(os.path.join(OUT, "tuner_history.json"))) if not r.get("skipped")]
+    keys = list(GRIDS)
+    pw, ph, cols = 470, 210, 2
+    W, Hh = 16 + cols * pw, 70 + ((len(keys) + 1) // 2) * ph + 30
+    body = []
+    t0, t1 = runs[0]["T"], runs[-1]["T"]
+    body.append(f'<text x="16" y="44" font-size="12" fill="{INK2}">Dot = value the tuner\'s fit window picks at each hourly run (larger = more often the optimum in a block bootstrap); '
+                f'orange = live value; green dashed = literature.</text>')
+    body.append(f'<g transform="translate(16,52)"><circle cx="6" cy="0" r="5" fill="{C_BLUE}"/><text x="16" y="4" font-size="11" fill="{INK2}">fit-best</text>'
+                f'<line x1="80" y1="0" x2="100" y2="0" stroke="{C_ORANGE}" stroke-width="2"/><text x="106" y="4" font-size="11" fill="{INK2}">live</text>'
+                f'<line x1="150" y1="0" x2="170" y2="0" stroke="{C_AQUA}" stroke-width="2" stroke-dasharray="4 3"/><text x="176" y="4" font-size="11" fill="{INK2}">literature</text>'
+                f'<circle cx="250" cy="0" r="5" fill="none" stroke="{INK}" stroke-width="1.5"/><text x="260" y="4" font-size="11" fill="{INK2}">ring: OOS conf &gt;= 0.9</text></g>')
+    for n, key in enumerate(keys):
+        ox, oy = 16 + (n % cols) * pw, 70 + (n // cols) * ph
+        grid = [str(v) for v in GRIDS[key]]
+        cats = list(dict.fromkeys(grid + [str(r["params"][key]["current"]) for r in runs if key in r["params"]]))
+        L, R, T, B = 150, pw - 20, 22, ph - 34
+        yv = lambda c: T + (B - T) * (cats.index(c) + 0.5) / len(cats)
+        xv = lambda t: L + (R - L) * (t - t0) / max(1.0, t1 - t0)
+        body.append(f'<text x="{ox}" y="{oy + 14}" font-size="13" font-weight="600" fill="{INK}">{_esc(key)}</text>')
+        for c in cats:
+            lab = c if len(c) <= 22 else c[:21] + "…"
+            body.append(f'<line x1="{ox + L}" x2="{ox + R}" y1="{oy + yv(c):.1f}" y2="{oy + yv(c):.1f}" stroke="{GRID}" stroke-width="1"/>'
+                        f'<text x="{ox + L - 6}" y="{oy + yv(c) + 4:.1f}" font-size="10" text-anchor="end" fill="{INK2}">{_esc(lab)}</text>')
+        lit = LITERATURE[key][0]
+        if lit is not None and str(lit) in cats:
+            body.append(f'<line x1="{ox + L}" x2="{ox + R}" y1="{oy + yv(str(lit)):.1f}" y2="{oy + yv(str(lit)):.1f}" stroke="{C_AQUA}" stroke-width="2" stroke-dasharray="4 3"/>')
+        pts = [(xv(r["T"]), yv(str(r["params"][key]["current"]))) for r in runs if key in r["params"]]
+        body.append('<polyline fill="none" stroke="%s" stroke-width="2" points="%s"/>' % (C_ORANGE, " ".join(f"{ox + x:.1f},{oy + y:.1f}" for x, y in pts)))
+        for r in runs:
+            p = r["params"].get(key)
+            if not p:
+                continue
+            pr = p["p_argmax"].get(str(p["best"]), 0.0)
+            x, y = ox + xv(r["T"]), oy + yv(str(p["best"]))
+            body.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{3 + 5 * pr:.1f}" fill="{C_BLUE}" fill-opacity="0.85" stroke="{SURF}" stroke-width="2">'
+                        f'<title>{r["iso"]} best {_esc(p["best"])} oos {p["oos_gain"]} conf {p["confidence"]} p_argmax {pr}</title></circle>')
+            if p["confidence"] >= 0.9 and str(p["best"]) != str(p["current"]):
+                body.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{6 + 5 * pr:.1f}" fill="none" stroke="{INK}" stroke-width="1.5"/>')
+        for t in range(int(t0 // (3 * H)) * 3, int(t1 // H) + 1, 3):
+            tt = t * H if t * H >= t0 else None
+            if tt is None or tt > t1:
+                continue
+            body.append(f'<text x="{ox + xv(tt):.1f}" y="{oy + B + 16}" font-size="10" text-anchor="middle" fill="{MUTED}">{S._iso(tt)[11:16]}</text>')
+    body.append(f'<text x="16" y="{Hh - 10}" font-size="10" fill="{MUTED}">Run time, UTC, 22 Oct 2026. Window = first log (21 Oct 22:43) to the run time; fit = older 70 %, test = newest 30 %. Source: research_notes/mm_upgrade_study.py</text>')
+    open(os.path.join(FIG, "mm_tuner_history.svg"), "w").write(_svg(W, Hh, "".join(body), "Self-tuner MM optimum by hourly run (rebuilt)"))
+
+
+def fig_gains():
+    runs = [r for r in json.load(open(os.path.join(OUT, "tuner_history.json"))) if not r.get("skipped")]
+    keys = list(GRIDS)
+    W, Hh = 940, 360
+    L, R, T, B = 70, W - 180, 50, Hh - 50
+    vals = [r["params"][k]["oos_gain"] for r in runs for k in keys if k in r["params"]]
+    lo, hi = min(min(vals), -10.5), max(max(vals), 10.5)
+    t0, t1 = runs[0]["T"], runs[-1]["T"]
+    xv = lambda t: L + (R - L) * (t - t0) / max(1.0, t1 - t0)
+    yv = lambda v: B - (B - T) * (v - lo) / (hi - lo)
+    pal = [C_BLUE, C_ORANGE, C_AQUA, "#eda100", "#e87ba4", "#008300"]
+    body = [f'<line x1="{L}" x2="{R}" y1="{yv(0):.1f}" y2="{yv(0):.1f}" stroke="{INK2}" stroke-width="1"/>']
+    for v in (10, -10):
+        body.append(f'<line x1="{L}" x2="{R}" y1="{yv(v):.1f}" y2="{yv(v):.1f}" stroke="{GRID}" stroke-width="1" stroke-dasharray="3 3"/>'
+                    f'<text x="{L - 6}" y="{yv(v) + 4:.1f}" font-size="10" text-anchor="end" fill="{INK2}">{v:+d}</text>')
+    body.append(f'<text x="{L - 6}" y="{yv(0) + 4:.1f}" font-size="10" text-anchor="end" fill="{INK2}">0</text>')
+    for i, k in enumerate(keys):
+        pts = [(xv(r["T"]), yv(r["params"][k]["oos_gain"])) for r in runs if k in r["params"]]
+        body.append('<polyline fill="none" stroke="%s" stroke-width="2" points="%s"/>' % (pal[i], " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)))
+        for r in runs:
+            p = r["params"].get(k)
+            if p:
+                body.append(f'<circle cx="{xv(r["T"]):.1f}" cy="{yv(p["oos_gain"]):.1f}" r="4" fill="{pal[i]}" stroke="{SURF}" stroke-width="2"><title>{k} {r["iso"]}: '
+                            f'{_esc(p["best"])} oos {p["oos_gain"]} conf {p["confidence"]}</title></circle>')
+        body.append(f'<line x1="{R + 16}" x2="{R + 36}" y1="{T + 18 * i}" y2="{T + 18 * i}" stroke="{pal[i]}" stroke-width="2"/>'
+                    f'<text x="{R + 42}" y="{T + 18 * i + 4}" font-size="11" fill="{INK2}">{k}</text>')
+    for t in range(int(t0 // (3 * H)) * 3, int(t1 // H) + 1, 3):
+        if t0 <= t * H <= t1:
+            body.append(f'<text x="{xv(t * H):.1f}" y="{B + 16}" font-size="10" text-anchor="middle" fill="{MUTED}">{S._iso(t * H)[11:16]}</text>')
+    body.append(f'<text x="16" y="42" font-size="12" fill="{INK2}">Test-window gain of the fit-best value over the live one (tuner score, SUSQies). Dashed = the materiality bar (10).</text>')
+    open(os.path.join(FIG, "mm_tuner_oos_gain.svg"), "w").write(_svg(W, Hh, "".join(body), "Out-of-sample gain of each run's optimum"))
+
+
+def fig_candidates():
+    c = json.load(open(os.path.join(OUT, "candidates.json")))
+    rows = []
+    for fam, v in c["families"].items():
+        o = v["bucket"]["edge30"]
+        if o.get("pick") == "baseline":
+            rows.append((fam, "no fit-window winner", None, None, None, None, None)); continue
+        ci = o["hour_ci90_per_h"]
+        rows.append((fam, o["pick"], 24 * o["hour_mean_per_h"], 24 * ci[0], 24 * ci[1], o["oos_gain"] / c["test_days"], o["conf_8block"]))
+    W, rh = 900, 34
+    Hh = 96 + rh * len(rows) + 44
+    L, R = 330, W - 150
+    xs = [x for r in rows for x in r[2:6] if x is not None] + [0]
+    lo, hi = min(xs) - 5, max(xs) + 5
+    xv = lambda v: L + (R - L) * (v - lo) / (hi - lo)
+    body = [f'<text x="16" y="44" font-size="12" fill="{INK2}">Fit-window winner per family, replayed on the newest 30 % ({c["window"]["fit_until"][11:]} to {c["window"]["to"][11:]} UTC, 22 Oct); fill P&amp;L marked at +30 min.</text>',
+            f'<text x="16" y="60" font-size="12" fill="{INK2}">Dot = mean hourly gain x 24 with its 90 % hour-block CI; ring = whole-test-window gain per day (differs when the gain comes from inventory carried across hours).</text>',
+            f'<line x1="{xv(0):.1f}" x2="{xv(0):.1f}" y1="76" y2="{Hh - 44}" stroke="{INK2}" stroke-width="1"/>']
+    for i, (fam, pick, g, a, b, full, conf) in enumerate(rows):
+        y = 92 + rh * i
+        body.append(f'<text x="{L - 10}" y="{y + 4}" font-size="11" text-anchor="end" fill="{INK}">{_esc(fam)}: {_esc(pick[:34])}</text>')
+        if g is None:
+            continue
+        body.append(f'<line x1="{xv(a):.1f}" x2="{xv(b):.1f}" y1="{y}" y2="{y}" stroke="{C_BLUE}" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5"/>'
+                    f'<circle cx="{xv(full):.1f}" cy="{y}" r="6" fill="none" stroke="{INK2}" stroke-width="1.5"/>'
+                    f'<circle cx="{xv(g):.1f}" cy="{y}" r="5" fill="{C_BLUE}" stroke="{SURF}" stroke-width="2"/>'
+                    f'<text x="{R + 10:.1f}" y="{y + 4}" font-size="10" fill="{INK2}">{g:+.0f} [{a:+.0f}, {b:+.0f}] /day</text>')
+    for v in sorted({round(lo), 0, round(hi)}):
+        body.append(f'<text x="{xv(v):.1f}" y="{Hh - 28}" font-size="10" text-anchor="middle" fill="{MUTED}">{v:+d}</text>')
+    body.append(f'<text x="{(L + R) / 2:.0f}" y="{Hh - 12}" font-size="10" text-anchor="middle" fill="{MUTED}">SUSQies per day vs the live rule (live MM fill P&amp;L at +30 min in this window: {24 * c["baseline"]["bucket"]["test"]["edge30"] / (24 * c["test_days"]):+.0f}/day)</text>')
+    open(os.path.join(FIG, "mm_candidates_oos.svg"), "w").write(_svg(W, Hh, "".join(body), "Candidate MM rules out of sample"))
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "plot":
+    os.makedirs(FIG, exist_ok=True)
+    analyze_history(); fig_history(); fig_gains(); fig_candidates()
+
+
+def settlement_value():
+    """Value of MM fills at the outside-venue fair (Polymarket/Kalshi blend) instead of a 30-minute SIG mark: at the fair
+    at the fill and at the LATEST fair in the logs (closest proxy for settlement value). For gap thresholds G, the value
+    removed by not quoting the side that trades against the outside fair by >= G ticks; fit/test halves, market-cluster CI."""
+    cfg0 = BotConfig.load()
+    con = S.open_ro(os.path.join(ROOT, cfg0.db_path))
+    latest = {r["exchange_id"]: r["fair"] for r in con.execute(
+        "SELECT exchange_id, fair FROM venue_fair v WHERE fair IS NOT NULL AND ts=(SELECT MAX(ts) FROM venue_fair w WHERE w.exchange_id=v.exchange_id)")}
+    rows = sorted((r for r in json.load(open(os.path.join(OUT, "fill_table.json")))["mm"] if r["xdev_signed"] is not None), key=lambda r: r["ts"])
+    for r in rows:
+        r["v_fill"] = r["qty"] * (r["xdev_signed"] + r["conc"]) * S.TICK                         # at the fair at the fill
+        lf = latest.get(r["ex"])
+        r["v_last"] = None if lf is None else r["qty"] * r["sgn"] * (lf - r["px"])                # at the latest fair
+        r["v_sig_last"] = None
+    t0, t1 = rows[0]["ts"], rows[-1]["ts"]; fu = t0 + S.FIT_FRAC * (t1 - t0)
+    out = {"fills": len(rows), "shares": round(sum(r["qty"] for r in rows)), "hours": round((t1 - t0) / H, 1),
+           "total_v_fill": round(sum(r["v_fill"] for r in rows), 1), "total_v_last": round(sum(r["v_last"] or 0 for r in rows), 1),
+           "total_mo30": round(sum((r["mo30"] or 0) * r["qty"] * S.TICK for r in rows), 1), "rules": {}}
+    for G in (2, 3, 5, 8):
+        drop = lambda r: r["xdev_signed"] <= -G
+        res = {}
+        for vk in ("v_fill", "v_last"):
+            g = lambda sub: -sum(r[vk] for r in sub if drop(r) and r[vk] is not None)
+            by = {}
+            for r in rows:
+                if drop(r) and r[vk] is not None:
+                    by[r["ex"]] = by.get(r["ex"], 0.0) - r[vk]
+            allex = sorted({r["ex"] for r in rows}); arr = [by.get(e, 0.0) for e in allex]
+            rng = random.Random(9); ms = sorted(sum(arr[rng.randrange(len(arr))] for _ in arr) for _ in range(4000))
+            top2 = [e for _, e in sorted(((x, e) for e, x in by.items()), reverse=True)[:2]]
+            res[vk] = {"all": round(g(rows), 1), "fit": round(g([r for r in rows if r["ts"] < fu]), 1), "test": round(g([r for r in rows if r["ts"] >= fu]), 1),
+                       "market_ci90": [round(ms[200], 1), round(ms[3800], 1)], "without_top2": round(g([r for r in rows if r["ex"] not in top2]), 1),
+                       "markets_hit": len(by), "markets_positive": sum(1 for x in by.values() if x > 0)}
+        sh = sum(r["qty"] for r in rows if drop(r))
+        res["dropped_shares"] = round(sh); res["dropped_frac"] = round(sh / sum(r["qty"] for r in rows), 2)
+        res["mo30_given_up"] = round(sum((r["mo30"] or 0) * r["qty"] * S.TICK for r in rows if drop(r)), 1)
+        out["rules"][f"gap>={G}"] = res
+        print(G, json.dumps(res))
+    print({k: v for k, v in out.items() if k != "rules"})
+    json.dump(out, open(os.path.join(OUT, "settlement_value.json"), "w"), indent=1)
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "settle":
+    settlement_value()
+
+
+def convergence():
+    """Non-tautological check: after fills that traded against the outside fair by >= G ticks, did the SIG mid move toward
+    the outside fair? Markouts at 30 / 60 min and at the LATEST SIG mid (venue_fair polls), by gap bucket."""
+    cfg0 = BotConfig.load()
+    con = S.open_ro(os.path.join(ROOT, cfg0.db_path))
+    q, qt, xv, xt = _series(con)
+    rows = [r for r in json.load(open(os.path.join(OUT, "fill_table.json")))["mm"] if r["xdev_signed"] is not None]
+    out = {}
+    for lo, hi in ((-99, -5), (-5, -2), (-2, 2), (2, 99), (-99, -3), (3, 99)):
+        sub = [r for r in rows if lo <= r["xdev_signed"] < hi]
+        res = {"fills": len(sub), "shares": round(sum(r["qty"] for r in sub))}
+        for h in (1800, 3 * 3600, 6 * 3600):
+            vals = []
+            for r in sub:
+                s = _after(xt[r["ex"]], xv[r["ex"]], r["ts"] + h, 1800.0)
+                if s is not None and s[5] is not None:
+                    vals.append(dict(ts=r["ts"], ex=r["ex"], qty=r["qty"], m=r["sgn"] * (s[5] - r["px"]) / S.TICK))
+            ci = block_ci(vals, "m") if len(vals) >= 5 else None
+            # market-cluster CI
+            if vals:
+                by = {}
+                for v in vals:
+                    a = by.setdefault(v["ex"], [0.0, 0.0]); a[0] += v["m"] * v["qty"]; a[1] += v["qty"]
+                bl = list(by.values()); rng = random.Random(4); ms = []
+                for _ in range(3000):
+                    smp = [bl[rng.randrange(len(bl))] for _ in bl]; w = sum(b for _, b in smp)
+                    ms.append(sum(a for a, _ in smp) / w)
+                ms.sort()
+                ci = dict(ci or {}, market_ci90=[round(ms[150], 2), round(ms[2850], 2)], markets=len(bl))
+            res[f"+{h // 60}min"] = ci
+        out[f"gap {lo}..{hi}"] = res
+        print(lo, hi, json.dumps(res))
+    json.dump(out, open(os.path.join(OUT, "convergence.json"), "w"), indent=1)
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "converge":
+    convergence()
+
+
+def convergence_halves():
+    """Gap-gate effect at +3 h / +6 h SIG marks, separately on the older 70 % and newest 30 % of fills."""
+    cfg0 = BotConfig.load()
+    con = S.open_ro(os.path.join(ROOT, cfg0.db_path))
+    q, qt, xv, xt = _series(con)
+    rows = sorted((r for r in json.load(open(os.path.join(OUT, "fill_table.json")))["mm"] if r["xdev_signed"] is not None), key=lambda r: r["ts"])
+    t0, t1 = rows[0]["ts"], rows[-1]["ts"]; fu = t0 + S.FIT_FRAC * (t1 - t0)
+    out = {}
+    for G in (2, 3, 5):
+        res = {}
+        for h in (1800, 3 * 3600, 6 * 3600):
+            for part, (a, b) in (("fit", (t0, fu)), ("test", (fu, t1 + 1))):
+                gain = n = sh = 0.0
+                for r in rows:
+                    if not (a <= r["ts"] < b) or r["xdev_signed"] > -G:
+                        continue
+                    s = _after(xt[r["ex"]], xv[r["ex"]], r["ts"] + h, 1800.0)
+                    if s is None or s[5] is None:
+                        continue
+                    gain -= r["qty"] * r["sgn"] * (s[5] - r["px"]); n += 1; sh += r["qty"]
+                res[f"{part}+{h // 60}m"] = {"gain": round(gain, 1), "fills": int(n), "shares": round(sh), "ticks_per_share": round(gain / S.TICK / sh, 2) if sh else None}
+        out[f"gap>={G}"] = res
+        print(G, json.dumps(res))
+    d = json.load(open(os.path.join(OUT, "convergence.json"))); d["halves"] = out
+    json.dump(d, open(os.path.join(OUT, "convergence.json"), "w"), indent=1)
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "converge":
+    convergence_halves()
