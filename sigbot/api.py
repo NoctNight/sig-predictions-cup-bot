@@ -17,6 +17,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import http.client
+import io
+import socket
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -80,6 +83,52 @@ class SuperMarketClient:
         self._reads = TokenBucket(self.reads_per_min)
         self._writes = TokenBucket(self.writes_per_min)
         self._ctx = _ssl_context()
+        self._local = threading.local()     # one kept-alive HTTPS connection per thread (http.client is not thread-safe)
+
+    def _conn(self, host: str, fresh: bool = False) -> http.client.HTTPSConnection:
+        c = getattr(self._local, "conn", None)
+        if fresh or c is None or getattr(self._local, "host", None) != host:
+            if c is not None:
+                try:
+                    c.close()
+                except Exception:
+                    pass
+            c = http.client.HTTPSConnection(host, context=self._ctx, timeout=self.timeout)
+            self._local.conn, self._local.host = c, host
+        return c
+
+    def _send(self, method: str, url: str, data: Optional[bytes], headers: dict) -> bytes:
+        """One HTTP exchange on the thread's kept-alive connection (saves the TCP+TLS handshake, ~50 ms here). A stale
+        connection (closed by the server while idle) is retried once at once on a fresh one; every request is safe to
+        resend (orders carry idempotency keys). HTTP errors are raised as urllib HTTPError so the retry logic is unchanged."""
+        parts = urllib.parse.urlsplit(url)
+        path = parts.path + ("?" + parts.query if parts.query else "")
+        for attempt in (0, 1):
+            c = self._conn(parts.netloc, fresh=attempt > 0)
+            try:
+                c.request(method, path, body=data, headers=dict(headers, Connection="keep-alive"))
+                resp = c.getresponse()
+                raw = resp.read()
+                if resp.getheader("Connection", "").lower() == "close":
+                    self._conn(parts.netloc, fresh=True)
+                if resp.status >= 400:
+                    raise urllib.error.HTTPError(url, resp.status, resp.reason, resp.headers, io.BytesIO(raw))
+                return raw
+            except urllib.error.HTTPError:
+                raise
+            except (http.client.RemoteDisconnected, http.client.BadStatusLine, BrokenPipeError, ConnectionResetError,
+                    http.client.CannotSendRequest, http.client.ResponseNotReady) as e:
+                self._conn(parts.netloc, fresh=True)
+                if attempt == 0:
+                    continue                    # stale kept-alive connection: resend once on a new one
+                raise ConnectionError(str(e))
+            except socket.timeout as e:
+                self._conn(parts.netloc, fresh=True)
+                raise TimeoutError(str(e))
+            except OSError as e:                # DNS failure, connection refused, TLS errors
+                self._conn(parts.netloc, fresh=True)
+                raise urllib.error.URLError(e)
+        raise ConnectionError("unreachable")
 
     # ------------------------------------------------------------------ core
     def _request(self, method: str, path: str, params: Optional[dict] = None, body: Optional[dict] = None) -> Any:
@@ -97,11 +146,9 @@ class SuperMarketClient:
         while True:
             (self._writes if is_write else self._reads).take()
             self.stats["writes" if is_write else "reads"] += 1
-            req = urllib.request.Request(url, data=data, headers=headers, method=method)
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout, context=self._ctx) as resp:
-                    raw = resp.read()
-                    return json.loads(raw) if raw else {}
+                raw = self._send(method, url, data, headers)
+                return json.loads(raw) if raw else {}
             except urllib.error.HTTPError as e:
                 raw = e.read()
                 try:

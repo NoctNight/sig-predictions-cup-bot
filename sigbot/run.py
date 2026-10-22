@@ -103,14 +103,24 @@ class ArbScanner(threading.Thread):
 
     def run(self):
         b = self.bot
+        last = 0.0
         while not b.stop:
-            period = b.cfg.arb_scan_sec_feed if b.feed_ok() else b.cfg.arb_scan_sec
-            offset = b.cfg.arb_scan_offset % period
-            now = time.time()
-            target = math.floor(now / period) * period + offset
-            if target <= now:
-                target += period
-            time.sleep(max(0.0, target - time.time()))
+            if b.feed_ok():
+                # event-driven: run as soon as the feed delivers a batch (the venue publishes 1-s batches), at most every
+                # arb_scan_min_gap seconds and at least every arb_scan_sec_feed seconds
+                b.feed.wait_update(b.cfg.arb_scan_sec_feed)
+                gap = b.cfg.arb_scan_min_gap - (time.time() - last)
+                if gap > 0:
+                    time.sleep(gap)
+            else:
+                period = b.cfg.arb_scan_sec
+                offset = b.cfg.arb_scan_offset % period
+                now = time.time()
+                target = math.floor(now / period) * period + offset
+                if target <= now:
+                    target += period
+                time.sleep(max(0.0, target - time.time()))
+            last = time.time()
             try:
                 self.one_pass()
                 self.recycle_pass()
@@ -402,7 +412,7 @@ class Bot:
     def _warmup_volume(self):
         """Liquidity ranking from 1h candles (one read per exchange, paced by the client). Cached for the run."""
         cache = os.path.join(HERE, "data/volume_cache.json")
-        if os.path.exists(cache) and time.time() - os.path.getmtime(cache) < 6 * 3600:
+        if os.path.exists(cache) and time.time() - os.path.getmtime(cache) < 48 * 3600:   # fallback ranking only (the tracker picks MM markets); a 7-min rebuild at startup is not worth it
             self.volume = json.load(open(cache))
             self.mm.vol = {k: v for k, v in json.load(open(cache + ".vol")).items()} if os.path.exists(cache + ".vol") else {}
             log.info("volume cache loaded (%d exchanges)", len(self.volume))
@@ -758,11 +768,32 @@ class Bot:
         live = bool(getattr(self, "offload_live", False)) and not self.dry_run
         done = 0
         ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        seen = getattr(self, "_offload_seen", {})
+        self._offload_seen = seen
         for r in recs:
             u = r["unwind"]
+            key = (u.get("race") or u.get("exchange_id"), u.get("side"), r["opportunity"].get("race") or r["opportunity"].get("exchange_id"))
+            if (u["kind"] == "arb_set" or not live) and time.time() - seen.get(key, 0) < 600:
+                continue                         # same recommendation within 10 min: do not repeat it every 3 s
+            seen[key] = time.time()
             log.info("OFFLOAD%s: exit %s %s x%d (gives up %.2f%%) to fund %s (%.2f%% net), gain %.2f%%", "" if live else " (report-only)",
                      u.get("race") or u.get("exchange_id"), u.get("side", "set"), u["qty"], 100 * u["forgone_ret"],
                      r["opportunity"].get("race") or r["opportunity"].get("exchange_id"), 100 * r["opportunity"]["ret_net"], 100 * r["gain"])
+            if live and u["kind"] == "arb_set" and r["opportunity"].get("kind") in ("tilt", "direction") and done < 2:
+                rname = u.get("race")
+                race = self.universe.races.get(rname)
+                books = {ex: self.fresh_book(ex, 10.0) for ex in race.exchange_ids} if race else {}
+                if race and all(v is not None for v in books.values()):
+                    q = int(min(u["qty"], math.ceil(r["opportunity"]["capital"] / max(u["proceeds"], 0.05))))
+                    with self.trade_lock:
+                        res = self.arb.unwind_set(rname, books, q, why=f"fund {r['opportunity']['kind']} {r['opportunity'].get('exchange_id')}")
+                    if res:
+                        done += 1
+                        try:
+                            self.cash = float(self.api.account().get("balance") or self.cash)
+                        except ApiError:
+                            pass
+                continue
             if not live or u["kind"] == "arb_set" or done >= 2 or not u.get("order"):
                 continue
             side, px = u["order"]

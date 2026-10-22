@@ -151,7 +151,7 @@ class ArbEngine:
     def budget_left(self, cash: float) -> float:
         total_cap = self.cfg.capital_frac * self.starting_cash
         used = sum(self.committed.values())
-        return max(0.0, min(total_cap - used, cash * 0.95))
+        return max(0.0, min(total_cap - used, cash * 0.95 - self.cfg.cash_reserve))
 
     def race_budget_left(self, race: str) -> float:
         """Capital still allowed in `race`: the per-race ceiling (max_race_frac), tightened by the allocator's edge-based
@@ -176,7 +176,8 @@ class ArbEngine:
         for c in allc:
             if budget <= 0:
                 break
-            if c.ret < self.cfg.min_ret or c.race in self.hostile or self.cooldown.get(c.race, 0) > time.time():
+            floor = self.cfg.min_ret_sell if (c.kind == "sell_set" and self.cfg.min_ret_sell >= 0) else self.cfg.min_ret
+            if c.ret < floor or c.race in self.hostile or self.cooldown.get(c.race, 0) > time.time():
                 continue
             rb = self.race_budget_left(c.race) - race_spent.get(c.race, 0.0)
             cap = min(budget, rb)
@@ -330,6 +331,27 @@ class ArbEngine:
             self.store.record_order(d.get("orderId"), d.get("exchangeId"), None, "yes", "buy", d.get("price"), q, "arb", cycle_id=cycle_id,
                                     status="filled" if not d.get("open") else "open", response=d)
         return {"race": rname, "qty": q, "proceeds": uq["proceeds"], "fund": best_new}
+
+    def unwind_set(self, rname: str, books: dict, qty: int, why: str = "offload") -> Optional[dict]:
+        """Unwind `qty` held sets of `rname` now, all legs or none, at limits from walking the asks."""
+        race = self.u.races[rname]
+        uq = self.unwind_quote(race, books, qty)
+        if not uq or qty < self.cfg.min_set_qty:
+            return None
+        legs = [{"exchangeId": e, "side": "yes", "action": "buy", "quantity": qty, "price": lim, "tournamentId": self.api.tournament_id}
+                for e, lim in uq["limits"].items()]
+        log.info("UNWIND (%s) %s: %d sets at proceeds %.4f/set, gives up %.2f%%", why, rname, qty, uq["proceeds"], 100 * uq["forgone_ret"])
+        if self.dry_run:
+            return {"race": rname, "qty": qty, "dry": True}
+        try:
+            resp = self.api.place_multi_leg(legs, all_or_none=True, key=self.api.new_key("unw"))
+        except ApiError as e:
+            self.store.record_arb(rname, "unwind_set", legs, qty, -uq["forgone_edge"], uq["proceeds"], False, {"error": e.code, "why": why})
+            log.info("unwind %s not filled: %s", rname, e.code)
+            return None
+        self.store.record_arb(rname, "unwind_set", legs, qty, -uq["forgone_edge"], uq["proceeds"], True, resp)
+        self.committed[rname] = max(0.0, self.committed.get(rname, 0.0) - qty * uq["proceeds"])
+        return {"race": rname, "qty": qty, "proceeds": uq["proceeds"]}
 
     def free_unwinds(self, held_books: dict[str, dict[str, dict]], positions: dict[str, float], cycle_id=None) -> list[dict]:
         """Unwind held arb sets whenever the legs' asks sum low enough that unwinding returns at least the settlement

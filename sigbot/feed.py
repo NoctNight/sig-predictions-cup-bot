@@ -175,6 +175,7 @@ class RealtimeFeed(threading.Thread):
         self.store = store  # kept for the caller; the feed never writes to it
         self.log = log or logging.getLogger("sigbot.feed")
         self.lock, self._stop = threading.Lock(), threading.Event()
+        self.updated = threading.Event()   # set whenever a market batch is applied (the arb scanner wakes on it)
         self.keep_samples = False  # probe only: keep one raw markets_batch, message sizes and trade latencies
         self._token, self._token_exp, self._ws, self._ref, self._sessions = {}, 0.0, None, 0, 0
         self._connected_since: Optional[float] = None
@@ -438,7 +439,14 @@ class RealtimeFeed(threading.Thread):
                            "nextExpiryAt": b.get("nextExpiryAt"), "feed_ts": now}
         return ex
 
+    def wait_update(self, timeout: float) -> bool:
+        """Block until a new market batch arrives (or timeout); clears the flag. True if a batch arrived."""
+        got = self.updated.wait(timeout)
+        self.updated.clear()
+        return got
+
     def _market_batch(self, market_id: str, batch: dict, now: float):
+        self.updated.set()
         delivery = batch.get("delivery") or {}
         rev, prev = delivery.get("revision"), delivery.get("previousRevision")
         trades = batch.get("trades") or []

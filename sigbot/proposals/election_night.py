@@ -74,8 +74,8 @@ POLL_CLOSE_ET = {
     "AL": (20.0, 20.0), "CT": (20.0, 20.0), "DE": (20.0, 20.0), "DC": (20.0, 20.0), "IL": (20.0, 20.0), "ME": (20.0, 20.0),
     "MD": (20.0, 20.0), "MA": (20.0, 20.0), "MS": (20.0, 20.0), "MO": (20.0, 20.0), "NJ": (20.0, 20.0), "OK": (20.0, 20.0),
     "PA": (20.0, 20.0), "RI": (20.0, 20.0), "TN": (20.0, 20.0), "MI": (20.0, 21.0), "TX": (20.0, 21.0), "KS": (20.0, 21.0),
-    "SD": (20.0, 21.0), "ND": (20.0, 22.0), "AR": (20.5, 20.5),
-    "AZ": (21.0, 21.0), "CO": (21.0, 21.0), "LA": (21.0, 21.0), "MN": (21.0, 21.0), "NE": (21.0, 22.0), "NM": (21.0, 21.0),
+    "SD": (20.0, 21.0), "ND": (20.0, 21.0), "AR": (20.5, 20.5),
+    "AZ": (21.0, 21.0), "CO": (21.0, 21.0), "LA": (21.0, 21.0), "MN": (21.0, 21.0), "NE": (21.0, 21.0), "NM": (21.0, 21.0),
     "NY": (21.0, 21.0), "WI": (21.0, 21.0), "WY": (21.0, 21.0), "IA": (21.0, 21.0),
     "MT": (22.0, 22.0), "NV": (22.0, 22.0), "UT": (22.0, 22.0), "ID": (22.0, 23.0),
     "CA": (23.0, 23.0), "OR": (23.0, 23.0), "WA": (23.0, 23.0),
@@ -113,11 +113,12 @@ class Config:
     start_et: float = 18.0                 # ET hour on election day: nothing happens before
     flatten_et: float = 35.5               # 11:30 ET on 4 Nov: flatten uncalled positions
     pre_open_sec: float = 0.0              # watch a race this long before its first poll close
-    per_race_cap: float = 10000.0          # notional (price paid) per race, all legs and kinds
-    total_cap: float = 100000.0
+    per_race_cap: float = 5000.0           # notional (price paid) per race, all legs and kinds
+    total_cap: float = 90000.0
     per_cycle_budget: float = 20000.0      # notional per cycle across races
     call_level: float = 0.95
     single_call_level: float = 0.97        # when only one venue quotes the race
+    call_polls: int = 2                    # consecutive polls meeting the price rule (1-minute data hid intra-minute noise)
     max_call_price: float = 0.985
     min_edge_call: float = 0.015           # buy a called leg up to fair - this
     move_pts: float = 0.05
@@ -135,6 +136,9 @@ class Config:
     kill_fresh_sec: float = 600.0
     stale_sec: float = 30.0
     min_qty: int = 50
+    safe_call_frac: float = 0.3            # calls within safe_call_sec of the last poll close (safe seats) may use this share of total_cap
+    safe_call_sec: float = 900.0
+    recycle_gap: float = 0.01              # sell a called hold once the SIG bid is within this of the outside fair (frees cash)
     ttl_sec: float = 15.0
     skip_slow_moves: bool = True           # no move trades in slow-count states (calls there may come after 4 Nov noon)
     paper: bool = True                     # assume our orders fill at the book levels we took
@@ -206,11 +210,13 @@ class ElectionNight:
         self.ext_calls: dict = {}            # race -> (party, ts, source) from on_call()
         self.disagree_n: collections.Counter = collections.Counter()
         self.dis_since: dict = {}
+        self.call_n: dict = {}
         self.paused: set = set()
         self.killed: set = set()             # races whose call reversed
         self.halted_reason: Optional[str] = None
         self.pos: dict = collections.defaultdict(dict)   # race -> {(ex, side): {qty, cost, kind, party, t0, entry_mid, fair0, target}}
         self.log: list = []
+        self.peak = 0.0
 
     # -------------------------------------------------------------- helpers
     def close_ts(self, race: str, which: str) -> Optional[float]:
@@ -257,6 +263,7 @@ class ElectionNight:
                                             "entry_mid": o.get("sig_mid"), "fair0": o.get("fair"), "target": o.get("target")})
         p["qty"] += qty
         p["cost"] += qty * price
+        p["safe"] = p.get("safe") or bool(o.get("safe"))
         if o["kind"] == "call":
             p["kind"] = "call"
 
@@ -311,7 +318,7 @@ class ElectionNight:
         self.halted_reason = ("stale outside data" if stale else
                               f"{in_dis} races in venue disagreement" if in_dis >= cfg.kill_races else None)
         orders: list[dict] = []
-        budget = cfg.per_cycle_budget
+        cands: list[dict] = []
         flatten = ts >= cfg.day0() + cfg.flatten_et * 3600
         for race in self.watched(ts):
             rp = by_race.get(race)
@@ -330,12 +337,25 @@ class ElectionNight:
             orders += self._exits(ts, race, fairs, books, flatten)
             if self.halted_reason or flatten or race in self.paused or race in self.killed:
                 continue
-            o, spent = self._entries(ts, race, fairs, books, budget)
-            orders += o
-            budget -= spent
+            cands += self._entries(ts, race, fairs, books, cfg.per_cycle_budget)[0]
+        # cash is the binding constraint (about 100k against 100+ callable races): fund the best expected return per
+        # SUSQie first; the last order is cut to what is left
+        room = min(cfg.total_cap - self.total_cost(), cfg.per_cycle_budget)
+        safe_room = cfg.safe_call_frac * cfg.total_cap - sum(p["cost"] for ps in self.pos.values() for p in ps.values() if p.get("safe"))
+        for o in sorted(cands, key=lambda o: -(o["fair"] - o["price_avg"]) / o["price_avg"]):
+            lim = min(room, safe_room) if o.get("safe") else room
+            if lim < o["price_avg"] * cfg.min_qty:
+                continue
+            if o["quantity"] * o["price_avg"] > lim:
+                o["quantity"] = int(lim / o["price_avg"])
+            room -= o["quantity"] * o["price_avg"]
+            if o.get("safe"):
+                safe_room -= o["quantity"] * o["price_avg"]
+            orders.append(o)
         if cfg.paper:
             for o in orders:
                 self._book_fill(o, o["quantity"], o["price_avg"])
+        self.peak = max(self.peak, self.total_cost())
         return orders
 
     # --------------------------------------------------------------- calls
@@ -351,7 +371,9 @@ class ElectionNight:
         for party, (f, nv, r) in fairs.items():
             vals = [v for v in (r.get("pm"), r.get("kalshi")) if v is not None]
             lvl = cfg.call_level if nv >= 2 else cfg.single_call_level
-            if vals and min(vals) >= lvl:
+            k = (race, party)
+            self.call_n[k] = self.call_n.get(k, 0) + 1 if (vals and min(vals) >= lvl) else 0
+            if self.call_n[k] >= cfg.call_polls:
                 return party, "price"
         return None
 
@@ -363,7 +385,7 @@ class ElectionNight:
     def _entries(self, ts: float, race: str, fairs: dict, books: dict, budget: float) -> tuple[list, float]:
         cfg = self.cfg
         legs = self.legs[race]
-        room = min(cfg.per_race_cap - self.race_cost(race), cfg.total_cap - self.total_cost(), budget)
+        room = min(cfg.per_race_cap - self.race_cost(race), budget)
         if room <= 0:
             return [], 0.0
         call = self._call_party(ts, race, fairs)
@@ -378,6 +400,10 @@ class ElectionNight:
             fills = take(buy_ladder(books, legs, party), limit, room, cfg.min_qty)
             sm = _mid(books.get(legs[party]))
             out = [self._order(ts, race, party, f, "call", f"called {party} ({self.called[race][2]}), fair {fair:.3f}", fair, sm) for f in fills]
+            last = self.close_ts(race, "last")
+            safe = last is not None and self.called[race][1] - last <= cfg.safe_call_sec
+            for o in out:
+                o["safe"] = safe
             return out, sum(f["cost"] for f in fills)
         # ---- move trades (pre-call)
         first = self.close_ts(race, "first")
@@ -428,10 +454,13 @@ class ElectionNight:
                 vals = [v for v in (fairs.get(party, (0, 0, {}))[2].get("pm"), fairs.get(party, (0, 0, {}))[2].get("kalshi")) if v is not None]
                 low = bool(vals) and max(vals) < cfg.reversal_level
                 p["below"] = p.get("below", 0) + 1 if low else 0
+                bid = _levels(books.get(ex), "bid") if side == "yes" else [(round(1 - q, 4), n) for q, n in _levels(books.get(ex), "ask")]
                 if p["below"] >= cfg.kill_polls:
                     why = f"call reversal: outside {max(vals):.3f} < {cfg.reversal_level}"
                     self.killed.add(race)
                     self.called.pop(race, None)
+                elif cfg.recycle_gap > 0 and bid and fair is not None and bid[0][0] >= fair - cfg.recycle_gap and bid[0][1] >= p["qty"]:
+                    why = f"recycle: sig bid {bid[0][0]:.3f} vs fair {fair:.3f}"
             else:
                 sm = _mid(books.get(legs[party]))
                 if called and called[0] == party:
@@ -553,6 +582,8 @@ SCENARIOS = {
     "kappa1": dict(a=0.45, d=120, T=600, T2=86400, kappa=1.0, refill=True, pull_pts=None),
     "norefill": dict(a=0.45, d=120, T=600, T2=86400, kappa=0.8, refill=False, pull_pts=None),
     "pull":   dict(a=0.9, d=30, T=60, T2=3600, kappa=0.8, refill=False, pull_pts=0.03),
+    "fast_k1": dict(a=0.9, d=30, T=60, T2=3600, kappa=1.0, refill=True, pull_pts=None),
+    "instant": dict(a=1.0, d=0, T=1, T2=3600, kappa=1.0, refill=True, pull_pts=None),   # sanity: no lag, no compression
 }
 
 
@@ -576,6 +607,8 @@ class LaggingVenue:
         return 0.5 + self.kappa * (f - 0.5)
 
     def F(self, tau: float) -> float:
+        if self.d <= 0 and self.a >= 1 and tau >= 0:
+            return 1.0                                     # "instant": the DMM has repriced before we can act
         if tau <= 0:
             return 0.0
         fast = self.a * (1 - math.exp(-(tau - self.d) / self.T)) if tau > self.d else 0.0
@@ -728,13 +761,13 @@ def _at(series: list, t: float) -> Optional[float]:
 
 
 def simulate(scenario: str = "base", cap: float = 10000.0, step: int = 60, offices=None, cfg_over: Optional[dict] = None,
-             data: Optional[dict] = None) -> dict:
+             data: Optional[dict] = None, total: float = 1e12) -> dict:
     """Replay 2024 election night: every `step` seconds the sleeve sees both venues' D/R probabilities and SIG books from a
     LaggingVenue per race, trades, and settles on the actual winner. Positions not called are flattened at 12:00 ET the
     next day (SIG's 2026 close is 4 Nov 12:00 ET)."""
     data = data if data is not None else load_2024()
     sc = SCENARIOS[scenario]
-    cfg = Config(year=2024, per_race_cap=cap, total_cap=1e12, per_cycle_budget=1e12, **(cfg_over or {}))
+    cfg = Config(year=2024, per_race_cap=cap, total_cap=total, per_cycle_budget=1e12, **(cfg_over or {}))
     t_start = cfg.day0() + cfg.start_et * 3600
     t_end = cfg.day0() + 36 * 3600
     races, venues = {}, {}
@@ -784,12 +817,16 @@ def simulate(scenario: str = "base", cap: float = 10000.0, step: int = 60, offic
     for name, (key, d, legs) in races.items():
         c = en.called.get(name)
         cost = sum(o["quantity"] * o["price_avg"] for o in orders_all if o["race"] == name and o["kind"] != "exit")
-        per_race.append(dict(race=name, office=key[0], winner=d["winner"], called=c[0] if c else None,
+        close = poll_close_ts(key[1], 2024, "last")
+        fv = [v for v in (_at(d.get("pm", []), close), _at(d.get("kalshi", []), close)) if v is not None] if close else []
+        pw = (sum(fv) / len(fv) if d["winner"] == "D" else 1 - sum(fv) / len(fv)) if fv else None
+        cat = "no data" if pw is None else ("safe at close" if pw >= 0.95 else ("called later" if c else "not called"))
+        per_race.append(dict(race=name, office=key[0], winner=d["winner"], called=c[0] if c else None, category=cat,
                              called_et=et_str(c[1]) if c else None, cost=round(cost), pnl=round(pnl.get(name, 0.0)),
                              killed=name in en.killed))
     traded = [r for r in per_race if r["cost"] > 0]
     tot = sum(r["pnl"] for r in per_race)
-    return {"scenario": scenario, "params": sc, "cap": cap, "races": len(races), "traded": len(traded),
+    return {"scenario": scenario, "params": sc, "cap": cap, "total": total, "peak_held": round(en.peak), "races": len(races), "traded": len(traded),
             "wrong_calls": sum(1 for r in per_race if r["called"] and r["called"] != r["winner"]),
             "killed": sum(1 for r in per_race if r["killed"]), "pnl": round(tot), "cost": round(sum(r["cost"] for r in per_race)),
             "worst_race": min((r["pnl"] for r in per_race), default=0), "by_kind": {k: {"orders": v["orders"], "cost": round(v["cost"])} for k, v in by_kind.items()},
@@ -875,7 +912,7 @@ def replay(path: str, cap: float, scenario: str = "base") -> dict:
 
 # ------------------------------------------------------------------------------------------------ self-test
 def selftest() -> None:
-    cfg = Config(year=2026, per_race_cap=10000, total_cap=15000)
+    cfg = Config(year=2026, per_race_cap=10000, total_cap=15000, safe_call_frac=1.0)
     legs = {"Georgia Senate": {"D": "g1", "R": "g2"}, "Ohio Senate": {"D": "o1", "R": "o2"}, "Kentucky Senate": {"D": "k1", "R": "k2"}}
     en = ElectionNight(cfg, legs)
     day = cfg.day0()
@@ -901,7 +938,8 @@ def selftest() -> None:
     assert not any(x["race"] == "Georgia Senate" and x["kind"] == "call" for x in o), "call before last poll close"
     # GA called after 19:00: buy D up to fair - 1.5 pts, within the race cap, cheapest instruments first
     t = ga_close + 60
-    o = step(t, {"Georgia Senate": 0.985, "Ohio Senate": 0.6, "Kentucky Senate": 0.6})
+    assert not [x for x in step(t - 30, {"Georgia Senate": 0.985, "Ohio Senate": 0.6, "Kentucky Senate": 0.6}) if x["race"] == "Georgia Senate"]
+    o = step(t, {"Georgia Senate": 0.985, "Ohio Senate": 0.6, "Kentucky Senate": 0.6})   # second poll at call level
     ga = [x for x in o if x["race"] == "Georgia Senate"]
     assert ga and all(x["kind"] == "call" and x["price"] <= 0.985 - 0.015 + 1e-9 for x in ga), ga
     assert en.race_cost("Georgia Senate") <= 10000 + 1e-6 and en.called["Georgia Senate"][0] == "D"
@@ -936,6 +974,14 @@ def selftest() -> None:
     en2 = ElectionNight(cfg, legs)
     assert en2.cycle(ga_close + 100, [{"ts": ga_close, "race": "Georgia Senate", "party": "D", "pm": 0.99, "kalshi": 0.99}], {}) == []
     assert en2.halted_reason == "stale outside data"
+    # safe-seat calls (within 15 min of the close) are limited to safe_call_frac of the total cap
+    en4 = ElectionNight(Config(per_race_cap=10000, total_cap=15000, safe_call_frac=0.3), {"Georgia Senate": legs["Georgia Senate"]})
+    v4 = LaggingVenue(legs["Georgia Senate"], 0.9, day + 18 * 3600, **SCENARIOS["base"])
+    rows4 = [{"ts": ga_close + 60, "race": "Georgia Senate", "party": "D", "pm": 0.985, "kalshi": 0.985},
+             {"ts": ga_close + 60, "race": "Georgia Senate", "party": "R", "pm": 0.015, "kalshi": 0.015}]
+    en4.cycle(ga_close + 60, rows4, v4.books(ga_close + 60))
+    en4.cycle(ga_close + 64, [dict(r, ts=ga_close + 64) for r in rows4], v4.books(ga_close + 64))
+    assert 4000 < en4.race_cost("Georgia Senate") <= 4500 + 1e-6, en4.race_cost("Georgia Senate")
     # ladder helper: NO on the other leg counts as buying the party at 1 - bid
     lad = buy_ladder({"a": {"asks": [{"price": 0.7, "quantity": 10}]}, "b": {"bids": [{"price": 0.32, "quantity": 5}]}}, {"D": "a", "R": "b"}, "D")
     assert lad[0][:4] == (0.68, 5.0, "b", "no") and lad[1][:4] == (0.7, 10.0, "a", "yes")
@@ -956,6 +1002,7 @@ def main(argv=None):
     ap.add_argument("--simulate", action="store_true")
     ap.add_argument("--scenario", default="base")
     ap.add_argument("--cap", type=float, default=10000.0)
+    ap.add_argument("--total", type=float, default=1e12, help="total cap (notional held at once); default unlimited")
     ap.add_argument("--offices", default=None, help="comma list: president,senate,governor,house")
     ap.add_argument("--record", action="store_true")
     ap.add_argument("--minutes", type=float, default=5.0)
@@ -975,12 +1022,12 @@ def main(argv=None):
         offices = a.offices.split(",") if a.offices else None
         data = load_2024()
         for sc in (list(SCENARIOS) if a.scenario == "all" else [a.scenario]):
-            res = simulate(sc, a.cap, offices=offices, data=data)
+            res = simulate(sc, a.cap, offices=offices, data=data, total=a.total)
             if a.json:
                 print(json.dumps(res, indent=1, default=str))
                 continue
             print(f"\n== scenario {sc} {res['params']}  cap {a.cap:,.0f}/race")
-            print(f"races {res['races']}, traded {res['traded']}, cost {res['cost']:,}, P&L {res['pnl']:+,}, worst race {res['worst_race']:+,}, "
+            print(f"peak held {res['peak_held']:,}; races {res['races']}, traded {res['traded']}, cost {res['cost']:,}, P&L {res['pnl']:+,}, worst race {res['worst_race']:+,}, "
                   f"wrong calls {res['wrong_calls']}, call reversals {res['killed']}, by kind {res['by_kind']}, exits {dict(res['exits'])}")
             off = collections.defaultdict(lambda: [0, 0, 0])
             for r in res["per_race"]:
@@ -988,6 +1035,12 @@ def main(argv=None):
                 off[r["office"]][1] += r["cost"]
                 off[r["office"]][2] += r["pnl"]
             print("by office: " + ", ".join(f"{k} {v[0]} traded cost {v[1]:,} pnl {v[2]:+,}" for k, v in off.items()))
+            cat = collections.defaultdict(lambda: [0, 0, 0])
+            for r in res["per_race"]:
+                cat[r["category"]][0] += 1
+                cat[r["category"]][1] += 1 if r["cost"] else 0
+                cat[r["category"]][2] += r["pnl"]
+            print("by state of the race at poll close: " + ", ".join(f"{k} {v[0]} races, {v[1]} traded, pnl {v[2]:+,}" for k, v in cat.items()))
             for r in res["per_race"][:8] + res["per_race"][-5:]:
                 print(f"  {r['race']:22s} winner {r['winner']} called {r['called'] or '-'} at {r['called_et'] or '-':15s} cost {r['cost']:>7,} pnl {r['pnl']:>+7,}")
     if not (a.selftest or a.clock or a.record or a.replay or a.simulate):

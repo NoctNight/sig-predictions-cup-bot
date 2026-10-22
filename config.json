@@ -14,7 +14,9 @@
     "recycle_enabled": true,
     "recycle_min_gain": 0.005,
     "recycle_min_new_ret": 0.02,
-    "min_ret": 0.024
+    "min_ret": 0.024,
+    "min_ret_sell": 0.005,
+    "cash_reserve": 20000.0
   },
   "mm": {
     "capital_frac": 0.33,
@@ -54,7 +56,7 @@
     "calibration_slope": 1.5,
     "tilt_s": 0.1,
     "min_edge": 0.04,
-    "max_markets": 30
+    "max_markets": 80
   },
   "news": {
     "enabled": true,
@@ -115,5 +117,6 @@
     "auto_apply": true,
     "offload_live": true
   },
-  "mm_fast_requotes_per_min": 3
+  "mm_fast_requotes_per_min": 3,
+  "inside_enabled": false
 }

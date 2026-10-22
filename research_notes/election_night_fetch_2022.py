@@ -167,7 +167,7 @@ def main():
             p = t["price"] if t["idx"] == l["idx"] else 1.0 - t["price"]
             path.append((tt, round(p, 6), round(t["usd"], 2)))
             rows.append(["polymarket", l["office"], l["event"], l["slug"], l["party"], l["outcome"], tt, round(p, 6),
-                         round(t["usd"], 2)])
+                         round(t["usd"], 2), l["market_id"], l["question"]])
         pre = [p for tt, p, _ in path if tt <= T_POLLS]
         summary.append(dict(office=l["office"], event=l["event"], slug=l["slug"], market_id=l["market_id"], question=l["question"],
                             party=l["party"], outcome=int(float(l["outcome"])), n_trades=len(path),
@@ -178,7 +178,7 @@ def main():
     rows.sort(key=lambda r: (r[1], r[4 + 0], str(r[5]), r[6]))
     with open(os.path.join(OUT, "paths_2022.csv"), "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["venue", "office", "event", "slug", "party", "outcome", "ts", "price", "usd_size"])
+        w.writerow(["venue", "office", "event", "slug", "party", "outcome", "ts", "price", "usd_size", "market_id", "question"])
         w.writerows(rows)
     _wr(os.path.join(OUT, "legs_2022.json"), summary)
     ns = [s["n_trades"] for s in summary]

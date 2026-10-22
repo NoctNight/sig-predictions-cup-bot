@@ -38,6 +38,8 @@ class ArbConfig:
     # if a new set's return beats the return the old set still has to earn, by at least recycle_min_gain
     recycle_enabled: bool = True
     min_ret: float = 0.0                 # new baskets must return at least this per unit of capital
+    min_ret_sell: float = -1.0           # sell-sets only (riskless to settlement); < 0 means use min_ret
+    cash_reserve: float = 0.0            # arbs never take cash below this (keeps MM, tilt and directional funded)
     recycle_min_gain: float = 0.01       # new return minus forgone return, per unit of capital
     recycle_min_new_ret: float = 0.02    # only recycle into sets returning at least this much
 
@@ -172,6 +174,7 @@ class BotConfig:
     feed_enabled: bool = True            # Supabase Realtime WebSocket feed: versioned books for every tournament market
     feed_max_age_sec: float = 120.0      # a feed book received longer ago than this is refetched over REST (quiet-topic drop guard)
     arb_scan_sec_feed: float = 1.0       # scanner period while the feed is healthy (candidate books come from the feed)
+    arb_scan_min_gap: float = 0.25       # event-driven scanner: minimum seconds between passes
     arb_scan_books_feed: int = 12        # candidate races evaluated per pass from feed books
     feed_stall_sec: float = 240.0        # feed silent this long -> the bot abandons the feed thread and starts a new one
     lag_enabled: bool = True             # follow Polymarket/Kalshi moves before the DMM requotes (proposals/dmm_lag_follow)

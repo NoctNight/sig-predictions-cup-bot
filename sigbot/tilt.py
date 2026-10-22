@@ -98,14 +98,28 @@ class TiltHarvester:
     def cycle(self, prices: dict[str, dict], positions: dict[str, float], open_orders: dict[str, list], exclude: set[str],
               cash: float, cycle_id: int, write_budget: int) -> dict:
         summary = {"candidates": 0, "requoted": [], "orders": 0, "writes": 0}
-        budget_total = min(self.cfg.capital_frac * self.starting_cash, cash * 0.9)
-        # capital already committed by this sleeve = collateral of fills on our own tilt orders (not arb/MM positions)
+        cap_total = self.cfg.capital_frac * self.starting_cash
+        # capital committed by this sleeve = collateral of the tilt positions still HELD: per market, tilt fills net of
+        # exit fills, clamped to the actual position (it used to sum every tilt fill ever, which starved the sleeve once
+        # positions had been exited)
         committed = 0.0
         if self.store is not None:
-            for r in self.store.rows("SELECT side, price, quantity FROM fills WHERE purpose='tilt'"):
-                if r["price"] is None:
+            net, cost, qty = {}, {}, {}
+            for r in self.store.rows("SELECT exchange_id, side, price, quantity, purpose FROM fills WHERE purpose IN ('tilt','exit') AND price IS NOT NULL ORDER BY filled_at"):
+                ex = r["exchange_id"]
+                s = 1.0 if r["side"] == "yes" else -1.0
+                net[ex] = net.get(ex, 0.0) + s * abs(r["quantity"])
+                if r["purpose"] == "tilt":
+                    cost[ex] = cost.get(ex, 0.0) + abs(r["quantity"]) * (r["price"] if r["side"] == "yes" else 1 - r["price"])
+                    qty[ex] = qty.get(ex, 0.0) + abs(r["quantity"])
+            for ex, n in net.items():
+                if ex not in qty or not qty[ex]:
                     continue
-                committed += abs(r["quantity"]) * (r["price"] if r["side"] == "yes" else 1 - r["price"])
+                pos = positions.get(ex, 0.0)
+                held = min(abs(n), abs(pos)) if n * pos > 0 else 0.0
+                committed += held * cost[ex] / qty[ex]
+        self.committed = committed
+        budget_total = cap_total
         # resting tilt orders also count against the budget (worst case = everything fills)
         resting_by_ex: dict[str, float] = {}
         if self.store is not None:
@@ -114,7 +128,10 @@ class TiltHarvester:
                 for o in lst:
                     if o["id"] in mine:
                         resting_by_ex[ex] = resting_by_ex.get(ex, 0.0) + float(o.get("priceLimit") or 0.0) * float(o["quantity"])
-        free = max(0.0, budget_total - committed - sum(resting_by_ex.values()))
+        resting = sum(resting_by_ex.values())
+        free = max(0.0, min(budget_total - committed - resting, cash * 0.9 - resting))
+        self.unfunded = []                    # candidates this cycle could not fund (offload may free arb capital for them)
+        self.unfunded_ts = time.time()
         cands = self.candidates(prices, exclude)
         summary["candidates"] = len(cands)
         ttl = (datetime.now(timezone.utc) + timedelta(seconds=self.cfg.order_ttl_sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -136,8 +153,11 @@ class TiltHarvester:
                 continue
             # requoting this market releases its own resting notional first
             free_here = free + resting_by_ex.get(ex, 0.0)
-            room = min(free_here, per_market_cap - self.invested(ex, positions, mid))
+            want = per_market_cap - self.invested(ex, positions, mid)
+            room = min(free_here, want)
             if room < 5:
+                if want >= 50 and free_here < 5:
+                    self.unfunded.append({"exchange_id": ex, "kind": kind, "edge": edge, "touch": touch, "capital": want})
                 continue
             if writes + 1 + math.ceil((len(to_place) + 3) / 15) > write_budget:
                 break

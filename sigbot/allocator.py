@@ -393,6 +393,15 @@ def build_state_from_bot(bot) -> dict:
             st["opps"].append({"kind": "arb", "race": best["race"], "ret_net": (edge - UNWIND_COST_FRAC * face) / best["cost"],
                                "capital": best["cost"] * best["qty"], "why": "arb budget/cash exhausted", "funded_by": ["arb_set"]})
     st["opps"].extend(_blocked_direction(bot.store.rows, st))
+    tilt = getattr(bot, "tilt", None)
+    if tilt is not None and time.time() - getattr(tilt, "unfunded_ts", 0) < 180:
+        for c in sorted(getattr(tilt, "unfunded", []) or [], key=lambda c: -c["edge"])[:5]:
+            # tilt edge is return on collateral to settlement; charge one tick of exit cost on the collateral
+            coll = (1 - c["touch"]) if c["kind"] == "longshot" else c["touch"]
+            st["opps"].append({"kind": "tilt", "exchange_id": c["exchange_id"], "side": "no" if c["kind"] == "longshot" else "yes",
+                               "ret_net": c["edge"] - 0.005 / max(coll, 0.05), "capital": min(c["capital"], 1000.0),
+                               "why": "tilt budget/cash exhausted", "funded_by": ["arb_set"]})
+    st["arb_races"] = {r["race"] for r in bot.store.rows("SELECT DISTINCT race FROM arb_trades WHERE ok=1 AND kind IN ('sell_set','buy_set')")}
     return st
 
 

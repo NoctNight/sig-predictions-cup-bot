@@ -1,67 +1,67 @@
 {
- "generated_at": "2026-10-22 14:03",
+ "generated_at": "2026-10-22 18:11",
  "window": {
   "from": "2026-10-21 22:42",
-  "to": "2026-10-22 14:03",
-  "split": "2026-10-22 09:27",
-  "hours": 15.4
+  "to": "2026-10-22 18:11",
+  "split": "2026-10-22 12:21",
+  "hours": 19.5
  },
- "cash": 42650,
- "account_value": 100452,
- "pool": 95429,
+ "cash": 10875,
+ "account_value": 100488,
+ "pool": 95464,
  "sleeves": {
   "arb": {
-   "pnl": 1160.4,
-   "cap_days": 529183.21,
-   "evidence": 33,
+   "pnl": 1607.2,
+   "cap_days": 862963.65,
+   "evidence": 62,
    "evidence_kind": "baskets",
-   "sets": 33370,
+   "sets": 59970,
    "unwound_sets": 608,
-   "held_capital": 44168.68,
+   "held_capital": 73292.18,
    "note": "held to 2026-11-03, 1% of face unwind cost",
-   "rate_per_1k_day": 2.19,
-   "rate_alloc": 2.19,
+   "rate_per_1k_day": 1.86,
+   "rate_alloc": 1.86,
    "param": "arb.capital_frac",
    "current_frac": 0.9,
-   "recommended_frac": 0.5956,
+   "recommended_frac": 0.6169,
    "enough_evidence": true,
-   "fit_rate": 2.6,
-   "test_rate": 1.69,
-   "fit_evidence": 14,
-   "test_evidence": 19,
-   "fit_recommended": 0.5956,
-   "test_recommended": 0.8142,
+   "fit_rate": 2.21,
+   "test_rate": 1.34,
+   "fit_evidence": 28,
+   "test_evidence": 34,
+   "fit_recommended": 0.6169,
+   "test_recommended": 0.4912,
    "consistent": true,
-   "apply_step": 0.7478,
+   "apply_step": 0.7585,
    "current_capital": 90000,
-   "recommended_capital": 59560,
+   "recommended_capital": 61690,
    "confirmations": 1,
    "status": "awaiting confirmation (1/2)"
   },
   "mm": {
-   "pnl": -36.37,
-   "cap_days": 7248.83,
-   "evidence": 238,
+   "pnl": -23.41,
+   "cap_days": 10068.59,
+   "evidence": 260,
    "evidence_kind": "fills",
-   "open_exchanges": 46,
-   "max_collateral": 5772.31,
-   "open_collateral": 5772.31,
-   "inventory_cap_days": 973.34,
-   "resting_cap_days": 6275.49,
-   "hedge_pnl_excluded": -4.6,
+   "open_exchanges": 51,
+   "max_collateral": 6474.75,
+   "open_collateral": 6474.75,
+   "inventory_cap_days": 2045.14,
+   "resting_cap_days": 8023.45,
+   "hedge_pnl_excluded": -7.1,
    "note": "inventory marked at latest SIG mid; residual-hedge fills (disabled bug) excluded",
-   "rate_per_1k_day": -5.02,
-   "rate_alloc": -5.02,
+   "rate_per_1k_day": -2.33,
+   "rate_alloc": -2.33,
    "param": "mm.capital_frac",
    "current_frac": 0.33,
    "recommended_frac": 0.066,
    "enough_evidence": true,
-   "fit_rate": -0.05,
-   "test_rate": -10.66,
-   "fit_evidence": 154,
-   "test_evidence": 84,
+   "fit_rate": -4.0,
+   "test_rate": 0.62,
+   "fit_evidence": 196,
+   "test_evidence": 64,
    "fit_recommended": 0.066,
-   "test_recommended": 0.066,
+   "test_recommended": 0.2097,
    "consistent": true,
    "apply_step": 0.198,
    "current_capital": 33000,
@@ -70,61 +70,62 @@
    "status": "awaiting confirmation (1/2)"
   },
   "tilt": {
-   "pnl": 244.9,
-   "cap_days": 3281.79,
-   "evidence": 96,
+   "pnl": 370.65,
+   "cap_days": 4824.93,
+   "evidence": 131,
    "evidence_kind": "fills",
-   "open_exchanges": 16,
-   "max_collateral": 7228.28,
-   "open_collateral": 7228.28,
-   "pnl_mid_mark": 41.3,
+   "open_exchanges": 23,
+   "max_collateral": 10327.19,
+   "open_collateral": 10327.19,
+   "pnl_mid_mark": 69.2,
    "note": "marked at latest outside fair (SIG mid in pnl_mid_mark)",
-   "rate_per_1k_day": 74.63,
-   "rate_mid_per_1k_day": 12.59,
-   "rate_alloc": 12.59,
+   "rate_per_1k_day": 76.82,
+   "rate_mid_per_1k_day": 14.34,
+   "rate_alloc": 14.34,
    "param": "tilt.capital_frac",
    "current_frac": 0.2,
    "recommended_frac": 0.25,
    "enough_evidence": true,
-   "fit_rate": 16.46,
-   "test_rate": -66.13,
-   "fit_evidence": 64,
-   "test_evidence": 32,
+   "fit_rate": 14.38,
+   "test_rate": 13.93,
+   "fit_evidence": 84,
+   "test_evidence": 47,
    "fit_recommended": 0.25,
-   "test_recommended": 0.04,
-   "consistent": false,
-   "apply_step": 0.2,
+   "test_recommended": 0.25,
+   "consistent": true,
+   "apply_step": 0.225,
    "current_capital": 20000,
    "recommended_capital": 25000,
-   "confirmations": 0
+   "confirmations": 1,
+   "status": "awaiting confirmation (1/2)"
   },
   "direction": {
-   "pnl": 248.96,
-   "cap_days": 1473.65,
-   "evidence": 24,
+   "pnl": 341.68,
+   "cap_days": 1976.36,
+   "evidence": 44,
    "evidence_kind": "fills",
-   "open_exchanges": 15,
-   "max_collateral": 2775.24,
-   "open_collateral": 2552.93,
-   "pnl_mid_mark": 43.58,
+   "open_exchanges": 12,
+   "max_collateral": 3639.12,
+   "open_collateral": 3286.76,
+   "pnl_mid_mark": 40.51,
    "note": "marked at latest outside fair (SIG mid in pnl_mid_mark)",
-   "rate_per_1k_day": 168.94,
-   "rate_mid_per_1k_day": 29.57,
-   "rate_alloc": 29.57,
+   "rate_per_1k_day": 172.88,
+   "rate_mid_per_1k_day": 20.5,
+   "rate_alloc": 20.5,
    "param": "direction.overall_cash_frac",
-   "current_frac": 0.08,
-   "recommended_frac": 0.1,
+   "current_frac": 0.17,
+   "recommended_frac": 0.2,
    "enough_evidence": true,
-   "fit_rate": 29.57,
-   "test_rate": 0.0,
-   "fit_evidence": 24,
-   "test_evidence": 0,
-   "fit_recommended": 0.1,
-   "test_recommended": 0.08,
+   "fit_rate": 24.56,
+   "test_rate": -98.22,
+   "fit_evidence": 31,
+   "test_evidence": 15,
+   "fit_recommended": 0.2,
+   "test_recommended": 0.034,
    "consistent": false,
-   "apply_step": 0.08,
-   "current_capital": 3412,
-   "recommended_capital": 4265,
+   "apply_step": 0.17,
+   "current_capital": 1849,
+   "recommended_capital": 2175,
    "confirmations": 0
   }
  },
@@ -136,7 +137,7 @@
    "arb": 0.9,
    "mm": 0.35,
    "tilt": 0.25,
-   "direction": 0.1
+   "direction": 0.2
   },
   "worst_case_max": 75000.0,
   "min_evidence": {
@@ -152,13 +153,13 @@
   "out_of_sample_gate": "a change is applied only if the full window, the older 70% alone and the newest 30% alone (entries in that part, marked now) all recommend moving the same way with enough evidence",
   "frac_base": "starting cash for arb/mm/tilt, current cash for direction"
  },
- "worst_case_current": 58212,
- "worst_case_recommended": 37056,
+ "worst_case_current": 56649,
+ "worst_case_recommended": 35009,
  "changes": [],
  "races": {
   "rank_test": {
-   "common_races": 85,
-   "spearman": 0.703,
+   "common_races": 83,
+   "spearman": 0.57,
    "min": 0.3,
    "passes": true
   },
@@ -166,916 +167,925 @@
   "default_cap": 2000,
   "arb_capital": 90000,
   "caps": {
-   "Arkansas Governor": 469,
-   "VA-01 House race": 981,
-   "Montana Senate": 11970,
-   "VA-07 House race": 906,
-   "Virginia Senate": 0,
-   "Tennessee Governor": 0,
-   "MN-01 House race": 0,
-   "Michigan Governor": 0,
-   "FL-22 House race": 3699,
-   "South Carolina Governor": 32,
-   "Arkansas Senate": 0,
-   "TX-15 House race": 0,
-   "WI-01 House race": 0,
-   "California Governor": 1466,
-   "Alabama Senate": 695,
-   "Delaware Senate": 7471,
-   "Oklahoma Governor": 275,
-   "Wisconsin Governor": 0,
-   "Iowa Senate": 0,
-   "NY-17 House race": 316,
-   "Georgia Governor": 435,
-   "FL-09 House race": 1412,
-   "U.S. House": 1361,
-   "FL-20 House race": 0,
-   "Alaska Senate": 1311,
-   "Oregon Governor": 0,
-   "NJ-07 House race": 0,
-   "FL-16 House race": 184,
-   "Oklahoma Senate": 391,
-   "Illinois Senate": 1749,
-   "PA-01 House race": 179,
-   "KY-04 House race": 0,
-   "Rhode Island Senate": 0,
-   "CO-04 House race": 1275,
-   "North Carolina Senate": 1066,
-   "IA-01 House race": 0,
-   "New Jersey Senate": 0,
-   "Nevada Governor": 0,
-   "PA-10 House race": 0,
-   "Michigan Senate": 700,
-   "Connecticut Governor": 0,
-   "PA-07 House race": 0,
-   "AZ-06 House race": 0,
-   "Pennsylvania Governor": 0,
-   "Alaska Governor": 760,
-   "U.S. Senate": 797,
-   "MT-01 House race": 171,
-   "South Dakota Governor": 624,
-   "Colorado Senate": 734,
-   "VA-05 House race": 781,
-   "Rhode Island Governor": 12974,
-   "Vermont Governor": 241,
-   "NY-13 House race": 0,
-   "Kansas Governor": 0,
-   "New York Governor": 1229,
-   "Hawaii Governor": 444,
-   "MI-07 House race": 0,
-   "Wyoming Governor": 0,
-   "Minnesota Governor": 843,
-   "CA-48 House race": 1707,
-   "Maine Governor": 0,
-   "TX-23 House race": 0,
-   "Nebraska Senate": 7470,
-   "Idaho Governor": 609,
-   "TX-28 House race": 0,
-   "MN-05 House race": 202,
-   "Maryland Governor": 0,
-   "Texas Senate": 0,
-   "NH-01 House race": 0,
-   "MI-10 House race": 0,
-   "Massachusetts Senate": 0,
-   "Florida Senate": 5768,
-   "Illinois Governor": 0,
-   "Florida Governor": 3315,
-   "CA-22 House race": 0,
-   "Maine Senate": 13,
-   "IA-03 House race": 0,
-   "Kansas Senate": 405,
-   "MN-02 House race": 1191,
-   "Texas Governor": 0,
-   "South Carolina Senate": 790,
-   "PA-08 House race": 0,
-   "WI-03 House race": 846,
-   "FL-07 House race": 0,
-   "FL-13 House race": 0,
-   "CO-03 House race": 0,
-   "TN-05 House race": 0,
-   "Massachusetts Governor": 1019,
-   "AZ-01 House race": 0,
-   "Arizona Governor": 1571,
-   "New Hampshire Governor": 0,
-   "Minnesota Senate": 461,
-   "New Mexico Senate": 0,
-   "Wyoming Senate": 0,
-   "New Hampshire Senate": 1661,
+   "VA-05 House race": 269,
    "New Mexico Governor": 0,
-   "CO-08 House race": 1409,
-   "ME-02 House race": 0,
-   "WA-03 House race": 3622,
+   "PA-08 House race": 24,
+   "Connecticut Governor": 0,
+   "Arkansas Governor": 187,
+   "NY-13 House race": 0,
+   "Nevada Governor": 0,
+   "Maine Senate": 0,
+   "Alabama Senate": 1652,
+   "Oklahoma Governor": 129,
+   "New York Governor": 708,
+   "Massachusetts Senate": 0,
+   "U.S. Senate": 260,
+   "Vermont Governor": 65,
+   "South Carolina Senate": 250,
+   "South Carolina Governor": 11,
+   "Georgia Governor": 136,
+   "Wyoming Governor": 0,
+   "MT-01 House race": 47,
+   "CO-04 House race": 438,
+   "Illinois Governor": 0,
+   "SC-01 House race": 0,
+   "MN-01 House race": 0,
+   "Illinois Senate": 2568,
+   "TN-05 House race": 0,
+   "MN-05 House race": 90,
+   "Mississippi Senate": 0,
+   "CA-48 House race": 542,
+   "NH-01 House race": 0,
+   "Wyoming Senate": 0,
+   "Michigan Senate": 238,
+   "New Jersey Senate": 0,
+   "Iowa Senate": 0,
+   "Colorado Senate": 266,
+   "AZ-06 House race": 0,
+   "South Dakota Governor": 200,
+   "Arizona Governor": 577,
+   "Maine Governor": 0,
+   "Florida Governor": 2498,
    "Tennessee Senate": 0,
-   "Mississippi Senate": 0
+   "U.S. House": 438,
+   "PA-10 House race": 0,
+   "MI-10 House race": 1922,
+   "FL-07 House race": 0,
+   "Oklahoma Senate": 167,
+   "VA-07 House race": 301,
+   "WA-03 House race": 4176,
+   "AZ-01 House race": 0,
+   "Oregon Governor": 0,
+   "Maryland Governor": 0,
+   "Rhode Island Senate": 0,
+   "NJ-07 House race": 0,
+   "New Hampshire Governor": 0,
+   "Massachusetts Governor": 677,
+   "MI-07 House race": 0,
+   "Nebraska Senate": 8334,
+   "MN-02 House race": 2391,
+   "Virginia Senate": 0,
+   "VA-01 House race": 406,
+   "WI-01 House race": 2022,
+   "Arkansas Senate": 0,
+   "IA-03 House race": 0,
+   "Alaska Governor": 276,
+   "Rhode Island Governor": 14070,
+   "FL-22 House race": 2790,
+   "FL-13 House race": 0,
+   "Montana Senate": 11726,
+   "Texas Governor": 0,
+   "Minnesota Governor": 279,
+   "WI-03 House race": 2356,
+   "CO-03 House race": 23,
+   "Michigan Governor": 0,
+   "Kansas Governor": 0,
+   "IA-01 House race": 0,
+   "New Mexico Senate": 0,
+   "NY-17 House race": 84,
+   "North Carolina Senate": 366,
+   "TX-23 House race": 0,
+   "New Hampshire Senate": 1319,
+   "PA-07 House race": 0,
+   "FL-16 House race": 110,
+   "Alaska Senate": 2497,
+   "Texas Senate": 2041,
+   "Hawaii Governor": 154,
+   "FL-09 House race": 484,
+   "CO-08 House race": 506,
+   "Delaware Senate": 7958,
+   "FL-20 House race": 0,
+   "PA-01 House race": 48,
+   "TX-28 House race": 0,
+   "TX-15 House race": 0,
+   "Pennsylvania Governor": 0,
+   "Kansas Senate": 679,
+   "California Governor": 1263,
+   "Minnesota Senate": 130,
+   "CA-22 House race": 0,
+   "Wisconsin Governor": 0,
+   "KY-04 House race": 0,
+   "Tennessee Governor": 1835,
+   "ME-02 House race": 0,
+   "Florida Senate": 4688,
+   "Idaho Governor": 2331
   },
   "proposed_caps": {
-   "Arkansas Governor": 469,
-   "VA-01 House race": 981,
-   "Montana Senate": 11970,
-   "VA-07 House race": 906,
-   "Virginia Senate": 0,
-   "Tennessee Governor": 0,
-   "MN-01 House race": 0,
-   "Michigan Governor": 0,
-   "FL-22 House race": 3699,
-   "South Carolina Governor": 32,
-   "Arkansas Senate": 0,
-   "TX-15 House race": 0,
-   "WI-01 House race": 0,
-   "California Governor": 1466,
-   "Alabama Senate": 695,
-   "Delaware Senate": 7471,
-   "Oklahoma Governor": 275,
-   "Wisconsin Governor": 0,
-   "Iowa Senate": 0,
-   "NY-17 House race": 316,
-   "Georgia Governor": 435,
-   "FL-09 House race": 1412,
-   "U.S. House": 1361,
-   "FL-20 House race": 0,
-   "Alaska Senate": 1311,
-   "Oregon Governor": 0,
-   "NJ-07 House race": 0,
-   "FL-16 House race": 184,
-   "Oklahoma Senate": 391,
-   "Illinois Senate": 1749,
-   "PA-01 House race": 179,
-   "KY-04 House race": 0,
-   "Rhode Island Senate": 0,
-   "CO-04 House race": 1275,
-   "North Carolina Senate": 1066,
-   "IA-01 House race": 0,
-   "New Jersey Senate": 0,
-   "Nevada Governor": 0,
-   "PA-10 House race": 0,
-   "Michigan Senate": 700,
-   "Connecticut Governor": 0,
-   "PA-07 House race": 0,
-   "AZ-06 House race": 0,
-   "Pennsylvania Governor": 0,
-   "Alaska Governor": 760,
-   "U.S. Senate": 797,
-   "MT-01 House race": 171,
-   "South Dakota Governor": 624,
-   "Colorado Senate": 734,
-   "VA-05 House race": 781,
-   "Rhode Island Governor": 12974,
-   "Vermont Governor": 241,
-   "NY-13 House race": 0,
-   "Kansas Governor": 0,
-   "New York Governor": 1229,
-   "Hawaii Governor": 444,
-   "MI-07 House race": 0,
-   "Wyoming Governor": 0,
-   "Minnesota Governor": 843,
-   "CA-48 House race": 1707,
-   "Maine Governor": 0,
-   "TX-23 House race": 0,
-   "Nebraska Senate": 7470,
-   "Idaho Governor": 609,
-   "TX-28 House race": 0,
-   "MN-05 House race": 202,
-   "Maryland Governor": 0,
-   "Texas Senate": 0,
-   "NH-01 House race": 0,
-   "MI-10 House race": 0,
-   "Massachusetts Senate": 0,
-   "Florida Senate": 5768,
-   "Illinois Governor": 0,
-   "Florida Governor": 3315,
-   "CA-22 House race": 0,
-   "Maine Senate": 13,
-   "IA-03 House race": 0,
-   "Kansas Senate": 405,
-   "MN-02 House race": 1191,
-   "Texas Governor": 0,
-   "South Carolina Senate": 790,
-   "PA-08 House race": 0,
-   "WI-03 House race": 846,
-   "FL-07 House race": 0,
-   "FL-13 House race": 0,
-   "CO-03 House race": 0,
-   "TN-05 House race": 0,
-   "Massachusetts Governor": 1019,
-   "AZ-01 House race": 0,
-   "Arizona Governor": 1571,
-   "New Hampshire Governor": 0,
-   "Minnesota Senate": 461,
-   "New Mexico Senate": 0,
-   "Wyoming Senate": 0,
-   "New Hampshire Senate": 1661,
+   "VA-05 House race": 269,
    "New Mexico Governor": 0,
-   "CO-08 House race": 1409,
-   "ME-02 House race": 0,
-   "WA-03 House race": 3622,
+   "PA-08 House race": 24,
+   "Connecticut Governor": 0,
+   "Arkansas Governor": 187,
+   "NY-13 House race": 0,
+   "Nevada Governor": 0,
+   "Maine Senate": 0,
+   "Alabama Senate": 1652,
+   "Oklahoma Governor": 129,
+   "New York Governor": 708,
+   "Massachusetts Senate": 0,
+   "U.S. Senate": 260,
+   "Vermont Governor": 65,
+   "South Carolina Senate": 250,
+   "South Carolina Governor": 11,
+   "Georgia Governor": 136,
+   "Wyoming Governor": 0,
+   "MT-01 House race": 47,
+   "CO-04 House race": 438,
+   "Illinois Governor": 0,
+   "SC-01 House race": 0,
+   "MN-01 House race": 0,
+   "Illinois Senate": 2568,
+   "TN-05 House race": 0,
+   "MN-05 House race": 90,
+   "Mississippi Senate": 0,
+   "CA-48 House race": 542,
+   "NH-01 House race": 0,
+   "Wyoming Senate": 0,
+   "Michigan Senate": 238,
+   "New Jersey Senate": 0,
+   "Iowa Senate": 0,
+   "Colorado Senate": 266,
+   "AZ-06 House race": 0,
+   "South Dakota Governor": 200,
+   "Arizona Governor": 577,
+   "Maine Governor": 0,
+   "Florida Governor": 2498,
    "Tennessee Senate": 0,
-   "Mississippi Senate": 0
+   "U.S. House": 438,
+   "PA-10 House race": 0,
+   "MI-10 House race": 1922,
+   "FL-07 House race": 0,
+   "Oklahoma Senate": 167,
+   "VA-07 House race": 301,
+   "WA-03 House race": 4176,
+   "AZ-01 House race": 0,
+   "Oregon Governor": 0,
+   "Maryland Governor": 0,
+   "Rhode Island Senate": 0,
+   "NJ-07 House race": 0,
+   "New Hampshire Governor": 0,
+   "Massachusetts Governor": 677,
+   "MI-07 House race": 0,
+   "Nebraska Senate": 8334,
+   "MN-02 House race": 2391,
+   "Virginia Senate": 0,
+   "VA-01 House race": 406,
+   "WI-01 House race": 2022,
+   "Arkansas Senate": 0,
+   "IA-03 House race": 0,
+   "Alaska Governor": 276,
+   "Rhode Island Governor": 14070,
+   "FL-22 House race": 2790,
+   "FL-13 House race": 0,
+   "Montana Senate": 11726,
+   "Texas Governor": 0,
+   "Minnesota Governor": 279,
+   "WI-03 House race": 2356,
+   "CO-03 House race": 23,
+   "Michigan Governor": 0,
+   "Kansas Governor": 0,
+   "IA-01 House race": 0,
+   "New Mexico Senate": 0,
+   "NY-17 House race": 84,
+   "North Carolina Senate": 366,
+   "TX-23 House race": 0,
+   "New Hampshire Senate": 1319,
+   "PA-07 House race": 0,
+   "FL-16 House race": 110,
+   "Alaska Senate": 2497,
+   "Texas Senate": 2041,
+   "Hawaii Governor": 154,
+   "FL-09 House race": 484,
+   "CO-08 House race": 506,
+   "Delaware Senate": 7958,
+   "FL-20 House race": 0,
+   "PA-01 House race": 48,
+   "TX-28 House race": 0,
+   "TX-15 House race": 0,
+   "Pennsylvania Governor": 0,
+   "Kansas Senate": 679,
+   "California Governor": 1263,
+   "Minnesota Senate": 130,
+   "CA-22 House race": 0,
+   "Wisconsin Governor": 0,
+   "KY-04 House race": 0,
+   "Tennessee Governor": 1835,
+   "ME-02 House race": 0,
+   "Florida Senate": 4688,
+   "Idaho Governor": 2331
   },
   "table": {
    "Rhode Island Governor": {
     "avail": 1.0,
-    "net_ret": 0.0248,
-    "rate_per_1k_day": 2.14,
-    "held_capital": 9998,
-    "cap": 12974
+    "net_ret": 0.0242,
+    "rate_per_1k_day": 2.12,
+    "held_capital": 12927,
+    "cap": 14070
    },
    "Nebraska Senate": {
     "avail": 1.0,
-    "net_ret": 0.0206,
-    "rate_per_1k_day": 1.78,
-    "held_capital": 4998,
-    "cap": 7470
+    "net_ret": 0.0183,
+    "rate_per_1k_day": 1.61,
+    "held_capital": 7469,
+    "cap": 8334
    },
    "Montana Senate": {
     "avail": 1.0,
-    "net_ret": 0.0164,
-    "rate_per_1k_day": 1.42,
-    "held_capital": 10000,
-    "cap": 11970
-   },
-   "CA-48 House race": {
-    "avail": 0.991,
-    "net_ret": 0.0143,
-    "rate_per_1k_day": 1.24,
-    "held_capital": 0,
-    "cap": 1707
-   },
-   "Florida Senate": {
-    "avail": 1.0,
-    "net_ret": 0.0135,
-    "rate_per_1k_day": 1.17,
-    "held_capital": 4146,
-    "cap": 5768
+    "net_ret": 0.016,
+    "rate_per_1k_day": 1.4,
+    "held_capital": 10970,
+    "cap": 11726
    },
    "Arizona Governor": {
     "avail": 1.0,
-    "net_ret": 0.0131,
-    "rate_per_1k_day": 1.13,
+    "net_ret": 0.0122,
+    "rate_per_1k_day": 1.07,
     "held_capital": 0,
-    "cap": 1571
+    "cap": 577
    },
    "Illinois Senate": {
     "avail": 0.998,
-    "net_ret": 0.0126,
-    "rate_per_1k_day": 1.09,
-    "held_capital": 244,
-    "cap": 1749
-   },
-   "California Governor": {
-    "avail": 1.0,
-    "net_ret": 0.0122,
-    "rate_per_1k_day": 1.05,
-    "held_capital": 0,
-    "cap": 1466
-   },
-   "FL-09 House race": {
-    "avail": 1.0,
-    "net_ret": 0.0118,
-    "rate_per_1k_day": 1.02,
-    "held_capital": 0,
-    "cap": 1412
-   },
-   "CO-08 House race": {
-    "avail": 1.0,
-    "net_ret": 0.0117,
-    "rate_per_1k_day": 1.01,
-    "held_capital": 0,
-    "cap": 1409
+    "net_ret": 0.0121,
+    "rate_per_1k_day": 1.06,
+    "held_capital": 2000,
+    "cap": 2568
    },
    "WA-03 House race": {
     "avail": 1.0,
-    "net_ret": 0.0117,
-    "rate_per_1k_day": 1.01,
-    "held_capital": 2216,
-    "cap": 3622
+    "net_ret": 0.0118,
+    "rate_per_1k_day": 1.03,
+    "held_capital": 3621,
+    "cap": 4176
    },
-   "U.S. House": {
+   "CA-48 House race": {
+    "avail": 0.993,
+    "net_ret": 0.0116,
+    "rate_per_1k_day": 1.01,
+    "held_capital": 0,
+    "cap": 542
+   },
+   "Florida Senate": {
+    "avail": 1.0,
+    "net_ret": 0.0115,
+    "rate_per_1k_day": 1.01,
+    "held_capital": 4146,
+    "cap": 4688
+   },
+   "California Governor": {
     "avail": 1.0,
     "net_ret": 0.0113,
-    "rate_per_1k_day": 0.98,
-    "held_capital": 0,
-    "cap": 1361
-   },
-   "FL-22 House race": {
-    "avail": 1.0,
-    "net_ret": 0.0112,
-    "rate_per_1k_day": 0.97,
-    "held_capital": 2352,
-    "cap": 3699
+    "rate_per_1k_day": 0.99,
+    "held_capital": 727,
+    "cap": 1263
    },
    "VA-07 House race": {
-    "avail": 0.685,
+    "avail": 0.579,
     "net_ret": 0.011,
-    "rate_per_1k_day": 0.95,
+    "rate_per_1k_day": 0.97,
     "held_capital": 0,
-    "cap": 906
+    "cap": 301
    },
-   "Florida Governor": {
+   "CO-08 House race": {
     "avail": 1.0,
-    "net_ret": 0.011,
-    "rate_per_1k_day": 0.95,
-    "held_capital": 1999,
-    "cap": 3315
-   },
-   "Alaska Senate": {
-    "avail": 1.0,
-    "net_ret": 0.0109,
+    "net_ret": 0.0107,
     "rate_per_1k_day": 0.94,
     "held_capital": 0,
-    "cap": 1311
-   },
-   "CO-04 House race": {
-    "avail": 1.0,
-    "net_ret": 0.0106,
-    "rate_per_1k_day": 0.92,
-    "held_capital": 0,
-    "cap": 1275
+    "cap": 506
    },
    "Delaware Senate": {
     "avail": 1.0,
+    "net_ret": 0.0107,
+    "rate_per_1k_day": 0.94,
+    "held_capital": 7454,
+    "cap": 7958
+   },
+   "Florida Governor": {
+    "avail": 1.0,
     "net_ret": 0.0106,
+    "rate_per_1k_day": 0.93,
+    "held_capital": 1999,
+    "cap": 2498
+   },
+   "Alaska Senate": {
+    "avail": 1.0,
+    "net_ret": 0.0105,
     "rate_per_1k_day": 0.92,
-    "held_capital": 6200,
-    "cap": 7471
+    "held_capital": 1999,
+    "cap": 2497
+   },
+   "FL-09 House race": {
+    "avail": 1.0,
+    "net_ret": 0.0103,
+    "rate_per_1k_day": 0.9,
+    "held_capital": 0,
+    "cap": 484
    },
    "New York Governor": {
     "avail": 1.0,
-    "net_ret": 0.0102,
-    "rate_per_1k_day": 0.88,
-    "held_capital": 0,
-    "cap": 1229
+    "net_ret": 0.0097,
+    "rate_per_1k_day": 0.85,
+    "held_capital": 251,
+    "cap": 708
    },
-   "Minnesota Governor": {
-    "avail": 0.749,
-    "net_ret": 0.0094,
+   "FL-22 House race": {
+    "avail": 1.0,
+    "net_ret": 0.0093,
+    "rate_per_1k_day": 0.81,
+    "held_capital": 2352,
+    "cap": 2790
+   },
+   "U.S. House": {
+    "avail": 1.0,
+    "net_ret": 0.0093,
     "rate_per_1k_day": 0.81,
     "held_capital": 0,
-    "cap": 843
+    "cap": 438
    },
-   "North Carolina Senate": {
+   "CO-04 House race": {
     "avail": 1.0,
-    "net_ret": 0.0089,
-    "rate_per_1k_day": 0.77,
+    "net_ret": 0.0093,
+    "rate_per_1k_day": 0.81,
     "held_capital": 0,
-    "cap": 1066
+    "cap": 438
    },
-   "VA-05 House race": {
-    "avail": 0.848,
-    "net_ret": 0.0077,
-    "rate_per_1k_day": 0.66,
-    "held_capital": 0,
-    "cap": 781
+   "WI-01 House race": {
+    "avail": 0.052,
+    "net_ret": 0.0088,
+    "rate_per_1k_day": 0.77,
+    "held_capital": 2000,
+    "cap": 2022
    },
    "MN-02 House race": {
     "avail": 1.0,
-    "net_ret": 0.0075,
-    "rate_per_1k_day": 0.65,
-    "held_capital": 285,
-    "cap": 1191
+    "net_ret": 0.0083,
+    "rate_per_1k_day": 0.73,
+    "held_capital": 2000,
+    "cap": 2391
    },
-   "VA-01 House race": {
+   "North Carolina Senate": {
     "avail": 1.0,
-    "net_ret": 0.0071,
-    "rate_per_1k_day": 0.61,
-    "held_capital": 127,
-    "cap": 981
+    "net_ret": 0.0078,
+    "rate_per_1k_day": 0.68,
+    "held_capital": 0,
+    "cap": 366
    },
    "WI-03 House race": {
     "avail": 1.0,
+    "net_ret": 0.0075,
+    "rate_per_1k_day": 0.66,
+    "held_capital": 2000,
+    "cap": 2356
+   },
+   "Minnesota Governor": {
+    "avail": 0.788,
+    "net_ret": 0.0075,
+    "rate_per_1k_day": 0.66,
+    "held_capital": 0,
+    "cap": 279
+   },
+   "VA-05 House race": {
+    "avail": 0.785,
+    "net_ret": 0.0072,
+    "rate_per_1k_day": 0.64,
+    "held_capital": 0,
+    "cap": 269
+   },
+   "Idaho Governor": {
+    "avail": 1.0,
     "net_ret": 0.007,
     "rate_per_1k_day": 0.61,
-    "held_capital": 0,
-    "cap": 846
+    "held_capital": 2000,
+    "cap": 2331
    },
    "U.S. Senate": {
-    "avail": 0.942,
-    "net_ret": 0.007,
-    "rate_per_1k_day": 0.61,
+    "avail": 0.816,
+    "net_ret": 0.0068,
+    "rate_per_1k_day": 0.59,
     "held_capital": 0,
-    "cap": 797
+    "cap": 260
    },
-   "South Carolina Senate": {
-    "avail": 1.0,
-    "net_ret": 0.0066,
+   "FL-16 House race": {
+    "avail": 0.362,
+    "net_ret": 0.0065,
     "rate_per_1k_day": 0.57,
     "held_capital": 0,
-    "cap": 790
+    "cap": 110
+   },
+   "VA-01 House race": {
+    "avail": 1.0,
+    "net_ret": 0.0059,
+    "rate_per_1k_day": 0.52,
+    "held_capital": 127,
+    "cap": 406
    },
    "Alaska Governor": {
     "avail": 1.0,
-    "net_ret": 0.0063,
-    "rate_per_1k_day": 0.55,
-    "held_capital": 0,
-    "cap": 760
-   },
-   "FL-16 House race": {
-    "avail": 0.244,
-    "net_ret": 0.0063,
-    "rate_per_1k_day": 0.54,
-    "held_capital": 0,
-    "cap": 184
-   },
-   "Colorado Senate": {
-    "avail": 1.0,
-    "net_ret": 0.0061,
-    "rate_per_1k_day": 0.53,
-    "held_capital": 0,
-    "cap": 734
-   },
-   "Hawaii Governor": {
-    "avail": 0.632,
     "net_ret": 0.0059,
     "rate_per_1k_day": 0.51,
     "held_capital": 0,
-    "cap": 444
-   },
-   "Michigan Senate": {
-    "avail": 1.0,
-    "net_ret": 0.0058,
-    "rate_per_1k_day": 0.5,
-    "held_capital": 0,
-    "cap": 700
+    "cap": 276
    },
    "Alabama Senate": {
     "avail": 1.0,
     "net_ret": 0.0058,
-    "rate_per_1k_day": 0.5,
-    "held_capital": 0,
-    "cap": 695
+    "rate_per_1k_day": 0.51,
+    "held_capital": 1377,
+    "cap": 1652
    },
-   "South Dakota Governor": {
-    "avail": 1.0,
-    "net_ret": 0.0052,
-    "rate_per_1k_day": 0.45,
+   "Colorado Senate": {
+    "avail": 0.998,
+    "net_ret": 0.0056,
+    "rate_per_1k_day": 0.49,
     "held_capital": 0,
-    "cap": 624
+    "cap": 266
    },
-   "Idaho Governor": {
+   "Hawaii Governor": {
+    "avail": 0.602,
+    "net_ret": 0.0054,
+    "rate_per_1k_day": 0.48,
+    "held_capital": 0,
+    "cap": 154
+   },
+   "South Carolina Senate": {
     "avail": 1.0,
-    "net_ret": 0.0051,
+    "net_ret": 0.0053,
+    "rate_per_1k_day": 0.46,
+    "held_capital": 0,
+    "cap": 250
+   },
+   "Michigan Senate": {
+    "avail": 1.0,
+    "net_ret": 0.005,
     "rate_per_1k_day": 0.44,
     "held_capital": 0,
-    "cap": 609
+    "cap": 238
+   },
+   "South Dakota Governor": {
+    "avail": 0.986,
+    "net_ret": 0.0043,
+    "rate_per_1k_day": 0.38,
+    "held_capital": 0,
+    "cap": 200
+   },
+   "Tennessee Governor": {
+    "avail": 0.11,
+    "net_ret": 0.0043,
+    "rate_per_1k_day": 0.37,
+    "held_capital": 1813,
+    "cap": 1835
    },
    "New Hampshire Senate": {
     "avail": 1.0,
-    "net_ret": 0.0045,
-    "rate_per_1k_day": 0.39,
+    "net_ret": 0.0042,
+    "rate_per_1k_day": 0.37,
     "held_capital": 1119,
-    "cap": 1661
+    "cap": 1319
    },
    "Massachusetts Governor": {
     "avail": 1.0,
-    "net_ret": 0.0044,
-    "rate_per_1k_day": 0.38,
+    "net_ret": 0.0041,
+    "rate_per_1k_day": 0.36,
     "held_capital": 485,
-    "cap": 1019
+    "cap": 677
    },
    "Arkansas Governor": {
-    "avail": 0.97,
-    "net_ret": 0.004,
-    "rate_per_1k_day": 0.35,
+    "avail": 0.975,
+    "net_ret": 0.0041,
+    "rate_per_1k_day": 0.36,
     "held_capital": 0,
-    "cap": 469
-   },
-   "Minnesota Senate": {
-    "avail": 1.0,
-    "net_ret": 0.0038,
-    "rate_per_1k_day": 0.33,
-    "held_capital": 0,
-    "cap": 461
-   },
-   "Georgia Governor": {
-    "avail": 0.951,
-    "net_ret": 0.0038,
-    "rate_per_1k_day": 0.33,
-    "held_capital": 0,
-    "cap": 435
-   },
-   "MT-01 House race": {
-    "avail": 0.403,
-    "net_ret": 0.0035,
-    "rate_per_1k_day": 0.31,
-    "held_capital": 0,
-    "cap": 171
-   },
-   "Kansas Senate": {
-    "avail": 1.0,
-    "net_ret": 0.0034,
-    "rate_per_1k_day": 0.29,
-    "held_capital": 0,
-    "cap": 405
+    "cap": 187
    },
    "Oklahoma Senate": {
     "avail": 1.0,
-    "net_ret": 0.0033,
-    "rate_per_1k_day": 0.28,
+    "net_ret": 0.0035,
+    "rate_per_1k_day": 0.31,
     "held_capital": 0,
-    "cap": 391
+    "cap": 167
    },
-   "NY-17 House race": {
-    "avail": 0.972,
-    "net_ret": 0.0027,
-    "rate_per_1k_day": 0.23,
+   "Kansas Senate": {
+    "avail": 1.0,
+    "net_ret": 0.003,
+    "rate_per_1k_day": 0.27,
+    "held_capital": 536,
+    "cap": 679
+   },
+   "Georgia Governor": {
+    "avail": 0.958,
+    "net_ret": 0.003,
+    "rate_per_1k_day": 0.26,
     "held_capital": 0,
-    "cap": 316
+    "cap": 136
+   },
+   "Minnesota Senate": {
+    "avail": 1.0,
+    "net_ret": 0.0028,
+    "rate_per_1k_day": 0.24,
+    "held_capital": 0,
+    "cap": 130
    },
    "Oklahoma Governor": {
     "avail": 1.0,
-    "net_ret": 0.0023,
-    "rate_per_1k_day": 0.2,
+    "net_ret": 0.0027,
+    "rate_per_1k_day": 0.24,
     "held_capital": 0,
-    "cap": 275
+    "cap": 129
    },
-   "Vermont Governor": {
-    "avail": 1.0,
+   "Texas Senate": {
+    "avail": 0.349,
+    "net_ret": 0.0025,
+    "rate_per_1k_day": 0.22,
+    "held_capital": 1999,
+    "cap": 2041
+   },
+   "MT-01 House race": {
+    "avail": 0.492,
     "net_ret": 0.002,
-    "rate_per_1k_day": 0.17,
+    "rate_per_1k_day": 0.18,
     "held_capital": 0,
-    "cap": 241
+    "cap": 47
    },
    "MN-05 House race": {
-    "avail": 0.996,
-    "net_ret": 0.0017,
-    "rate_per_1k_day": 0.15,
+    "avail": 0.949,
+    "net_ret": 0.002,
+    "rate_per_1k_day": 0.18,
     "held_capital": 0,
-    "cap": 202
+    "cap": 90
    },
-   "PA-01 House race": {
-    "avail": 0.989,
+   "NY-17 House race": {
+    "avail": 0.929,
+    "net_ret": 0.0019,
+    "rate_per_1k_day": 0.17,
+    "held_capital": 0,
+    "cap": 84
+   },
+   "Vermont Governor": {
+    "avail": 0.94,
     "net_ret": 0.0015,
     "rate_per_1k_day": 0.13,
     "held_capital": 0,
-    "cap": 179
+    "cap": 65
+   },
+   "PA-01 House race": {
+    "avail": 0.991,
+    "net_ret": 0.001,
+    "rate_per_1k_day": 0.09,
+    "held_capital": 0,
+    "cap": 48
    },
    "South Carolina Governor": {
-    "avail": 0.381,
+    "avail": 0.322,
     "net_ret": 0.0007,
     "rate_per_1k_day": 0.06,
     "held_capital": 0,
-    "cap": 32
+    "cap": 11
+   },
+   "PA-08 House race": {
+    "avail": 0.995,
+    "net_ret": 0.0005,
+    "rate_per_1k_day": 0.04,
+    "held_capital": 0,
+    "cap": 24
+   },
+   "CO-03 House race": {
+    "avail": 1.0,
+    "net_ret": 0.0005,
+    "rate_per_1k_day": 0.04,
+    "held_capital": 0,
+    "cap": 23
    },
    "Maine Senate": {
-    "avail": 0.927,
-    "net_ret": 0.0001,
-    "rate_per_1k_day": 0.01,
-    "held_capital": 0,
-    "cap": 13
-   },
-   "New Hampshire Governor": {
-    "avail": 0.651,
-    "net_ret": -0.0002,
-    "rate_per_1k_day": -0.01,
+    "avail": 0.805,
+    "net_ret": -0.0,
+    "rate_per_1k_day": -0.0,
     "held_capital": 0,
     "cap": 0
    },
-   "Iowa Senate": {
-    "avail": 0.994,
+   "CA-22 House race": {
+    "avail": 0.975,
     "net_ret": -0.0002,
     "rate_per_1k_day": -0.02,
     "held_capital": 0,
     "cap": 0
    },
-   "CA-22 House race": {
-    "avail": 0.97,
-    "net_ret": -0.0003,
-    "rate_per_1k_day": -0.03,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "CO-03 House race": {
-    "avail": 1.0,
-    "net_ret": -0.0004,
-    "rate_per_1k_day": -0.03,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "PA-08 House race": {
-    "avail": 0.994,
-    "net_ret": -0.0004,
-    "rate_per_1k_day": -0.04,
+   "New Hampshire Governor": {
+    "avail": 0.673,
+    "net_ret": -0.0002,
+    "rate_per_1k_day": -0.02,
     "held_capital": 0,
     "cap": 0
    },
    "Maine Governor": {
-    "avail": 0.959,
-    "net_ret": -0.0007,
-    "rate_per_1k_day": -0.06,
+    "avail": 0.966,
+    "net_ret": -0.0006,
+    "rate_per_1k_day": -0.05,
     "held_capital": 0,
     "cap": 0
    },
    "New Mexico Governor": {
-    "avail": 0.991,
-    "net_ret": -0.0007,
-    "rate_per_1k_day": -0.06,
+    "avail": 0.993,
+    "net_ret": -0.0008,
+    "rate_per_1k_day": -0.07,
     "held_capital": 0,
     "cap": 0
+   },
+   "Iowa Senate": {
+    "avail": 0.984,
+    "net_ret": -0.0009,
+    "rate_per_1k_day": -0.08,
+    "held_capital": 0,
+    "cap": 0
+   },
+   "MI-10 House race": {
+    "avail": 0.219,
+    "net_ret": -0.001,
+    "rate_per_1k_day": -0.09,
+    "held_capital": 1922,
+    "cap": 1922
    },
    "TX-28 House race": {
-    "avail": 0.141,
+    "avail": 0.119,
     "net_ret": -0.0013,
     "rate_per_1k_day": -0.11,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "New Jersey Senate": {
-    "avail": 0.589,
-    "net_ret": -0.0013,
-    "rate_per_1k_day": -0.11,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "NY-13 House race": {
-    "avail": 0.319,
-    "net_ret": -0.0017,
-    "rate_per_1k_day": -0.15,
     "held_capital": 0,
     "cap": 0
    },
    "FL-20 House race": {
-    "avail": 0.597,
+    "avail": 0.505,
     "net_ret": -0.0018,
-    "rate_per_1k_day": -0.15,
+    "rate_per_1k_day": -0.16,
+    "held_capital": 0,
+    "cap": 0
+   },
+   "New Jersey Senate": {
+    "avail": 0.653,
+    "net_ret": -0.0022,
+    "rate_per_1k_day": -0.19,
     "held_capital": 0,
     "cap": 0
    },
    "KY-04 House race": {
-    "avail": 1.0,
-    "net_ret": -0.0025,
+    "avail": 0.953,
+    "net_ret": -0.0024,
     "rate_per_1k_day": -0.21,
     "held_capital": 0,
     "cap": 0
    },
    "PA-10 House race": {
-    "avail": 0.672,
-    "net_ret": -0.0025,
+    "avail": 0.651,
+    "net_ret": -0.0024,
     "rate_per_1k_day": -0.21,
     "held_capital": 0,
     "cap": 0
    },
    "FL-07 House race": {
-    "avail": 0.82,
-    "net_ret": -0.0026,
+    "avail": 0.801,
+    "net_ret": -0.0025,
     "rate_per_1k_day": -0.22,
     "held_capital": 0,
     "cap": 0
    },
-   "Texas Senate": {
-    "avail": 0.229,
+   "NY-13 House race": {
+    "avail": 0.378,
     "net_ret": -0.0027,
     "rate_per_1k_day": -0.23,
     "held_capital": 0,
     "cap": 0
    },
    "Wyoming Senate": {
-    "avail": 0.602,
-    "net_ret": -0.0027,
-    "rate_per_1k_day": -0.23,
+    "avail": 0.557,
+    "net_ret": -0.0029,
+    "rate_per_1k_day": -0.25,
     "held_capital": 0,
     "cap": 0
    },
    "Michigan Governor": {
-    "avail": 0.544,
-    "net_ret": -0.0027,
-    "rate_per_1k_day": -0.23,
+    "avail": 0.503,
+    "net_ret": -0.0029,
+    "rate_per_1k_day": -0.25,
     "held_capital": 0,
     "cap": 0
    },
-   "MI-10 House race": {
-    "avail": 0.203,
-    "net_ret": -0.0028,
-    "rate_per_1k_day": -0.24,
+   "PA-07 House race": {
+    "avail": 0.765,
+    "net_ret": -0.0029,
+    "rate_per_1k_day": -0.26,
     "held_capital": 0,
     "cap": 0
    },
    "Arkansas Senate": {
-    "avail": 0.026,
+    "avail": 0.022,
     "net_ret": -0.0029,
-    "rate_per_1k_day": -0.25,
+    "rate_per_1k_day": -0.26,
     "held_capital": 0,
     "cap": 0
    },
    "Wyoming Governor": {
-    "avail": 0.079,
+    "avail": 0.067,
     "net_ret": -0.0029,
-    "rate_per_1k_day": -0.25,
+    "rate_per_1k_day": -0.26,
     "held_capital": 0,
     "cap": 0
    },
    "Texas Governor": {
-    "avail": 0.546,
+    "avail": 0.461,
     "net_ret": -0.003,
     "rate_per_1k_day": -0.26,
     "held_capital": 0,
     "cap": 0
    },
    "MI-07 House race": {
-    "avail": 0.158,
+    "avail": 0.134,
     "net_ret": -0.003,
     "rate_per_1k_day": -0.26,
     "held_capital": 0,
     "cap": 0
    },
    "Wisconsin Governor": {
-    "avail": 0.912,
+    "avail": 0.77,
     "net_ret": -0.003,
-    "rate_per_1k_day": -0.26,
+    "rate_per_1k_day": -0.27,
     "held_capital": 0,
     "cap": 0
    },
    "Massachusetts Senate": {
-    "avail": 0.021,
+    "avail": 0.018,
     "net_ret": -0.003,
-    "rate_per_1k_day": -0.26,
+    "rate_per_1k_day": -0.27,
     "held_capital": 0,
     "cap": 0
    },
    "Mississippi Senate": {
-    "avail": 0.071,
+    "avail": 0.118,
     "net_ret": -0.003,
-    "rate_per_1k_day": -0.26,
+    "rate_per_1k_day": -0.27,
     "held_capital": 0,
     "cap": 0
    },
    "FL-13 House race": {
-    "avail": 0.914,
-    "net_ret": -0.0032,
-    "rate_per_1k_day": -0.28,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "Tennessee Senate": {
-    "avail": 0.167,
+    "avail": 0.819,
     "net_ret": -0.0033,
-    "rate_per_1k_day": -0.28,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "Rhode Island Senate": {
-    "avail": 0.313,
-    "net_ret": -0.0034,
     "rate_per_1k_day": -0.29,
     "held_capital": 0,
     "cap": 0
    },
    "AZ-06 House race": {
-    "avail": 0.448,
+    "avail": 0.378,
     "net_ret": -0.0037,
     "rate_per_1k_day": -0.32,
     "held_capital": 0,
     "cap": 0
    },
+   "Rhode Island Senate": {
+    "avail": 0.333,
+    "net_ret": -0.0037,
+    "rate_per_1k_day": -0.33,
+    "held_capital": 0,
+    "cap": 0
+   },
+   "Tennessee Senate": {
+    "avail": 0.297,
+    "net_ret": -0.0039,
+    "rate_per_1k_day": -0.34,
+    "held_capital": 0,
+    "cap": 0
+   },
    "Maryland Governor": {
-    "avail": 0.921,
+    "avail": 0.781,
     "net_ret": -0.0039,
     "rate_per_1k_day": -0.34,
     "held_capital": 0,
     "cap": 0
    },
    "AZ-01 House race": {
-    "avail": 0.724,
-    "net_ret": -0.004,
-    "rate_per_1k_day": -0.34,
+    "avail": 0.718,
+    "net_ret": -0.0041,
+    "rate_per_1k_day": -0.36,
     "held_capital": 0,
     "cap": 0
    },
-   "PA-07 House race": {
-    "avail": 0.722,
-    "net_ret": -0.0041,
-    "rate_per_1k_day": -0.35,
+   "Virginia Senate": {
+    "avail": 0.873,
+    "net_ret": -0.0043,
+    "rate_per_1k_day": -0.37,
+    "held_capital": 0,
+    "cap": 0
+   },
+   "Kansas Governor": {
+    "avail": 0.627,
+    "net_ret": -0.0043,
+    "rate_per_1k_day": -0.37,
     "held_capital": 0,
     "cap": 0
    },
    "IA-01 House race": {
-    "avail": 0.818,
+    "avail": 0.691,
     "net_ret": -0.0044,
     "rate_per_1k_day": -0.38,
     "held_capital": 0,
     "cap": 0
    },
    "MN-01 House race": {
-    "avail": 0.777,
+    "avail": 0.656,
     "net_ret": -0.0044,
-    "rate_per_1k_day": -0.38,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "Illinois Governor": {
-    "avail": 0.281,
-    "net_ret": -0.0045,
     "rate_per_1k_day": -0.39,
     "held_capital": 0,
     "cap": 0
    },
-   "Virginia Senate": {
-    "avail": 0.906,
+   "Pennsylvania Governor": {
+    "avail": 0.738,
+    "net_ret": -0.0044,
+    "rate_per_1k_day": -0.39,
+    "held_capital": 0,
+    "cap": 0
+   },
+   "Illinois Governor": {
+    "avail": 0.237,
     "net_ret": -0.0045,
     "rate_per_1k_day": -0.39,
     "held_capital": 0,
     "cap": 0
    },
    "New Mexico Senate": {
-    "avail": 0.704,
-    "net_ret": -0.0047,
-    "rate_per_1k_day": -0.4,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "NH-01 House race": {
-    "avail": 0.345,
+    "avail": 0.703,
     "net_ret": -0.0047,
     "rate_per_1k_day": -0.41,
     "held_capital": 0,
     "cap": 0
    },
-   "IA-03 House race": {
-    "avail": 0.754,
-    "net_ret": -0.0049,
+   "NH-01 House race": {
+    "avail": 0.34,
+    "net_ret": -0.0048,
     "rate_per_1k_day": -0.42,
     "held_capital": 0,
     "cap": 0
    },
-   "Kansas Governor": {
-    "avail": 0.559,
+   "IA-03 House race": {
+    "avail": 0.637,
     "net_ret": -0.0049,
     "rate_per_1k_day": -0.43,
     "held_capital": 0,
     "cap": 0
    },
    "TX-23 House race": {
-    "avail": 0.964,
+    "avail": 0.823,
     "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
+    "rate_per_1k_day": -0.44,
     "held_capital": 0,
     "cap": 0
    },
    "Connecticut Governor": {
-    "avail": 0.133,
+    "avail": 0.112,
     "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "Oregon Governor": {
-    "avail": 0.244,
-    "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
+    "rate_per_1k_day": -0.44,
     "held_capital": 0,
     "cap": 0
    },
    "NJ-07 House race": {
-    "avail": 0.178,
+    "avail": 0.15,
     "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
+    "rate_per_1k_day": -0.44,
+    "held_capital": 0,
+    "cap": 0
+   },
+   "SC-01 House race": {
+    "avail": 0.02,
+    "net_ret": -0.005,
+    "rate_per_1k_day": -0.44,
+    "held_capital": 0,
+    "cap": 0
+   },
+   "Oregon Governor": {
+    "avail": 0.362,
+    "net_ret": -0.005,
+    "rate_per_1k_day": -0.44,
     "held_capital": 0,
     "cap": 0
    },
    "TN-05 House race": {
-    "avail": 0.163,
+    "avail": 0.137,
     "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "Pennsylvania Governor": {
-    "avail": 0.69,
-    "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "Tennessee Governor": {
-    "avail": 0.004,
-    "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
-    "held_capital": 0,
-    "cap": 0
-   },
-   "WI-01 House race": {
-    "avail": 0.006,
-    "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
+    "rate_per_1k_day": -0.44,
     "held_capital": 0,
     "cap": 0
    },
    "ME-02 House race": {
     "avail": 0.002,
     "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
+    "rate_per_1k_day": -0.44,
     "held_capital": 0,
     "cap": 0
    },
    "Nevada Governor": {
-    "avail": 0.009,
+    "avail": 0.007,
     "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
+    "rate_per_1k_day": -0.44,
     "held_capital": 0,
     "cap": 0
    },
    "TX-15 House race": {
-    "avail": 0.054,
+    "avail": 0.045,
     "net_ret": -0.005,
-    "rate_per_1k_day": -0.43,
+    "rate_per_1k_day": -0.44,
     "held_capital": 0,
     "cap": 0
    }
@@ -1089,36 +1099,18 @@
     "kind": "arb_set",
     "race": "FL-22 House race",
     "qty": 2643,
-    "proceeds": 0.9750000000000001,
-    "capital": 2576.925,
-    "forgone_ret": 0.015384615384615283,
+    "proceeds": 0.9849999999999999,
+    "capital": 2603.3549999999996,
+    "forgone_ret": 0.005076142131979813,
     "exit": "existing recycle/free-unwind path (atomic)"
    },
    {
     "kind": "arb_set",
     "race": "VA-01 House race",
     "qty": 155,
-    "proceeds": 0.9750000000000001,
-    "capital": 151.125,
-    "forgone_ret": 0.015384615384615283,
-    "exit": "existing recycle/free-unwind path (atomic)"
-   },
-   {
-    "kind": "arb_set",
-    "race": "Florida Senate",
-    "qty": 4919,
-    "proceeds": 0.9750000000000001,
-    "capital": 4796.025000000001,
-    "forgone_ret": 0.015384615384615283,
-    "exit": "existing recycle/free-unwind path (atomic)"
-   },
-   {
-    "kind": "arb_set",
-    "race": "Nebraska Senate",
-    "qty": 2610,
-    "proceeds": 1.95,
-    "capital": 5089.5,
-    "forgone_ret": 0.0153846153846154,
+    "proceeds": 0.98,
+    "capital": 151.9,
+    "forgone_ret": 0.01020408163265307,
     "exit": "existing recycle/free-unwind path (atomic)"
    },
    {
@@ -1126,17 +1118,39 @@
     "exchange_id": "944",
     "side": "yes",
     "qty": 3,
-    "proceeds": 0.925,
-    "capital": 2.7750000000000004,
-    "forgone_ret": 0.015625870391844435,
+    "proceeds": 0.935,
+    "capital": 2.805,
+    "forgone_ret": 0.011851207146499395,
     "order": [
      "no",
-     0.075
+     0.065
+    ]
+   },
+   {
+    "kind": "arb_set",
+    "race": "Nebraska Senate",
+    "qty": 3864,
+    "proceeds": 1.955,
+    "capital": 7554.12,
+    "forgone_ret": 0.012787723785166195,
+    "exit": "existing recycle/free-unwind path (atomic)"
+   },
+   {
+    "kind": "tilt",
+    "exchange_id": "908",
+    "side": "no",
+    "qty": 598,
+    "proceeds": 0.935,
+    "capital": 559.13,
+    "forgone_ret": 0.014508851827755647,
+    "order": [
+     "yes",
+     0.065
     ]
    }
   ],
   "opportunities": [],
   "min_gain": 0.005
  },
- "cpu_sec": 2.529
+ "cpu_sec": 1.396
 }

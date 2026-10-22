@@ -207,3 +207,26 @@
   The main-loop recycle path stays as a backstop when the feed is down. Unit-tested with stubs (all held sets priced),
   dry run OK, restarted via botctl. Expected latency for a capital-blocked swap: ~2-3 s (was 15-40 s); offload ~3-5 s
   (was 1.5-3 min).
+- 19:11 Sizhe: held sets rarely revert to a free unwind, so buy more sets at lower edge when YES bids sum above 100%,
+  but keep the bar for buy-sets (asks below 100% minus the third-party rate). arb.min_ret_sell 0.005 (sell-sets: any
+  edge >= 0.5 cent, riskless to settlement; was the shared min_ret 2.4%); buy-sets keep min_ret 2.4% (the tuner's value,
+  third-party risk). New arb.cash_reserve 8,000: arbs never take cash below it, so MM, tilt and directional stay funded,
+  and capital-blocked better sets trigger the 1-second recycler sooner. Dry run: plan included Alaska Senate 2,040 sets
+  at 2.04% and Oklahoma Senate 2,030 at 1.52%. Restarted via botctl.
+- 19:25 Review: the inside quoter's 30-minute markout fell to -0.37 tick on 46 fills (rule: disable below -0.3 on >= 20):
+  inside_enabled false. OFFLOAD logged the same arb-set recommendation every 3 s (MI-07 leftover NO legs, not a real arb
+  set, so the recycler never acts on it): identical arb-set (and report-only) recommendations are now logged at most once
+  per 10 min. Restarted via botctl.
+- 19:45 Allocate by edge (Sizhe asked earlier; one-time permission to implement research results without asking): tilt
+  (+19 per 1k per day, best markouts) had no orders because low-edge arbs had drawn cash to the 8k reserve and tilt sizes to
+  90% of cash. arb.cash_reserve 8,000 -> 20,000 (arbs stop at 20k cash; tilt/directional/MM get it first; better arbs then
+  come via the 1-s recycler), tilt.max_markets 30 -> 80 (covers the untouched longshot/favourite tails). Restarted via botctl.
+- 19:40 Tilt was starved by a bookkeeping bug: its budget subtracted every tilt fill since the start (12,338 of "committed"
+  capital) even for positions already exited, so it placed nothing. Now committed = collateral of tilt positions still held
+  (tilt fills net of exits, clamped to the actual position); free = min(cap - committed - resting, 0.9 x cash - resting).
+  Dry run: 33 tilt orders on 11 markets. Unfunded tilt candidates are recorded each cycle and become offload
+  opportunities fundable by arb sets (ret = tilt edge on collateral minus one tick of exit cost); the offload now unwinds
+  just enough of the cheapest real arb set (ArbEngine.unwind_set, all-or-none, limits from walking the feed asks) when the
+  tilt trade beats the set's forgone return by recycle_min_gain. Tilt realisation measured on 119 fills: +1.0 tick after
+  1 h, +1.6 ticks after 6 h, median 9.8 h from entry to exit on the 12 exited markets. Volume-cache warm-up accepts a cache
+  up to 48 h old (it is only the fallback market ranking; a rebuild cost 7 min of startup). Restarted via botctl.
