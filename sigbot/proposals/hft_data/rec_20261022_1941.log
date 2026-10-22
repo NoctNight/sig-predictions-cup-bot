@@ -1,0 +1,43 @@
+2026-10-22 20:41:05,017 INFO hft_record: polymarket subscribed to 230 tokens
+2026-10-22 20:41:05,127 INFO sigbot.feed: realtime token minted (expires in 180 min, user channel user:0f5779b7-54d5-4823-b097-848fae12682e)
+2026-10-22 20:41:05,197 INFO hft_record: own open orders snapshot: 0
+2026-10-22 20:41:05,925 INFO sigbot.feed: feed connected to realtime.thesuper.market
+2026-10-22 20:41:05,926 WARNING sigbot.feed: resync required for 0 exchanges (connect)
+2026-10-22 20:41:06,082 INFO sigbot.feed: join realtime:tournament:bda92870-621e-47b0-bc3c-3602c5c26f55:markets -> ok 
+2026-10-22 20:41:06,090 INFO sigbot.feed: join realtime:user:0f5779b7-54d5-4823-b097-848fae12682e -> ok 
+2026-10-22 20:41:35,204 INFO hft_record: t+30s counts {'map': 1, 'pm': 483, 'own': 1, 'book': 650, 'trade': 8, 'pmt': 2}
+2026-10-22 20:42:05,213 INFO hft_record: t+60s counts {'map': 1, 'pm': 604, 'own': 1, 'book': 1352, 'trade': 14, 'pmt': 5}
+2026-10-22 20:42:35,216 INFO hft_record: t+90s counts {'map': 1, 'pm': 680, 'own': 1, 'book': 2201, 'trade': 20, 'pmt': 8}
+2026-10-22 20:43:05,221 INFO hft_record: t+120s counts {'map': 1, 'pm': 762, 'own': 1, 'book': 2822, 'trade': 23, 'pmt': 8}
+2026-10-22 20:43:35,230 INFO hft_record: t+150s counts {'map': 1, 'pm': 806, 'own': 1, 'book': 3670, 'trade': 27, 'pmt': 10}
+2026-10-22 20:44:05,237 INFO hft_record: t+180s counts {'map': 1, 'pm': 858, 'own': 1, 'book': 4413, 'trade': 27, 'pmt': 12}
+2026-10-22 20:44:35,245 INFO hft_record: t+210s counts {'map': 1, 'pm': 926, 'own': 1, 'book': 5337, 'trade': 37, 'pmt': 13}
+2026-10-22 20:45:05,255 INFO hft_record: t+240s counts {'map': 1, 'pm': 990, 'own': 1, 'book': 6190, 'trade': 51, 'pmt': 13}
+2026-10-22 20:45:35,297 INFO hft_record: t+270s counts {'map': 1, 'pm': 1048, 'own': 1, 'book': 6935, 'trade': 55, 'pmt': 18}
+2026-10-22 20:46:05,304 INFO hft_record: t+300s counts {'map': 1, 'pm': 1120, 'own': 1, 'book': 7589, 'trade': 56, 'pmt': 20}
+2026-10-22 20:46:35,312 INFO hft_record: t+330s counts {'map': 1, 'pm': 1170, 'own': 1, 'book': 8681, 'trade': 58, 'pmt': 21}
+2026-10-22 20:47:05,315 INFO hft_record: t+360s counts {'map': 1, 'pm': 1262, 'own': 1, 'book': 9526, 'trade': 63, 'pmt': 22}
+2026-10-22 20:47:35,318 INFO hft_record: t+390s counts {'map': 1, 'pm': 1356, 'own': 1, 'book': 10460, 'trade': 69, 'pmt': 24}
+2026-10-22 20:48:05,324 INFO hft_record: t+420s counts {'map': 1, 'pm': 1434, 'own': 1, 'book': 11086, 'trade': 72, 'pmt': 24}
+2026-10-22 20:48:35,329 INFO hft_record: t+450s counts {'map': 1, 'pm': 1478, 'own': 1, 'book': 11782, 'trade': 72, 'pmt': 24}
+2026-10-22 20:49:05,484 INFO hft_record: t+480s counts {'map': 1, 'pm': 1528, 'own': 1, 'book': 12571, 'trade': 72, 'pmt': 24}
+2026-10-22 20:49:35,685 INFO hft_record: t+510s counts {'map': 1, 'pm': 1572, 'own': 1, 'book': 13401, 'trade': 72, 'pmt': 25}
+2026-10-22 20:50:05,700 INFO hft_record: t+540s counts {'map': 1, 'pm': 1608, 'own': 1, 'book': 14082, 'trade': 76, 'pmt': 26}
+2026-10-22 20:50:35,737 INFO hft_record: t+571s counts {'map': 1, 'pm': 1638, 'own': 1, 'book': 15022, 'trade': 76, 'pmt': 26}
+2026-10-22 20:51:05,829 INFO hft_record: t+601s counts {'map': 1, 'pm': 1686, 'own': 1, 'book': 15721, 'trade': 76, 'pmt': 26}
+2026-10-22 20:51:35,867 INFO hft_record: t+631s counts {'map': 1, 'pm': 1712, 'own': 1, 'book': 16435, 'trade': 78, 'pmt': 26}
+2026-10-22 20:52:05,874 INFO hft_record: t+661s counts {'map': 1, 'pm': 1764, 'own': 1, 'book': 17379, 'trade': 78, 'pmt': 26}
+2026-10-22 20:52:35,896 INFO hft_record: t+691s counts {'map': 1, 'pm': 1806, 'own': 1, 'book': 18141, 'trade': 78, 'pmt': 26}
+2026-10-22 20:53:05,907 INFO hft_record: t+721s counts {'map': 1, 'pm': 1820, 'own': 1, 'book': 18992, 'trade': 108, 'pmt': 26, 'acct': 11}
+2026-10-22 20:53:36,080 INFO hft_record: t+751s counts {'map': 1, 'pm': 1840, 'own': 1, 'book': 19743, 'trade': 113, 'pmt': 26, 'acct': 12}
+2026-10-22 20:54:06,334 INFO hft_record: t+781s counts {'map': 1, 'pm': 1890, 'own': 1, 'book': 20465, 'trade': 122, 'pmt': 29, 'acct': 12}
+2026-10-22 20:54:36,463 INFO hft_record: t+811s counts {'map': 1, 'pm': 1930, 'own': 1, 'book': 21260, 'trade': 187, 'pmt': 30, 'acct': 28}
+2026-10-22 20:55:06,532 INFO hft_record: t+841s counts {'map': 1, 'pm': 1970, 'own': 1, 'book': 22023, 'trade': 188, 'pmt': 31, 'acct': 29}
+2026-10-22 20:55:36,545 INFO hft_record: t+871s counts {'map': 1, 'pm': 2004, 'own': 1, 'book': 22772, 'trade': 190, 'pmt': 31, 'acct': 29}
+2026-10-22 20:56:06,648 INFO hft_record: t+901s counts {'map': 1, 'pm': 2052, 'own': 1, 'book': 23524, 'trade': 190, 'pmt': 31, 'acct': 30}
+2026-10-22 20:56:36,995 INFO hft_record: t+932s counts {'map': 1, 'pm': 2094, 'own': 1, 'book': 24372, 'trade': 206, 'pmt': 31, 'acct': 30}
+2026-10-22 20:57:07,067 INFO hft_record: t+962s counts {'map': 1, 'pm': 2126, 'own': 1, 'book': 25168, 'trade': 206, 'pmt': 31, 'acct': 30}
+2026-10-22 20:57:37,099 INFO hft_record: t+992s counts {'map': 1, 'pm': 2154, 'own': 1, 'book': 25966, 'trade': 209, 'pmt': 31, 'acct': 30}
+2026-10-22 20:58:07,117 INFO hft_record: t+1022s counts {'map': 1, 'pm': 2186, 'own': 1, 'book': 26769, 'trade': 210, 'pmt': 31, 'acct': 30}
+2026-10-22 20:58:37,188 INFO hft_record: t+1052s counts {'map': 1, 'pm': 2212, 'own': 1, 'book': 27470, 'trade': 213, 'pmt': 31, 'acct': 30}
+2026-10-22 20:59:07,391 INFO hft_record: t+1082s counts {'map': 1, 'pm': 2238, 'own': 1, 'book': 28265, 'trade': 218, 'pmt': 32, 'acct': 30}

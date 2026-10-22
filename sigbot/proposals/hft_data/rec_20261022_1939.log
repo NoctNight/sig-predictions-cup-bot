@@ -1,0 +1,11 @@
+2026-10-22 20:38:23,152 INFO hft_record: polymarket subscribed to 230 tokens
+2026-10-22 20:38:23,282 INFO sigbot.feed: realtime token minted (expires in 180 min, user channel user:0f5779b7-54d5-4823-b097-848fae12682e)
+2026-10-22 20:38:24,147 INFO sigbot.feed: feed connected to realtime.thesuper.market
+2026-10-22 20:38:24,148 WARNING sigbot.feed: resync required for 0 exchanges (connect)
+2026-10-22 20:38:24,339 INFO sigbot.feed: join realtime:tournament:bda92870-621e-47b0-bc3c-3602c5c26f55:markets -> ok 
+2026-10-22 20:38:24,342 INFO sigbot.feed: join realtime:user:0f5779b7-54d5-4823-b097-848fae12682e -> ok 
+2026-10-22 20:38:52,922 INFO hft_record: t+30s counts {'map': 1, 'pm': 473, 'book': 775, 'trade': 2}
+2026-10-22 20:39:22,929 INFO hft_record: t+60s counts {'map': 1, 'pm': 564, 'book': 1461, 'trade': 3}
+2026-10-22 20:39:52,933 INFO hft_record: t+90s counts {'map': 1, 'pm': 650, 'book': 2294, 'trade': 3, 'pmt': 1}
+2026-10-22 20:40:22,941 INFO hft_record: t+120s counts {'map': 1, 'pm': 722, 'book': 3210, 'trade': 21, 'pmt': 3}
+2026-10-22 20:40:52,947 INFO hft_record: t+150s counts {'map': 1, 'pm': 786, 'book': 4016, 'trade': 21, 'pmt': 5}

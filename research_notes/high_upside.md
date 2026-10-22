@@ -26,6 +26,32 @@ volume as everyone else. Their holdings are mostly favourites (win rates 82-93%)
 the third-place bar on 4 Nov is more like 0.9-1.0M than 853k (unverified: no holdings data; #4 at 827k also rises, and 7-18%
 losing legs cut the other way).
 
+**The mechanism (second pass, 5-minute candles 1-5 Oct for ten big markets, `data/opening_5m_oct1-5.json`, 20 reads).** The
+leaders did not buy favourites at 0.50; the first prints at 16:00 UTC were already near fair (RI Senate R 0.05, LA Senate R 0.92).
+What followed on 1 Oct was repeated pump-and-dump against the market maker: RI Senate R (a 2% longshot) printed 0.005 to 0.995
+and back inside single 5-minute bars at 16:25, 16:40-16:45, 17:40 and 18:50 UTC, with 397k shares at VWAP 0.741, 379k at 0.507,
+715k at 0.268 and 263k at 0.384 (60-70 prints per bar, ~5-10k per print, i.e. a ladder being eaten tick by tick). Hour 1 alone
+traded 1.06M shares at VWAP 0.544. The side that sold the longshot high (or bought the favourite low) into the re-centred ladder
+kept the difference: marked at the 5 Oct price it is 638k on RI Senate R, 418k on RI Senate D, 125k US House D, 177k/190k Alaska
+Senate D/R, 96k NH Senate R, 1.76M across the ten markets on 1 Oct alone, 0.28M on 2-5 Oct, and more at settlement (the longshots
+go to 0). The short side is the capital-efficient one: selling YES at 0.9 posts only 0.1 of collateral, so 100k of cash could
+sell a million shares of a pumped longshot in minutes. That, not "9x compounding", is how four accounts reached 800-990k:
+hours with a 20c+ range in RI Senate R: six on 1 Oct, two on 2-5 Oct, none since. The market maker now refills a swept level at
+the same price in 3.7 s and moves its touch from an outside signal, not from the last print (bot_exploits.md capture), so the
+re-centring that made the dump possible is gone.
+
+**Who paid (full all-time leaderboard, 1,758 accounts, 18 reads, `data/leaderboard_all_20261022.json`).** The field's net P&L is only
++1.86M (gross gains 12.7M, losses 10.9M): the market maker lost under 2M; the leaders' 8-10M came from other participants. Losses
+sit in accounts that barely traded: 5.8M in accounts with 10 trades or fewer, 3.6M in 11-100; gains sit in accounts with 1,000+
+trades (9.6M). 39 accounts lost 50k+ in 10 trades or fewer (sum -3.0M, median volume 144k, median loss 0.5 per unit of volume:
+e.g. calm-comet-3393, 2 trades, 100k volume, -90.6k), which is what buying the pumped longshot at ~0.9 with the whole balance looks
+like. Either those were naive accounts hitting a 0.90 print, or they were alts feeding a main account. The venue tightened
+registration right after (changelog: 6 Oct phone code, .edu email, one phone per entry; 8 Oct bulk bans and a form to report
+participants), and the rules let the sponsor replace an ineligible winner, so the top of the board is not guaranteed to stand.
+The field's take now: 555 accounts traded this week for a net +229k (gross 1.17M vs 0.95M; top 10 took 295k); 354 traded today for
++189k, mostly marks. Leaders are not immune: calm-badger-5206 (#8, +451k) lost 114k this week on one trade, a concentrated
+position marked down.
+
 Can it recur before 4 Nov? No evidence it can:
 
 * No market has been created since 18 Sep (216 on 24 Aug, 16 on 10 Sep, 5 on 18 Sep); all 237 settle 4 Nov 17:00 UTC; none
@@ -81,6 +107,7 @@ we have is small.
 | (b) election night, outside-venue leads, 100k cash | ~0 (13% per unit of turnover, cash turns ~3x) | 110-125 (sims +7k to +22k; best race +13k) | 89 (-13k plausible, -90k only if every call reverses) | sleeve built by the election-night session | section 4 |
 | (c) compounding the grind at full size / leverage | 0 (cash accounts, `availableAdvance` 0; 3%/day for 13 days = 1.5x) | 130-150 | 90 | size gates | bot_exploits.md |
 | (d) structural (new ladder, void, correction, chamber mispricing) | < 1% (no listing in 34 days; floors already queued) | 102 | 102 | a 1-read watcher | section 1 |
+| (e) the bar falls: leaders disqualified for multi-accounting (rules: ineligible winners are replaced) | unknowable; if the top 4 go, #5-#8 (585-451k) set a 4.5-5.5x bar, if the top 10 go, #11 (239k) sets 2.4x (C/T bound 0.42) | - | - | nothing; keep the balance intact so the option is live | section 1, past_winners_advice.md |
 
 Prize view (only the top 3 pay; SUSQies have no other value): a 5% shot at third is ~$125 expected, a 0.5-1% shot at first
 ~$150-300, so the best lottery (a2) is worth roughly $200-450 in expectation, and it ends below 20k with probability ~94%.
@@ -113,6 +140,8 @@ objective, not the tactic:
   because expected SUSQies are irrelevant and it has 3-6% versus 0%. Do nothing else with the cash that night.
 * If finish rank, smart score or the bot itself matter, do not punt. Run the grind to 3 Nov, then the election-night sleeve
   at 10k per race and 90k total: expected +20k, a finish near rank 150-250, worst case about -13k.
+* Path (e) argues the same way: a disqualification wave is the one event that could put a top-3 within 2-5x, and only an intact
+  balance plus a good election night can use it. Check the leaderboard for vanished top-10 names each morning (1 read).
 
 | when (ET) | do | notes |
 |---|---|---|
@@ -143,8 +172,10 @@ the martingale bound applies to simultaneous bets; the settlement-uplift bar fla
 
 ## Sources
 
-Leaderboard: `GET /tournaments/midterm-elections/leaderboard?period=all|7d|1d&sort=pnl|volume` (22 Oct 19:22 UTC; raw in the
-session scratch `lb_periods.json`). Smart score: `GET /tournaments/midterm-elections/me/smart-score`. Books: three live
+Leaderboard: `GET /tournaments/midterm-elections/leaderboard?period=all|7d|1d&sort=pnl|volume|roi|winRate|trades` (22 Oct
+19:22-19:30 UTC; full all-time board in `data/leaderboard_all_20261022.json`; 7d/1d pages in the session scratch). Opening candles:
+`GET /exchanges/{id}/price-history?resolution=5m&from=2026-10-01` for ten exchanges (`data/opening_5m_oct1-5.json`). Changelog:
+sig.thesuper.market/docs/changelog pages 1-4 (14-21 Oct, 6-12 Oct, 1-4 Oct, 25 Sep-1 Oct; no entry mentions the market maker). Smart score: `GET /tournaments/midterm-elections/me/smart-score`. Books: three live
 `/exchanges/{id}/orderbook` reads for RI Governor plus `data/books.json` (21 Oct 22:00 UTC). Sibling notes: election_night.md
 (sleeve, punt screener, P = C/T bound), volatile_moves.md, favourite_drift.md (calibration a 0.14, b 1.37), bot_exploits.md (DMM
 lag curve, ladder sizes), volume_target.md, past_winners_advice.md (rules, prizes, manual chamber settlement), tournament_research.md.

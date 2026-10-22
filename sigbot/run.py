@@ -905,8 +905,19 @@ class Bot:
                         except ApiError:
                             pass
                 continue
-            if not live or u["kind"] == "arb_set" or done >= 2 or not u.get("order"):
+            if not live or u["kind"] == "arb_set" or done >= 1 or not u.get("order"):
                 continue
+            # tilt/directional exits that fund another trade: the same guards as the arb path (22 Oct churn), plus a
+            # higher bar, because the exit crosses the spread and the funded trade's edge is a model estimate
+            opp = r["opportunity"]
+            okey = ("exit", opp.get("kind"), opp.get("exchange_id"))
+            funded = getattr(self, "_offload_funded", {})
+            self._offload_funded = funded
+            if time.time() - funded.get(okey, 0) < 1800 or time.time() - funded.get(("held", u.get("exchange_id")), 0) < 3600:
+                continue
+            if r["gain"] < max(0.03, 2 * self.cfg.arb.recycle_min_gain) or u["forgone_ret"] > 0.05:
+                continue
+            funded[okey] = funded[("held", u.get("exchange_id"))] = time.time()
             side, px = u["order"]
             try:
                 resp = self.api.place_order(u["exchange_id"], side, "buy", int(u["qty"]), float(px), expiration=ttl, key=self.api.new_key("offload"))

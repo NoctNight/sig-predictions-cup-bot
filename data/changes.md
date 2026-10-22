@@ -268,3 +268,8 @@
 - 20:20 KILL SWITCH fired (real, not an artifact): marked drawdown 402 over the trailing hour (> 400), from the 19:41-20:04
   offload churn, plus a -2.4 tick 30-min MM markout on 12 fills. Left untouched per Sizhe's rule; MM, tilt and arbs pause
   for 30 min and may pause again until the churn leaves the one-hour window (~21:05).
+- 20:55 Kill pause ended 20:52 (drawdown back to 165). Loaded the self-tuner fixes from research_notes/mm_upgrade.md 4.3
+  (tests/test_autotune.py: 40 checks pass). Offload exits of tilt/directional holdings that fund other trades now carry
+  the arb path's guards: each funded opportunity once per 30 min, each held position offloaded at most once per hour, at
+  most one per check, gain >= max(3%, 2 x recycle_min_gain), and never an exit that gives up more than 5% (one at 20:53
+  gave up 6.97% for a 1.6% net gain). Restarted via botctl.
