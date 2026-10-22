@@ -118,5 +118,6 @@
     "offload_live": true
   },
   "mm_fast_requotes_per_min": 3,
-  "inside_enabled": false
+  "inside_enabled": false,
+  "lag_enabled": false
 }

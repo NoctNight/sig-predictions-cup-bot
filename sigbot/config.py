@@ -181,7 +181,7 @@ class BotConfig:
     arb_scan_min_gap: float = 0.25       # event-driven scanner: minimum seconds between passes
     arb_scan_books_feed: int = 12        # candidate races evaluated per pass from feed books
     feed_stall_sec: float = 240.0        # feed silent this long -> the bot abandons the feed thread and starts a new one
-    lag_enabled: bool = True             # follow Polymarket/Kalshi moves before the DMM requotes (proposals/dmm_lag_follow)
+    lag_enabled: bool = False            # follow Polymarket/Kalshi moves before the DMM requotes (proposals/dmm_lag_follow)
     lag_move_pts: float = 0.02           # outside move that triggers a follow
     lag_qty: int = 1000                  # shares per follow, before the directional per-leg notional cap
     inside_enabled: bool = True          # rest one tick inside the DMM where its spread is >= 3 ticks (proposals/inside_quoter)

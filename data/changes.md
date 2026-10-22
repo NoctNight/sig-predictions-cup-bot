@@ -304,3 +304,19 @@
   settlement-basis value (real arb sets at their locked payout; thresholds unchanged; trailing-hour peak kept in memory);
   the overrides file is written atomically (tmp + os.replace) and a half-written file keeps the previous overrides.
   Tests added to tests/test_guards.py; deployed via botctl deploy (precheck passed). Settlement value 103,446 at 21:52.
+- 23:25 PAUSED: the fake-venue pipeline test (tests/sim_pipeline.py) reports 207 violations from 10 bot bugs (lag follower flips positions and bypasses the partisan block; lag+direction stack the per-leg cap; recycle follow-through double-counts freed capital; main-loop recycle backstop races the scanner; outside-fair gate fails open; feed_ok tolerates 2 min of frozen books; own-order netting misses orders placed mid-cycle; kill switch on marks). Fixing all, sim must pass before redeploy.
+- 00:55 (23 Oct) RESUMED after the sim-bug pause. Fixed everything tests/sim_pipeline.py found, plus three more its reruns
+  and the Fable review turned up; full sim (14 scenarios incl. the 24-h replay) 0 violations, guard + tuner tests pass,
+  two Fable reviews (second: SAFE TO DEPLOY), deployed via botctl deploy (precheck now also runs the sim):
+  lag follower off (flipped positions, bypassed the partisan block; HFT study had rejected it); recycle follow-through
+  budget counts freed capital once on both the cash and capital-cap terms (ArbEngine.follow_budget); main-loop recycle
+  backstop only while the feed is down; feed_ok = feed spoke within 30 s (was 120); MM requotes when its outside-fair
+  gate changes, waits for a fresh outside fair after a restart or kill pause (max 10 min, never mid-session), and the
+  gate's fairs are refreshed right after the directional poll (the scanner's fast requotes read them between cycles);
+  the arb scanner nets our orders placed since the open-order read; partisan exposure nets buy-sets as well as
+  sell-sets (live netD +1,835, was shown as +2,726); the settlement adjustment reads the arb-race list every cycle (a
+  5-min cache made new-race arb bursts trip the kill switch) and the kill switch takes cash, marks and adjustment from
+  one locked snapshot; offload logs say "candidate" unless an order is sent. Watcher recycle alarm 12 -> 30 per 10 min.
+  Tests: tests/test_guards.py (behaviour tests for budget, gate wait, own-order netting, buy-set netting, feed health).
+  Directional-impact study (research_notes/directional_impact.md): do not scale directional trades; edge, not impact,
+  is the limit. Daily 06:00 research task set up until 2 Nov (research_notes/BACKLOG.md, briefs in data/daily/).

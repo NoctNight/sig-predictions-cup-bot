@@ -153,6 +153,15 @@ class ArbEngine:
         used = sum(self.committed.values())
         return max(0.0, min(total_cap - used, cash * 0.95 - self.cfg.cash_reserve))
 
+    def follow_budget(self, cash: float, extra: float) -> float:
+        """Budget for a recycle follow-through: what the unwind freed may be spent despite the cash reserve, but only once.
+        `cash` already includes the freed capital, and the unwind already took it out of `committed`, so neither the cash
+        term nor the capital-cap term may add it again (review 22 Oct: both used to count it twice)."""
+        total_cap = self.cfg.capital_frac * self.starting_cash
+        used = sum(self.committed.values())
+        cash_room = max(0.0, (cash - extra) * 0.95 - self.cfg.cash_reserve) + extra
+        return max(0.0, min(total_cap - used, cash_room, cash * 0.95))
+
     def race_budget_left(self, race: str, ret: Optional[float] = None) -> float:
         """Capital still allowed in `race`: the per-race ceiling (max_race_frac), tightened by the allocator's edge-based
         cap when one is loaded (`race_caps`, floored at `race_cap_floor` so a new opportunity can still be taken small)."""
@@ -179,7 +188,7 @@ class ArbEngine:
             allc.extend(self.chunks_for_race(race, books))
         allc.sort(key=lambda c: -c.ret)
         # extra_budget: capital a recycle unwind just freed for this purchase; the cash reserve must not block spending it
-        budget = min(self.budget_left(cash) + max(0.0, extra_budget), cash * 0.95) if extra_budget > 0 else self.budget_left(cash)
+        budget = self.follow_budget(cash, extra_budget) if extra_budget > 0 else self.budget_left(cash)
         plan: list[Chunk] = []
         race_spent: dict[str, float] = {}
         for c in allc:

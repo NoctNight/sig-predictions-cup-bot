@@ -150,7 +150,7 @@ check("exits: one exit for exactly the held quantity once nothing rests", sent =
 # ---------------------------------------------------------------- kill switch on settlement basis (21:49 false trip on recycling)
 rs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 check("health: the drawdown peak no longer comes from the marked cycles table", "SELECT MAX(total_value) m FROM cycles" not in rs)
-check("health: the kill switch is fed the settlement-basis value", "pos_value + getattr(self, \"settle_adj\", 0.0), cycle_id)" in rs)
+check("health: the kill switch is fed the settlement-basis value", "cycle_adj = getattr(self, \"settle_adj\", 0.0)" in rs)
 # behaviour: a recycle lowers the marked value by 900 but raises locked profit; settlement-basis value must not drop
 hb = types.SimpleNamespace()
 vals = [(0, 102000.0), (60, 102000.0 + 879.0)]           # settlement basis after the recycle: higher
@@ -179,6 +179,79 @@ try:
 except Exception as e:
     check("mm: a half-written overrides file keeps the previous overrides", False, repr(e))
 check("analytics: the overrides file is written atomically", "os.replace(tmp, path)" in rs and "os.replace(path + \".tmp\", path)" in open(os.path.join(ROOT, "sigbot", "analytics.py")).read())
+
+# ---------------------------------------------------------------- sim_pipeline findings, 22 Oct 23:20
+import json as _j2  # noqa: E402
+check("lag follower: off by default and in the live config (flips positions, bypasses the partisan block)",
+      BotConfig().lag_enabled is False and _j2.load(open(os.path.join(ROOT, "config.json"))).get("lag_enabled") is False)
+# recycle follow-through: the freed capital is already in cash; it may be spent once, not twice
+eng3 = ArbEngine.__new__(ArbEngine)
+eng3.cfg = types.SimpleNamespace(capital_frac=0.9, cash_reserve=20000.0, max_race_frac=0.15)
+eng3.starting_cash = 100000.0
+eng3.committed = {}
+cash, freed = 30000.0, 10000.0                          # cash after the unwind, of which 10000 the unwind freed
+eng3.cfg.capital_frac = 0.9
+check("arb: recycle budget counts the freed capital once (cash binds)", eng3.follow_budget(cash, freed) == 10000.0, str(eng3.follow_budget(cash, freed)))
+eng3.committed = {"X": 85000.0}                          # the unwind already took the freed 10000 out of committed
+check("arb: recycle budget counts the freed capital once (capital cap binds)", eng3.follow_budget(60000.0, 10000.0) == 5000.0,
+      str(eng3.follow_budget(60000.0, 10000.0)))
+check("arb: plan() spends the follow-through budget", "self.follow_budget(cash, extra_budget) if extra_budget > 0" in open(os.path.join(ROOT, "sigbot", "arb.py")).read())
+rs2 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("backstop: the main-loop recycle runs only when the scanner's feed path is down", "best_unfunded if not self.feed_ok() else None" in rs2)
+seen = []
+fb = types.SimpleNamespace(feed=types.SimpleNamespace(healthy=lambda s=120: seen.append(s) or s >= 15))
+R.Bot.feed_ok(fb)
+check("feed: books silent for more than 30 s (past the 25-s heartbeat) are not healthy", seen == [30], str(seen))
+# xv gate: a market whose gate state changed is requoted at once
+from sigbot.mm import QuoteState  # noqa: E402
+mm2 = MarketMaker.__new__(MarketMaker)
+mm2.cfg = types.SimpleNamespace(requote_ticks=2, refresh_sec=1500)
+mm2.state = {"9": QuoteState("9", last_reserve=0.5, last_quote_ts=time.time(), fills_seen=0, last_gate=(True, True))}
+info = {"reserve": 0.5, "gate": (True, False)}
+check("mm: a gate that closes the ask forces a requote", mm2.needs_requote("9", info, 0, 2, 2) is True)
+info2 = {"reserve": 0.5, "gate": (True, True)}
+check("mm: no gate change and nothing else, no requote", mm2.needs_requote("9", info2, 0, 2, 2) is False)
+
+check("health: sets in a newly arbed race get their settlement credit at once (no cached race list)", "_real_sets_ts" not in open(os.path.join(ROOT, "sigbot", "run.py")).read())
+from sigbot import risk as _risk  # noqa: E402
+_u = types.SimpleNamespace(races={"S": types.SimpleNamespace(legs={"D": types.SimpleNamespace(exchange_id="d"), "R": types.SimpleNamespace(exchange_id="r")})})
+check("risk: a held buy-set is not partisan exposure", _risk.net_positions_ex_arb(_u, {"d": 2000.0, "r": 2000.0}) == {"d": 0.0, "r": 0.0})
+check("risk: a held sell-set is still netted, leftovers kept", _risk.net_positions_ex_arb(_u, {"d": -2000.0, "r": -2500.0}) == {"d": 0.0, "r": -500.0})
+
+# ---------------------------------------------------------------- review 22 Oct 23:55 (Fable): behaviour, not source text
+gb = types.SimpleNamespace(cfg=types.SimpleNamespace(mm=types.SimpleNamespace(xv_gate_ticks=3)),
+                           direction=types.SimpleNamespace(cfg=types.SimpleNamespace(enabled=True)), mm=types.SimpleNamespace(xv_fair={}))
+G = lambda killed, t: R.Bot.mm_gate_ready(gb, killed, t)
+check("gate: after a start with no outside fair, the MM waits", G(False, 1000.0) is False)
+check("gate: ... but not for more than 10 min", G(False, 1000.0 + 601) is True)
+gb.mm_need_xv, gb.mm_gate_wait0 = True, None
+gb.mm.xv_fair = {"9": (0.5, 0.5, 0.5, 5000.0)}
+check("gate: a fresh fair lets the MM quote", G(False, 5100.0) is True)
+check("gate: a fair going stale MID-SESSION does not stop the MM", G(False, 5000.0 + 900) is True)
+check("gate: killed, no quoting", G(True, 6000.0) is False)
+check("gate: after a kill pause with only stale fairs, the MM waits again", G(False, 7900.0) is False)
+gb.mm.xv_fair = {"9": (0.5, 0.5, 0.5, 7950.0)}
+check("gate: ... until the next fresh poll", G(False, 8000.0) is True)
+gb.direction.cfg.enabled = False
+gb.mm_need_xv = True
+check("gate: with the directional poll off, no wait at all", G(False, 9000.0) is True)
+
+class OStore:
+    def rows(self, q, a=()):
+        return [{"order_id": 77, "exchange_id": "1075", "side": "yes", "action": "buy", "price": 0.92, "quantity": 400}] if "placed_at >" in q else []
+ob = types.SimpleNamespace(open_orders_cache={"1075": [{"id": 1, "side": "yes", "action": "buy", "priceLimit": 0.925, "quantity": 300, "quantityFilled": 100}]},
+                           open_orders_ts=time.time(), store=OStore())
+lv = R.own_levels(ob)
+nb2 = lv.net("1075", {"bids": [{"price": 0.925, "quantity": 200}, {"price": 0.92, "quantity": 2400}], "asks": [{"price": 0.93, "quantity": 2000}]})
+check("scanner: our partly filled resting bid (remaining 200) is removed from the book", nb2["bestBid"] == 0.92, str(nb2.get("bestBid")))
+check("scanner: an order placed after the snapshot is netted too", nb2["bids"][0]["quantity"] == 2000, str(nb2["bids"][:1]))
+check("health: the kill switch gets cash, marks and settlement adjustment from one snapshot",
+      "self.health(cycle_cash + pos_value + cycle_adj, cycle_id)" in open(os.path.join(ROOT, "sigbot", "run.py")).read())
+
+_rs3 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+_i = _rs3.find("self.direction.cycle(prices")
+check("gate: the outside fairs are refreshed right after the directional poll (fast requotes read them between cycles)",
+      _i > 0 and "self.mm.xv_fair = {" in _rs3[_i:_i + 1500])
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

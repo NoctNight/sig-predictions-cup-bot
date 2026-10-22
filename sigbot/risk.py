@@ -36,14 +36,20 @@ def _signed_notional(q: float, price: float) -> float:
 
 
 def net_positions_ex_arb(universe: Universe, positions: dict[str, float]) -> dict[str, float]:
-    """Remove held arb sets (common NO quantity on every leg of a race)."""
+    """Remove held arb sets: the common NO quantity on every leg of a race (sell-sets) and the common YES quantity on
+    every leg (buy-sets). Either pays a fixed amount whoever wins, so neither is partisan exposure (a buy-set used to
+    count as up to 0.4 x qty of exposure toward the underdog: sim_pipeline sweep6, 22 Oct)."""
     out = dict(positions)
     for race in universe.races.values():
         qs = [out.get(l.exchange_id, 0.0) for l in race.legs.values()]
         if len(qs) >= 2 and all(q < 0 for q in qs):
             common = max(qs)       # least negative = the common NO quantity
-            for l in race.legs.values():
-                out[l.exchange_id] = out.get(l.exchange_id, 0.0) - common
+        elif len(qs) >= 2 and all(q > 0 for q in qs):
+            common = min(qs)       # the common YES quantity
+        else:
+            continue
+        for l in race.legs.values():
+            out[l.exchange_id] = out.get(l.exchange_id, 0.0) - common
     return out
 
 

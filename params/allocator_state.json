@@ -1,4 +1,13 @@
 {
- "last_run": 1792665180.228228,
- "streak": {}
+ "last_run": 1792711997.995183,
+ "streak": {
+  "arb.capital_frac": [
+   -1,
+   1
+  ],
+  "mm.capital_frac": [
+   -1,
+   1
+  ]
+ }
 }

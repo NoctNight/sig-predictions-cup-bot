@@ -40,6 +40,7 @@ class QuoteState:
     last_reserve: Optional[float] = None
     last_quote_ts: float = 0.0
     fills_seen: int = 0
+    last_gate: tuple = (True, True)
 
 
 @dataclass
@@ -310,9 +311,11 @@ class MarketMaker:
         # outside-fair gate (research_notes/mm_upgrade.md, verified on realised fills): when the fresh Polymarket/Kalshi
         # fair sits >= xv_gate_ticks away from our mid, stop taking the other side of that convergence on every level
         xv = getattr(self, "xv_fair", {}).get(ex)
+        gate = (True, True)
         if xv and self.cfg.xv_gate_ticks > 0:
             from .proposals.mm_upgrade import xv_gate
             ok_bid, ok_ask = xv_gate(mid, xv[0], xv[1], xv[2], time.time() - xv[3], gap_ticks=self.cfg.xv_gate_ticks)
+            gate = (ok_bid, ok_ask)
             if not ok_bid:
                 paused = set(paused) | {"yes_all"}
             if not ok_ask:
@@ -340,7 +343,7 @@ class MarketMaker:
             else:
                 merged[key] = q
         quotes = list(merged.values())
-        info = dict(mid=mid, micro=micro, imb=imb, fair=fair, reserve=reserve, inv=inv, inv_frac=inv_frac, pressure=pressure, hot=hot, mr=mr,
+        info = dict(gate=gate, mid=mid, micro=micro, imb=imb, fair=fair, reserve=reserve, inv=inv, inv_frac=inv_frac, pressure=pressure, hot=hot, mr=mr,
                     spread_ticks=spread_ticks, shift_ticks=shift_ticks, bb=bb, ba=ba, bid_qty=book["bids"][0]["quantity"],
                     ask_qty=book["asks"][0]["quantity"], last=book.get("latestPrice"))
         return quotes, info
@@ -351,6 +354,8 @@ class MarketMaker:
         now = time.time()
         if st.last_reserve is None:
             return True
+        if info.get("gate", (True, True)) != st.last_gate:
+            return True                          # the outside-fair gate opened or closed a side: requote at once
         if abs(info["reserve"] - st.last_reserve) >= self.cfg.requote_ticks * TICK - 1e-9:
             return True
         if fills_on_ex > st.fills_seen:
@@ -433,6 +438,7 @@ class MarketMaker:
             st = self.state.setdefault(ex, QuoteState(ex))
             st.last_reserve, st.last_quote_ts, st.fills_seen = info["reserve"], time.time(), fills_count.get(ex, 0)
             st.last_touch = (info["bb"], info["ba"])
+            st.last_gate = info.get("gate", (True, True))
             to_place.extend((q, info) for q in quotes)
             summary["requoted"].append(ex)
         for i in range(0, len(to_place), self.cfg.batch_size):

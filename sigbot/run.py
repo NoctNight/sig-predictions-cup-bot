@@ -110,6 +110,28 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 log = logging.getLogger("sigbot")
 
 
+def own_levels(b) -> OwnLevels:
+    """Our resting orders as book levels, to net out of the books the scanner prices: the cycle's open-order read, plus
+    orders the store recorded after that read (placed by the MM/tilt/direction since; the venue never matches us with
+    ourselves, so a leg priced off our own bid is a rejected basket)."""
+    own = OwnLevels()
+    for ex_o, lst in (b.open_orders_cache or {}).items():
+        for o in lst:
+            rem = float(o.get("quantity") or 0) - float(o.get("quantityFilled") or o.get("filledQuantity") or 0)
+            if o.get("priceLimit") is not None:
+                own.upsert(o.get("id"), ex_o, o.get("side"), o.get("action", "buy"), float(o["priceLimit"]), rem)
+    snap_ts = getattr(b, "open_orders_ts", 0.0)
+    if b.store is not None and snap_ts:
+        try:
+            for o in b.store.rows("SELECT order_id, exchange_id, side, action, price, quantity FROM orders "
+                                  "WHERE placed_at > ? AND status='open' AND purpose != 'arb'", (snap_ts - 1.0,)):
+                if o["price"] is not None and o["order_id"] not in own.orders:
+                    own.upsert(o["order_id"], str(o["exchange_id"]), o["side"], o["action"] or "buy", float(o["price"]), float(o["quantity"]))
+        except Exception as e:
+            log.debug("own orders since snapshot: %s", e)
+    return own
+
+
 class ArbScanner(threading.Thread):
     """Polls the bulk price snapshot every `arb_scan_sec` seconds, aligned to `arb_scan_offset` past the 5-second grid,
     fetches books only for races whose best bids/asks already show edge, and executes atomic baskets at once.
@@ -203,12 +225,7 @@ class ArbScanner(threading.Thread):
         cands.sort(key=apparent, reverse=True)
         # hft_strategies.md: 17-18 of 33 failed baskets priced a leg off our OWN resting tilt/MM bid (the venue will not
         # match us with ourselves), 7 re-sent a basket on a book that still showed the size we had just taken
-        own = OwnLevels()
-        for ex_o, lst in (b.open_orders_cache or {}).items():
-            for o in lst:
-                rem = float(o.get("quantity") or 0) - float(o.get("quantityFilled") or o.get("filledQuantity") or 0)
-                if o.get("priceLimit") is not None:
-                    own.upsert(o.get("id"), ex_o, o.get("side"), o.get("action", "buy"), float(o["priceLimit"]), rem)
+        own = own_levels(b)
         last_fill = getattr(self, "last_fill_ts", {})
         self.last_fill_ts = last_fill
         cand_books, n_rest = {}, 0
@@ -648,10 +665,9 @@ class Bot:
         # drawdown must not count profitable recycling, which closes sets at the asks, as a loss; 22 Oct 21:49)
         mv = {str(x["exchangeId"]): float(x.get("marketValue") or 0.0) for x in p.get("positions", []) if not x.get("settled")}
         adj = 0.0
-        real = getattr(self, "_real_sets", None)
-        if real is None or time.time() - getattr(self, "_real_sets_ts", 0) > 300:
-            real = {r["race"] for r in self.store.rows("SELECT DISTINCT race FROM arb_trades WHERE ok=1 AND kind IN ('sell_set','buy_set')")}
-            self._real_sets, self._real_sets_ts = real, time.time()
+        # read every time (one small query per cycle): a 5-min cache left sets bought in a NEW race unadjusted, so their
+        # spread counted as drawdown and tripped the kill switch a minute after an arb burst (sim_pipeline aon_reject, 22 Oct)
+        real = {r["race"] for r in self.store.rows("SELECT DISTINCT race FROM arb_trades WHERE ok=1 AND kind IN ('sell_set','buy_set')")}
         for race in self.universe.races.values():
             if race.name not in real:
                 continue
@@ -938,7 +954,7 @@ class Bot:
             if (u["kind"] == "arb_set" or not live) and time.time() - seen.get(key, 0) < 600:
                 continue                         # same recommendation within 10 min: do not repeat it every 3 s
             seen[key] = time.time()
-            log.info("OFFLOAD%s: exit %s %s x%d (gives up %.2f%%) to fund %s (%.2f%% net), gain %.2f%%", "" if live else " (report-only)",
+            log.info("OFFLOAD candidate%s: exit %s %s x%d (gives up %.2f%%) to fund %s (%.2f%% net), gain %.2f%%", "" if live else " (report-only)",
                      u.get("race") or u.get("exchange_id"), u.get("side", "set"), u["qty"], 100 * u["forgone_ret"],
                      r["opportunity"].get("race") or r["opportunity"].get("exchange_id"), 100 * r["opportunity"]["ret_net"], 100 * r["gain"])
             if live and self.cfg.offload_arb_for_sleeves and u["kind"] == "arb_set" and r["opportunity"].get("kind") in ("tilt", "direction") and done < 1:
@@ -989,6 +1005,7 @@ class Bot:
             try:
                 resp = self.api.place_order(u["exchange_id"], side, "buy", int(u["qty"]), float(px), expiration=ttl, key=self.api.new_key("offload"))
                 self.store.record_order(resp.get("orderId"), u["exchange_id"], None, side, "buy", float(px), int(u["qty"]), "exit", response=resp)
+                log.info("OFFLOAD: exit %s %s x%d @%.3f to fund %s", u["exchange_id"], side, int(u["qty"]), float(px), opp.get("exchange_id"))
                 done += 1
             except ApiError as e:
                 log.warning("offload exit %s failed: %s", u["exchange_id"], e)
@@ -1011,8 +1028,31 @@ class Bot:
         return self.mm.select_markets(prices, self.volume)
 
     # --------------------------------------------------------------- realtime feed
+    def mm_gate_ready(self, killed: bool, now: Optional[float] = None) -> bool:
+        """May the MM quote this cycle? After a restart or a kill pause (no MM orders rest then) it waits for a fresh
+        outside fair so the xv gate is known before the first quote, for at most 10 min (outside venues down). Mid-session
+        a stale fair does not stop the MM: xv_gate treats stale fairs as open, as before (review 22 Oct: a mid-session wait
+        left resting quotes unmanaged for up to 10 min)."""
+        now = time.time() if now is None else now
+        if self.cfg.mm.xv_gate_ticks <= 0 or not getattr(getattr(self.direction, "cfg", None), "enabled", True):
+            return True
+        if killed:
+            self.mm_need_xv, self.mm_gate_wait0 = True, None
+            return False
+        if any(now - v[3] < 540 for v in (self.mm.xv_fair or {}).values()):
+            self.mm_need_xv, self.mm_gate_wait0 = False, None
+            return True
+        if not getattr(self, "mm_need_xv", True):
+            return True
+        self.mm_gate_wait0 = getattr(self, "mm_gate_wait0", None) or now
+        if now - self.mm_gate_wait0 > 600:
+            self.mm_need_xv, self.mm_gate_wait0 = False, None
+            log.warning("MM: no fresh outside fair for 10 min after start/kill; quoting with the xv gate open")
+            return True
+        return False
+
     def feed_ok(self) -> bool:
-        return self.feed is not None and self.feed.healthy()
+        return self.feed is not None and self.feed.healthy(30)   # > the 25-s heartbeat; was 120 s (frozen books)
 
     def feed_watchdog(self):
         """A feed thread can stall inside a DNS lookup or a connect that never returns (no socket timeout applies to
@@ -1100,9 +1140,12 @@ class Bot:
                 log.warning("account: %s", e)
             positions, pos_value, n_pos = self.positions_map()
             cycle_cash = self.cash
+            cycle_adj = getattr(self, "settle_adj", 0.0)   # positions_map() set it from these positions; later calls
+                                                          # (scanner thread, recycle backstop) move it, so keep this one
         self.positions_snapshot = positions      # read by the scanner thread (free unwinds between cycles)
         open_orders = self.open_orders_map()
         self.open_orders_cache = open_orders
+        self.open_orders_ts = time.time()
         self.load_allocation()
         self.feed_watchdog()
         cycle_id = self.store.new_cycle(cycle_cash, pos_value, n_pos, sum(len(v) for v in open_orders.values()),
@@ -1141,7 +1184,7 @@ class Bot:
         elif self.scanner is not None:
             arb_summary = dict(self.scanner.stats)
             # capital recycling: unwind a held set to fund a better one the scanner could not afford
-            best = self.scanner.best_unfunded
+            best = self.scanner.best_unfunded if not self.feed_ok() else None   # the scanner recycles itself when the feed is up
             if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.arb.committed and not best.get("failed"):
                 try:
                     best = dict(best, fresh_books={ex: self.get_book(ex, 50) for ex in self.universe.races[best["race"]].exchange_ids})
@@ -1176,6 +1219,7 @@ class Bot:
                     except ApiError as e:
                         log.warning("recycle follow-through %s: %s", best.get("race"), e)
                     self.scanner.best_unfunded = None
+                    self.positions_snapshot = self.positions_map()[0]
 
         # ---- portfolio exposure limits (arb sets netted out)
         expo = risk.exposure(self.universe, positions, prices)
@@ -1214,7 +1258,7 @@ class Bot:
         self.update_bars(prices)
         self.mm.meanrev_pred = self.meanrev_predictions(self.mm.quoted)
         self.mm.prices = prices
-        hl = self.health(cycle_cash + pos_value + getattr(self, "settle_adj", 0.0), cycle_id)
+        hl = self.health(cycle_cash + pos_value + cycle_adj, cycle_id)
         killed = time.time() < self.killed_until
         if not killed and (hl["drawdown"] > self.cfg.kill_drawdown or (hl["n_markout"] >= 20 and hl["markout30"] is not None and hl["markout30"] < self.cfg.kill_markout_ticks)):
             self.killed_until = time.time() + self.cfg.kill_pause_sec
@@ -1231,7 +1275,12 @@ class Bot:
 
         # ---- market making
         mm_summary = {}
-        if self.cfg.mm.enabled and not killed:
+        self.mm.xv_fair = {r["exchange_id"]: (r.get("fair"), r.get("pm"), r.get("kalshi"), r.get("ts") or time.time())
+                           for r in (getattr(self.direction, "rows", None) or []) if r.get("fair") is not None and r.get("exchange_id")}
+        gate_ready = self.mm_gate_ready(killed)
+        if not gate_ready and not killed:
+            log.info("MM waits for the first outside-fair poll before quoting (xv gate)")
+        if self.cfg.mm.enabled and not killed and gate_ready:
             if (cycle_id % 30) == 1:
                 self.pick_markets(prices)
             books = {}
@@ -1289,7 +1338,10 @@ class Bot:
                 log.info("DIRECTION traded %d skipped %d blocked=%s", dir_summary.get("traded", 0), dir_summary.get("skipped", 0),
                          dir_summary.get("blocked"))
 
-        # ---- outside fair for the MM's gate (fresh directional rows: fair, Polymarket, Kalshi, timestamp)
+
+        # ---- outside fair for the MM's gate, refreshed right after the directional poll: NOT redundant with the rebuild
+        # before the MM block, because the scanner thread's fast requotes read it until the next cycle (sim offload /
+        # slow_writes / day: removing this let fast requotes post on gated sides for a whole cycle)
         self.mm.xv_fair = {r["exchange_id"]: (r.get("fair"), r.get("pm"), r.get("kalshi"), r.get("ts") or time.time())
                            for r in (getattr(self.direction, "rows", None) or []) if r.get("fair") is not None and r.get("exchange_id")}
 

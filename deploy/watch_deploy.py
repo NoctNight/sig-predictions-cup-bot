@@ -9,7 +9,7 @@ Each tick (DB and log only, plus 2 API reads every other tick for the settlement
   * actions that have churned before: arb-set unwinds, exits, offload exits, failed baskets, kill switch, tracebacks
   * whether the bot process is alive
 Stops the bot via deploy/mac/botctl.sh stop and exits 2 when: settlement value falls more than --max-drop below the start,
-or more than 3 unwinds, or more than 40 exits, or a traceback / kill switch appears. Exit 0 when the window passes cleanly.
+or more than 3 offload unwinds, more than 30 recycles, or more than 40 exits, or a traceback / kill switch appears. Exit 0 when the window passes cleanly.
 """
 from __future__ import annotations
 
@@ -86,7 +86,9 @@ def main():
             reason = f"settlement value fell {drop:.0f} since the deploy"
         elif c["unwinds"] > 3:
             reason = f"{c['unwinds']} offload unwinds in {tick * a.every:.0f} s"
-        elif c["recycles"] > 12:
+        elif c["recycles"] > 30:
+            # each recycle must beat the set it closes by recycle_min_gain (settlement value rises); the simulation's
+            # standing-sell-set scenarios run 16-42 per 10 min legitimately, so only a rate far above that suggests a loop
             reason = f"{c['recycles']} recycles in {tick * a.every:.0f} s (each must beat the set it closes; this many suggests a loop)"
         elif c["exits"] > 40:
             reason = f"{c['exits']} exits in {tick * a.every:.0f} s"
