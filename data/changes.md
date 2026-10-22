@@ -273,3 +273,11 @@
   the arb path's guards: each funded opportunity once per 30 min, each held position offloaded at most once per hour, at
   most one per check, gain >= max(3%, 2 x recycle_min_gain), and never an exit that gives up more than 5% (one at 20:53
   gave up 6.97% for a 1.6% net gain). Restarted via botctl.
+- 21:35 HFT study (research_notes/hft_strategies.md, Fable-checked): no HFT strategy pays here (Polymarket follow,
+  DMM lag, refill front-running all fail out of sample; not wired). Wired its two fixes: (1) the arb scanner nets our own
+  resting orders out of the books it walks (proposals/own_book.OwnLevels, from the cycle's open-order list) and skips a race
+  until a feed book newer than our last basket there arrives (17-18 of 33 failed baskets priced a leg off our own tilt/MM
+  bid; 7 re-sent on a stale book); (2) sell-sets returning >= 4% to settlement get a 40% per-race ceiling
+  (arb.high_ret_min / high_ret_race_frac; ~120k of riskless 4-6.5% sets stand unfilled, Idaho Governor 5.9k alone), funded
+  by the 1-s recycler from low-edge sets. Also: exit orders compute their 60-s expiry per order (4 had arrived expired).
+  Restarted via botctl.

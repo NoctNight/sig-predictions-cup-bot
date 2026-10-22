@@ -64,7 +64,7 @@ def arbs(paths, min_edge=0.005, min_ret=0.0):
     races = {n: r for n, r in uni.races.items() if len(r.legs) >= 2}
     leg_race = {l.exchange_id: n for n, r in races.items() for l in r.legs.values()}
     xs = {n: X_DEFAULT.get(r.office, 0.02) for n, r in races.items()}
-    book, open_ep, eps = {}, {}, []
+    book, open_ep, eps, first_full = {}, {}, [], {}
     trades_by_ex = collections.defaultdict(list)
     t_first = t_last = None
     for kind, d in load(paths):
@@ -82,6 +82,7 @@ def arbs(paths, min_edge=0.005, min_ret=0.0):
         exs = races[n].exchanges() if hasattr(races[n], "exchanges") else [l.exchange_id for l in races[n].legs.values()]
         if any(e not in book or not book[e]["bids"] or not book[e]["asks"] for e in exs):
             continue
+        first_full.setdefault(n, d["ts"])
         for kindset in ("sell", "buy"):
             if kindset == "sell":
                 edge = sum(book[e]["bids"][0][0] for e in exs) - 1
@@ -98,7 +99,7 @@ def arbs(paths, min_edge=0.005, min_ret=0.0):
                 ep = open_ep.get(key)
                 if ep is None:
                     open_ep[key] = {"race": n, "kind": kindset, "t0": d["ts"], "rx0": d["rx"], "edge0": edge, "ret0": edge / cost,
-                                    "standing": d["ts"] - t_first < 5,
+                                    "standing": first_full.setdefault(n, d["ts"]) == d["ts"],   # open on the race's first full book
                                     "qty0": min(lv[e][0][1] for e in exs), "sets0": sets, "prof0": prof, "max_edge": edge,
                                     "max_prof": prof, "exs": exs, "trigger": ex}
                 else:
@@ -110,7 +111,7 @@ def arbs(paths, min_edge=0.005, min_ret=0.0):
     for ep in open_ep.values():
         ep["t1"], ep["closer"] = t_last, None
         eps.append(ep)
-    # who closed it: a print on any leg inside [t0, t1 + 1.5 s]
+    # who closed it: a print on any leg inside [t0 - 0.5 s, t1 + 0.5 s]
     for ep in eps:
         prints = [(ts, e, p, q) for e in ep["exs"] for (ts, p, q) in trades_by_ex.get(e, []) if ep["t0"] - 0.5 <= ts <= ep["t1"] + 0.5]
         ep["prints"] = len(prints)
@@ -138,7 +139,7 @@ def walk(lv, exs, kindset, x, min_edge, min_ret=0.0):
         try:
             pr = {e: lv[e][ptr[e]][0] for e in exs}
         except IndexError:
-            break
+            break   # the feed carries 6 levels: a walk that ends here is truncated, so sets/profit are lower bounds
         edge = (sum(pr.values()) - 1) if kindset == "sell" else (1 - sum(pr.values()) - x)
         cost = (len(exs) - sum(pr.values())) if kindset == "sell" else sum(pr.values())
         if edge <= min_edge or edge / cost < min_ret:
@@ -157,7 +158,7 @@ def walk(lv, exs, kindset, x, min_edge, min_ret=0.0):
 
 def report_arbs(paths, min_ret=0.0):
     eps, hours = arbs(paths, min_ret=min_ret)
-    print(f"min_ret {min_ret:.3f}; open at the first 5 s of the file (standing): {sum(x['standing'] for x in eps)}")
+    print(f"min_ret {min_ret:.3f}; open on the race's first full book (standing): {sum(x['standing'] for x in eps)}")
     eps = [x for x in eps if not x["standing"]]
     print(f"capture {hours:.2f} h, episodes {len(eps)}")
     for kind in ("sell", "buy"):

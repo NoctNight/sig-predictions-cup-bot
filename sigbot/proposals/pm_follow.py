@@ -7,8 +7,8 @@ by the SIG touch, and a walk-forward test.
     python3 -m sigbot.proposals.pm_follow --replay sigbot/proposals/hft_data/rec_*.jsonl   # second-resolution replay of a recording
 
 Signal: outside mid (Polymarket; the Polymarket/Kalshi average when both exist and agree within 4 pts) moved >= move
-within window_sec, SIG mid moved < 1/3 of it, SIG spread <= max_spread_ticks. Trade the leg whose SIG touch is cheaper to
-cross in the direction of the move (buy YES at the ask on an up move, buy NO at 1 - bid on a down move), quantity
+within window_sec, SIG mid moved < 1/3 of it, SIG spread <= max_spread_ticks. Trade the race's reference leg (D, else the first
+party) in the direction of the move (buy YES at the ask on an up move, buy NO at 1 - bid on a down move), quantity
 min(qty, touch size). Exit: when SIG mid has closed >= exit_frac of the entry gap, or at hold_sec, crossing the touch.
 Reported per trade: points per share net of both crossings, and the mid-to-mid move (gross of spread).
 `PMFollower.on_outside(ts, ex, outside_mid, sig_book)` returns a paper order; nothing is sent.

@@ -40,6 +40,8 @@ class ArbConfig:
     min_ret: float = 0.0                 # new baskets must return at least this per unit of capital
     min_ret_sell: float = -1.0           # sell-sets only (riskless to settlement); < 0 means use min_ret
     cash_reserve: float = 0.0            # arbs never take cash below this (keeps MM, tilt and directional funded)
+    high_ret_min: float = 0.04           # sell-sets returning at least this to settlement get the larger per-race ceiling
+    high_ret_race_frac: float = 0.40     # hft_strategies.md: ~120k of riskless sell-sets at 4-6.5% stand unfilled (Idaho Governor)
     three_leg_race_frac: float = 0.25    # per-race ceiling for races with an Independent leg (3-leg sets: riskless, deepest edge)
     recycle_min_gain: float = 0.01       # new return minus forgone return, per unit of capital
     recycle_min_new_ret: float = 0.02    # only recycle into sets returning at least this much

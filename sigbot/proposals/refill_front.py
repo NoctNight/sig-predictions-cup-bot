@@ -104,7 +104,12 @@ def simulate(paths, latency=1.05, qty=300, max_wait=120, max_spread=1, min_sweep
                 res.append({"ex": ex, "t": b[0], "status": "crossed", "ahead": ahead})
                 continue
             filled, t_fill, t_stop = 0.0, None, min(t_arr + max_wait, t_end)
+            # the DMM requoting through our price fills us too: first push after arrival with the opposite touch at/through P
+            t_cross = next((r[0] for r in rows[k + 1:] if r[0] <= t_stop and ((buy and r[2] and r[2][0][0] <= P + 1e-9)
+                            or (not buy and r[1] and r[1][0][0] >= P - 1e-9))), None)
             for (tt, p, q) in trades[ex][bisect.bisect_left(tts, t_arr):]:
+                if t_cross is not None and tt >= t_cross:
+                    break
                 if tt > t_stop:
                     break
                 at = abs(p - P) < 1e-9
@@ -122,6 +127,8 @@ def simulate(paths, latency=1.05, qty=300, max_wait=120, max_spread=1, min_sweep
                     t_fill = t_fill or tt
                 if filled >= qty - 1e-9:
                     break
+            if t_cross is not None and filled < qty - 1e-9 and (t_fill is None or t_fill <= t_cross):
+                filled, t_fill = qty, t_fill or t_cross
             busy_until = (t_fill if filled >= qty - 1e-9 else t_stop)
             r = {"ex": ex, "t": b[0], "P": P, "buy": buy, "ahead0": ahead, "filled": filled, "t_fill": t_fill,
                  "status": "filled" if filled > 0 else "unfilled"}

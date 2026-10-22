@@ -153,10 +153,13 @@ class ArbEngine:
         used = sum(self.committed.values())
         return max(0.0, min(total_cap - used, cash * 0.95 - self.cfg.cash_reserve))
 
-    def race_budget_left(self, race: str) -> float:
+    def race_budget_left(self, race: str, ret: Optional[float] = None) -> float:
         """Capital still allowed in `race`: the per-race ceiling (max_race_frac), tightened by the allocator's edge-based
         cap when one is loaded (`race_caps`, floored at `race_cap_floor` so a new opportunity can still be taken small)."""
         lim = self.cfg.max_race_frac * self.starting_cash
+        if ret is not None and ret >= self.cfg.high_ret_min and self.cfg.high_ret_race_frac > 0:
+            # riskless sets returning >= high_ret_min: the per-race cap only guards settlement mechanics, so allow more
+            return max(0.0, self.cfg.high_ret_race_frac * self.starting_cash - self.committed.get(race, 0.0))
         r = self.u.races.get(race)
         if r is not None and r.has_independent and self.cfg.three_leg_race_frac > 0:
             # high_upside.md: the three 3-leg sell-sets (RI Governor, NE Senate, MT Senate) are riskless and carry the most
@@ -184,7 +187,7 @@ class ArbEngine:
             floor = self.cfg.min_ret_sell if (c.kind == "sell_set" and self.cfg.min_ret_sell >= 0) else self.cfg.min_ret
             if c.ret < floor or c.race in self.hostile or self.cooldown.get(c.race, 0) > time.time():
                 continue
-            rb = self.race_budget_left(c.race) - race_spent.get(c.race, 0.0)
+            rb = self.race_budget_left(c.race, c.ret if c.kind == "sell_set" else None) - race_spent.get(c.race, 0.0)
             cap = min(budget, rb)
             q = min(c.qty, int(cap // c.cost))
             if q < self.cfg.min_set_qty:

@@ -48,6 +48,7 @@ from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
 from .proposals import election_night as EN
+from .proposals.own_book import OwnLevels
 
 
 class ExplainedDirection(DirectionTrader):
@@ -188,11 +189,23 @@ class ArbScanner(threading.Thread):
         if b.arb.budget_left(b.cash) < b.cfg.arb.min_set_qty * min_cost and not b.cfg.arb.recycle_enabled:
             cands = []
         cands.sort(key=apparent, reverse=True)
+        # hft_strategies.md: 17-18 of 33 failed baskets priced a leg off our OWN resting tilt/MM bid (the venue will not
+        # match us with ourselves), 7 re-sent a basket on a book that still showed the size we had just taken
+        own = OwnLevels()
+        for ex_o, lst in (b.open_orders_cache or {}).items():
+            for o in lst:
+                rem = float(o.get("quantity") or 0) - float(o.get("quantityFilled") or 0)
+                if o.get("priceLimit") is not None:
+                    own.upsert(o.get("id"), ex_o, o.get("side"), o.get("action", "buy"), float(o["priceLimit"]), rem)
+        last_fill = getattr(self, "last_fill_ts", {})
+        self.last_fill_ts = last_fill
         cand_books, n_rest = {}, 0
         for race in cands[: (b.cfg.arb_scan_books_feed if feed_ok else b.cfg.arb_scan_books)]:
             fb = {ex: b.fresh_book(ex, 30.0) for ex in race.exchange_ids}
+            if race.name in last_fill and any(v is None or v.get("feed_ts", 0) <= last_fill[race.name] for v in fb.values()):
+                continue                        # no book newer than our last basket in this race yet
             if all(v is not None for v in fb.values()):
-                cand_books[race.name] = fb      # every leg current on the feed: no read spent
+                cand_books[race.name] = {ex: own.net(ex, bk) for ex, bk in fb.items()}
                 continue
             if n_rest >= b.cfg.arb_scan_books:
                 continue
@@ -216,6 +229,9 @@ class ArbScanner(threading.Thread):
             log.info("scanner arb plan: %s", [(c.race, c.kind, c.qty, round(c.edge, 4), round(100 * c.ret, 2)) for c in plan])
             res = b.arb.execute(plan, None)
             n = sum(1 for r in res if r.get("ok"))
+            for r in res:
+                if r.get("ok"):
+                    self.last_fill_ts[r["chunk"].race] = time.time()
             if self.best_unfunded and any(not r.get("ok") and r["chunk"].race == self.best_unfunded["race"] for r in res):
                 self.best_unfunded["failed"] = True
             self.stats["executed"] += n
@@ -571,6 +587,7 @@ class Bot:
                 order = ("no", round(1 - f["sig_bid"], 3))
             else:
                 continue
+            ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
             log.info("ZERO-EV EXIT %s %s x%d: venue %s/%s vs fair %.3f", ex, side, q, f["sig_bid"], f["sig_ask"], f["fair"])
             if self.dry_run:
                 done += 1; continue
