@@ -367,3 +367,12 @@
   recycle_cash_gone (1 unwind; the pre-fix code made 12 in 30 min). 17 scenarios 0 violations; two Fable reviews (second
   SAFE TO DEPLOY). Deployed via botctl deploy, watch passed (103,407 -> 103,409). Wind-down: unwinds NOTHING for the punt
   until Sizhe sets RAISE_TARGET (30 Oct brief asks).
+- 00:16 (24 Oct) HIGH-FREQUENCY ARB live (Sizhe's name; code proposals/dev_churn.py, config churn_*), launched SMALL
+  at Sizhe's request: 4k pot / -200 stop until the Fable test-environment check returns (then 12k / -600). Rules: two-leg
+  sell-sets only, entry when the race's mid overround is >= 4 ticks above its 24-h median, exit at +2 ticks/set or 24 h,
+  never RI Governor / 3-leg races / races where we hold > 4,000 shares on a leg (Sizhe; today MN-05, Hawaii Governor),
+  volatility pause (>= 1.5x normal gap movement), no entries from 1 Nov 00:00 UTC, sell-all from 3 Nov 22:30 UTC. Same
+  deploy: hourly order-book snapshots (data/books_latest.json), the catch-up sweep loads its 60-min history from stored
+  quotes at start-up, main-loop free unwinds read the latest positions under the lock (double-unwind fix found by the sim).
+  Tests: tests/test_guards.py (churn:, books:, catchup history), sim scenario 'churn'; 19 scenarios 0 violations. Watch
+  passed (Mac network dropped 00:18-00:21, recovered). 114 races have medians; gap movement 0.72x normal.
