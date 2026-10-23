@@ -11,12 +11,13 @@
     "min_set_qty": 20,
     "x_overrides": {},
     "hedge_residual": false,
-    "recycle_enabled": true,
+    "recycle_enabled": false,
     "recycle_min_gain": 0.005,
     "recycle_min_new_ret": 0.02,
     "min_ret": 0.024,
     "min_ret_sell": 0.005,
-    "cash_reserve": 20000.0
+    "cash_reserve": 20000.0,
+    "new_sets": false
   },
   "mm": {
     "capital_frac": 0.33,
@@ -50,7 +51,7 @@
     "improve_when_spread_ticks_ge": 3
   },
   "tilt": {
-    "enabled": true,
+    "enabled": false,
     "capital_frac": 0.2,
     "max_market_frac": 0.01,
     "calibration_slope": 1.5,
@@ -99,7 +100,7 @@
   "scan_writes_per_min": 10,
   "direction": {
     "enabled": true,
-    "allow_live": true,
+    "allow_live": false,
     "per_market_cap": 600,
     "overall_cash_frac": 0.6,
     "per_poll_budget": 900.0,
@@ -114,8 +115,8 @@
     "auto_apply": true
   },
   "allocator": {
-    "auto_apply": true,
-    "offload_live": true
+    "auto_apply": false,
+    "offload_live": false
   },
   "mm_fast_requotes_per_min": 3,
   "inside_enabled": false,

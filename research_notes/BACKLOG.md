@@ -9,6 +9,25 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
 (guard test + tests/sim_pipeline.py + precheck + Fable review + 10-min post-deploy watch).
 
 ## Open
+000. NEW OBJECTIVE (Sizhe, 23 Oct ~15:20 BST): maximise LIQUID CASH available at ~18:00 ET on 3 Nov for Sizhe's punt.
+   Rank and settlement value no longer matter; a position's worth is its sale value on 3 Nov evening. Live since 23 Oct
+   (main session): arb.new_sets=false (no new sets, no recycles), tilt off, direction.allow_live=false (polling stays on
+   for the MM gate), offload off; free unwinds, zero-EV exits, residual hedges and the MM stay on. The research bar
+   becomes "adds liquid cash by 3 Nov evening at t > 2"; hold-to-settlement edges no longer count.
+   BUILD BEFORE 31 Oct (this is the capital-raise routine in 00b, now with a bigger job; off until its start time):
+   a. Classify every held set by when its race is likely to be CALLED on election night (poll-closing time ET, plus how
+      close the race is): early (called before ~22:00 ET 3 Nov) vs late (west coast / Hawaii / Alaska / close races).
+   b. Late-call sets: patient unwinds from 31 Oct 00:00 ET, spread over the days (limit per hour so we do not walk the
+      DMM books), cost cap starting at the set's locked return (no realised loss) and loosening to ~4.5% by 2 Nov and
+      5.5% by 17:45 ET 3 Nov; RI Governor first (00a trim).
+   c. Early-call sets: hold; on 3 Nov evening sell each set as soon as its race is called (legs at >= 0.97 / <= 0.03)
+      at near payout. This is a switch Sizhe turns on, or that turns itself on at 18:00 ET 3 Nov only if Sizhe has
+      approved it by then; until then, report-only.
+   d. MM: shrink inventory from 1 Nov and be flat by 12:00 ET 3 Nov; tilt/directional holdings: exit patiently from
+      31 Oct when the exit costs <= ~1 tick against the outside fair.
+   e. Daily brief: report projected liquid cash at 18:00 ET 3 Nov (cash + sale value of everything, by call time).
+   f. Refresh proposals/punt_screener.py with the projected cash and the live third-place balance before 3 Nov.
+   Never place the punt; Sizhe does that.
 00. SIZHE'S DECISIONS 23 Oct ~11:45 BST (do these first, under the normal gates):
    a. Rhode Island Governor: CAP IT. Its three legs (D 1073, R 1074, I 880) are separate binary markets (the I market was
       created 24 Aug, D/R on 18 Sep); nothing guarantees exactly one resolves YES. Our sell-set (NO x3) pays 2 only if

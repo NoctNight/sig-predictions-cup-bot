@@ -194,7 +194,7 @@ class ArbScanner(threading.Thread):
         b.latest_prices = (prices, time.time())
         self.stats["passes"] += 1
         self.stats["last_pass"] = time.time()
-        if not b.cfg.arb.enabled or time.time() < b.killed_until:
+        if not b.cfg.arb.enabled or not b.cfg.arb.new_sets or time.time() < b.killed_until:
             return
         cands = b.arb.candidates_from_prices(prices)
         if not cands:
@@ -318,7 +318,7 @@ class ArbScanner(threading.Thread):
         beats it by recycle_min_gain, and buy the new set at once from a fresh book, all inside the trade lock."""
         b = self.bot
         best = self.best_unfunded
-        if (not best or best.get("failed") or time.time() - best.get("ts", 0) > 10 or not b.cfg.arb.recycle_enabled
+        if (not best or best.get("failed") or time.time() - best.get("ts", 0) > 10 or not b.cfg.arb.recycle_enabled or not b.cfg.arb.new_sets
                 or not b.arb.committed or not b.feed_ok() or time.time() < b.killed_until):
             return
         if b.arb.budget_left(b.cash) >= best["cost"] * max(b.cfg.arb.min_set_qty, 1):
@@ -1159,7 +1159,7 @@ class Bot:
 
         # ---- arbs first (riskless, capital priority)
         arb_summary = {"candidates": 0, "planned": 0, "executed": 0}
-        if self.cfg.arb.enabled and self.scanner is None:
+        if self.cfg.arb.enabled and self.cfg.arb.new_sets and self.scanner is None:
             cands = self.arb.candidates_from_prices(prices)
             arb_summary["candidates"] = len(cands)
             cand_books = {}
@@ -1185,12 +1185,12 @@ class Bot:
             arb_summary = dict(self.scanner.stats)
             # capital recycling: unwind a held set to fund a better one the scanner could not afford
             best = self.scanner.best_unfunded if not self.feed_ok() else None   # the scanner recycles itself when the feed is up
-            if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.arb.committed and not best.get("failed"):
+            if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.cfg.arb.new_sets and self.arb.committed and not best.get("failed"):
                 try:
                     best = dict(best, fresh_books={ex: self.get_book(ex, 50) for ex in self.universe.races[best["race"]].exchange_ids})
                 except ApiError:
                     best = None
-            if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.arb.committed and not best.get("failed"):
+            if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.cfg.arb.new_sets and self.arb.committed and not best.get("failed"):
                 held_books = {}
                 for rname in list(self.arb.committed)[:3]:
                     try:

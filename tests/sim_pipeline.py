@@ -198,7 +198,12 @@ class Sim:
         cfg = mods["config"].BotConfig.load(os.path.join(sb, "config.json"))
         cfg.api_key = "sim-no-key"
         cfg.db_path = "data/sim.sqlite"
-        for k, val in sc.cfg.items():
+        # The live config is in cash mode since 23 Oct (no new sets, no recycles). Scenarios that exist to exercise the arb
+        # and recycle code switch it back on in their sandbox so that code stays regression-tested; every other scenario
+        # (incl. the 24-h replay) runs the live config as deployed.
+        overrides = dict(ARB_CODE_CFG) if sc.name in ARB_CODE_SCENARIOS else {}
+        overrides.update(sc.cfg)
+        for k, val in overrides.items():
             obj = cfg
             parts = k.split(".")
             for p in parts[:-1]:
@@ -635,6 +640,10 @@ class Checker:
 
 
 # ======================================================================================== scenarios
+ARB_CODE_SCENARIOS = {"sweep6", "recycle", "recycle_tail", "recycle_race", "own_bid", "aon_reject", "recycle_oversize"}
+ARB_CODE_CFG = {"arb.new_sets": True, "arb.recycle_enabled": True}
+
+
 class Scenario:
     name = "base"
     cycles = 60
