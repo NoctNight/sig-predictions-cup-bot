@@ -17,6 +17,12 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
    BUILD BEFORE 31 Oct (this is the capital-raise routine in 00b, now with a bigger job; off until its start time):
    a. Classify every held set by when its race is likely to be CALLED on election night (poll-closing time ET, plus how
       close the race is): early (called before ~22:00 ET 3 Nov) vs late (west coast / Hawaii / Alaska / close races).
+   RAISE_TARGET = EVERYTHING (Sizhe, 23 Oct ~17:00 BST: "everything for the punt"). So: late-call sets, tilt and
+   directional holdings and MM inventory are all turned into cash by 18:00 ET 3 Nov (patient, from 31 Oct, cheapest
+   exit cost first); early-call sets are held and sold at their call on election night (approved by the same answer),
+   which only adds cash if the punt is placed after those calls: the 1 Nov brief must ask Sizhe when he plans to place
+   the punt, and if it is at or before ~19:00 ET, unwind the early-call sets before then too. Projected cash: ~95-100k.
+   (The original rule below still applies to the mechanics: the routine raises up to the target and nothing more.)
    b. NO UNWIND WITHOUT SIZHE'S GO (Sizhe, 23 Oct ~16:20 BST: "only unwind if the money we unwind is able to make more
       money"). Every unwind loses susqies (exit cost 3.75-4.75% ~= the locked edge); it only pays if that cash goes into
       the punt. So the routine raises exactly the amount Sizhe sets (RAISE_TARGET, default 0 = hold everything to
