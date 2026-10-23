@@ -120,5 +120,8 @@
   },
   "mm_fast_requotes_per_min": 3,
   "inside_enabled": false,
-  "lag_enabled": false
+  "lag_enabled": false,
+  "catchup_enabled": true,
+  "catchup_notional": 300.0,
+  "catchup_kill": -50.0
 }

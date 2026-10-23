@@ -691,9 +691,15 @@ class FakeClient:
         return self.v.place(str(exchange_id), side, action, quantity, price, expiration, key or self.new_key("ord"))
 
     def place_batch(self, orders, key=None, max_rounds=6) -> dict:
+        # the touch each order was priced against, BEFORE the write latency: lets the checker tell a bot bug (quote
+        # already crossing when sent) from the market moving while the order was in flight
+        sent = {str(o["exchangeId"]): (P(self.v.bid_t[str(o["exchangeId"])]), P(self.v.ask_t[str(o["exchangeId"])]))
+                for o in orders[:50] if str(o["exchangeId"]) in self.v.bid_t}
+        n0 = len(self.v.calls)
         self._w()
         key = key or self.new_key("bat")
         res = []
+        self._sent_touch = (n0, sent)
         for i, o in enumerate(orders[:50]):
             try:
                 d = self.v.place(str(o["exchangeId"]), o["side"], o.get("action", "buy"), o["quantity"], o.get("price"),
@@ -701,6 +707,9 @@ class FakeClient:
                 res.append({"index": i, "ok": True, "status": 201, "data": d})
             except self.v.ApiError as e:
                 res.append({"index": i, "ok": False, "status": e.status, "data": {"error": {"code": e.code, "message": e.message}}})
+        for c in self.v.calls[n0:]:
+            if c.get("kind") == "order" and c.get("ex") in sent:
+                c["touch_at_send"] = sent[c["ex"]]
         return {"results": res}
 
     def place_multi_leg(self, legs, all_or_none=True, key=None) -> dict:

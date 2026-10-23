@@ -441,6 +441,23 @@ class MarketMaker:
             st.last_gate = info.get("gate", (True, True))
             to_place.extend((q, info) for q in quotes)
             summary["requoted"].append(ex)
+        # last look before sending: the touch can move inside the cycle (another sleeve's taker order, a DMM requote),
+        # and a resting bid at or above the current ask fills at once as a taker (sim 'day' 23 Oct: bid 0.76 into a
+        # 0.75/0.76 book). Drop any quote that would cross the freshest book.
+        touch_fn = getattr(self, "touch_fn", None)
+        if touch_fn is not None and to_place:
+            kept = []
+            for q, info in to_place:
+                t = touch_fn(q.exchange_id)
+                if t is not None:
+                    bb, ba = t
+                    if q.side == "yes" and ba is not None and q.yes_price >= ba - 1e-9:
+                        continue
+                    if q.side == "no" and bb is not None and q.yes_price <= bb + 1e-9:
+                        continue
+                kept.append((q, info))
+            summary["dropped_crossing"] = len(to_place) - len(kept)
+            to_place = kept
         for i in range(0, len(to_place), self.cfg.batch_size):
             chunk = to_place[i : i + self.cfg.batch_size]
             orders = [dict(exchangeId=q.exchange_id, side=q.side, action="buy", quantity=q.qty, price=q.price, expirationDate=ttl,

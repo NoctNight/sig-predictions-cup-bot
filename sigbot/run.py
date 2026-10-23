@@ -47,6 +47,7 @@ from .allocator import build_state_from_bot, offload_check
 from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
+from .proposals.outside_sweep import CatchupSweep, pnl_from_fills
 from .proposals import election_night as EN
 from .proposals.own_book import OwnLevels
 
@@ -299,7 +300,7 @@ class ArbScanner(threading.Thread):
             with b.trade_lock:
                 b.mm.force_cancel = True
                 try:
-                    summ = b.mm.quote_cycle({ex: fb}, b.positions_snapshot, b.pressures(), {ex: b.open_orders_cache.get(ex, [])},
+                    summ = b.mm.quote_cycle({ex: fb}, b.mm_positions(b.positions_snapshot), b.pressures(), {ex: b.open_orders_cache.get(ex, [])},
                                             b.fills_count_cache, b.cash, b.last_cycle_id, 2)
                 finally:
                     b.mm.force_cancel = False
@@ -479,6 +480,17 @@ class Bot:
             except Exception as e:
                 log.warning("election sleeve disabled: %s", e)
                 self.election = None
+        self.catchup = (CatchupSweep(notional=cfg.catchup_notional, kill_pnl=cfg.catchup_kill)
+                        if getattr(cfg, "catchup_enabled", False) else None)
+        self.catchup_state_path = os.path.join(HERE, "params", "catchup_state.json")
+        if self.catchup is not None:
+            try:
+                st = json.load(open(self.catchup_state_path))
+                self.catchup.ctx = {str(k): v for k, v in (st.get("ctx") or {}).items()}
+                self.catchup.last_signal = dict(st.get("last_signal") or {})
+                self.catchup.killed = bool(st.get("killed", False))
+            except Exception as e:                   # missing, corrupt or not a dict: start empty (positions without
+                log.warning("catchup state unreadable (%s): starting empty", e)   # context are then closed)
         self.move_detector = MoveDetector()
         self.volatile_paper = VolatileMoves()
         self.inside_posted: dict = {}            # ex -> time of our last inside post (re-post before the venue TTL expires)
@@ -493,6 +505,7 @@ class Bot:
                  sum(r.has_independent for r in self.universe.races.values()))
         self.arb = ArbEngine(self.api, self.store, cfg.arb, self.universe, self.slug, cfg.starting_cash, dry_run)
         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
+        self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
         self.tilt = TiltHarvester(self.api, self.store, cfg.tilt, self.universe, cfg.starting_cash, dry_run)
         self.direction = ExplainedDirection(self.api, self.store, None, self.universe)
         self.news = NewsSweeper(self.api, self.store, cfg.news, self.universe, cfg.starting_cash, dry_run) if cfg.news.enabled else None
@@ -860,6 +873,123 @@ class Bot:
         if summary["orders"]:
             log.info("INSIDE posted %d orders on %d markets (%d writes)", summary["orders"], summary["markets"], summary["writes"])
         return summary
+
+    def mm_positions(self, positions: dict) -> dict:
+        """Positions the MM manages: the venue's, minus the catch-up sweep's own open positions (the MM used to count
+        them as inventory and skew to unload them before they converged; review 23 Oct)."""
+        cu = getattr(self, "catchup_open", None) or {}
+        if not cu:
+            return positions
+        return {ex: q - cu.get(ex, 0.0) for ex, q in positions.items()}
+
+    def mm_touch(self, ex: str):
+        """Freshest (best bid, best ask) for the MM's last look before it sends quotes; None when no fresh book."""
+        bk = self.fresh_book(ex, 10.0)
+        if not bk:
+            return None
+        return ((bk.get("bids") or [{}])[0].get("price") if bk.get("bids") else None,
+                (bk.get("asks") or [{}])[0].get("price") if bk.get("asks") else None)
+
+    def catchup_cycle(self, dir_summary: dict, positions: dict, prices: dict, killed: bool):
+        """Catch-up sweep trial (proposals/outside_sweep.py): exits first (convergence, 12 h stop, outside disagreement or
+        reversal, kill, 3 Nov flatten), then entries on a fresh directional poll. Positions come from the fills table
+        (purposes catchup / catchup_exit), so a restart cannot lose them. One order per exchange in flight (60 s TTL)."""
+        cs = self.catchup
+        if cs is None or self.dry_run or self.store is None:
+            return
+        now = time.time()
+        rows = getattr(self.direction, "rows", None) or []
+        if dir_summary.get("polled"):
+            cs.push(rows)
+        byex = {str(r["exchange_id"]): r for r in rows if r.get("exchange_id")}
+        fills = [dict(r) for r in self.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('catchup','catchup_exit') ORDER BY filled_at")]
+        marks = {ex: r.get("sig_mid") for ex, r in byex.items()}
+        pnl, open_pos = pnl_from_fills(fills, marks)
+        self.catchup_open = dict(open_pos)           # the MM excludes these from its inventory
+        if not cs.killed and cs.check_kill(pnl):
+            log.warning("CATCHUP: sleeve P&L %.1f at or below %.0f: switched off; open positions are being closed", pnl, cs.kill_pnl)
+        resting = {str(r["exchange_id"]) for r in self.store.rows(
+            "SELECT exchange_id FROM orders WHERE purpose IN ('catchup','catchup_exit') AND status='open' AND placed_at > ?", (now - 90,))}
+        cu_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose IN ('catchup','catchup_exit') AND placed_at > ?",
+                                                             (now - 6 * 3600,))}
+        for ex_o, lst in (self.open_orders_cache or {}).items():
+            if any(str(o.get("id")) in cu_ids for o in lst):
+                resting.add(str(ex_o))                 # the venue still shows one of our catchup orders resting here
+        ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        changed = False
+        for ex, q in open_pos.items():
+            if ex in resting:
+                continue
+            why = cs.exit_reason(ex, byex.get(ex), now)
+            if not why:
+                continue
+            bk = self.fresh_book(ex, 30.0)
+            if not bk:
+                try:
+                    bk = self.get_book(ex, 5)          # REST read: never price an exit off a stale direction row
+                except ApiError as e:
+                    log.warning("catchup exit book %s: %s", ex, e)
+                    continue
+            bid = bk["bids"][0]["price"] if bk.get("bids") else None
+            ask = bk["asks"][0]["price"] if bk.get("asks") else None
+            if q > 0 and bid is None or q < 0 and ask is None:
+                log.warning("CATCHUP exit %s waits: no %s in the book (%s)", ex, "bid" if q > 0 else "ask", why)
+                continue
+            side, px = ("no", round(1 - bid, 3)) if q > 0 else ("yes", round(ask, 3))
+            try:
+                resp = self.api.place_order(ex, side, "buy", int(abs(q)), px, expiration=ttl, key=self.api.new_key("cux"))
+                self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, int(abs(q)), "catchup_exit", response=resp)
+                log.info("CATCHUP exit %s %s x%d @%.3f (%s)", ex, side, int(abs(q)), px, why)
+            except ApiError as e:
+                log.warning("catchup exit %s: %s", ex, e)
+        for ex in list(cs.ctx):
+            if ex not in open_pos and ex not in resting and now - cs.ctx[ex].get("ts", now) > 300:
+                cs.ctx.pop(ex)                      # flat and settled: forget the entry context
+                changed = True
+        if not killed and not cs.killed and dir_summary.get("polled"):
+            sigs = cs.signals(rows, now)
+            if sigs:
+                expo = risk.exposure(self.universe, positions, prices)
+                n_open = len(open_pos) + len([e for e in resting if e not in open_pos])
+                for s in sigs:
+                    ex = s["exchange_id"]
+                    if ex in open_pos or ex in resting or ex in cs.ctx:
+                        continue
+                    bk = self.fresh_book(ex, 10.0)
+                    if not bk or not bk.get("bids") or not bk.get("asks"):
+                        continue
+                    b0, a0 = bk["bids"][0], bk["asks"][0]
+                    if a0["price"] - b0["price"] > 2 * TICK + 1e-9:
+                        continue
+                    s = dict(s, bid=b0["price"], ask=a0["price"])
+                    side, px, q = cs.size(s, (a0 if s["d"] > 0 else b0)["quantity"])
+                    if not q:
+                        continue
+                    if not cs.can_enter(n_open, risk.adds(self.universe, ex, side), expo.net_d_notional, q * px,
+                                        cap=self.cfg.mm.portfolio_max_partisan_notional):
+                        continue
+                    try:
+                        resp = self.api.place_order(ex, side, "buy", q, px, expiration=ttl, key=self.api.new_key("cu"))
+                        self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, q, "catchup", response=resp)
+                    except ApiError as e:
+                        log.warning("catchup entry %s: %s", ex, e)
+                        continue
+                    adds_dir = risk.adds(self.universe, ex, side)
+                    expo.net_d_notional += q * px if adds_dir == "D" else (-q * px if adds_dir == "R" else 0.0)   # next signal sees it
+                    cs.ctx[ex] = {"ts": now, "d": s["d"], "f_then": s["f_then"], "move": s["move"], "mid0": s["mid"], "gap": s["gap"]}
+                    cs.last_signal[s["race"]] = now
+                    n_open += 1
+                    changed = True
+                    log.info("CATCHUP enter %s %s %s x%d @%.3f: outside moved %+.3f, SIG gap %.1f ticks", s["race"], ex, side, q, px,
+                             s["move"], s["gap"] / TICK)
+        if changed or cs.killed:
+            try:
+                tmp = self.catchup_state_path + ".tmp"
+                with open(tmp, "w") as f:
+                    json.dump({"ctx": cs.ctx, "last_signal": cs.last_signal, "killed": cs.killed}, f)
+                os.replace(tmp, self.catchup_state_path)
+            except OSError as e:
+                log.warning("catchup state: %s", e)
 
     def volatile_cycle(self):
         """research_notes/volatile_moves.md: after a sweep of 5+ ticks, quotes on the retrace side lost about 1 tick over the
@@ -1342,7 +1472,7 @@ class Bot:
                 except ApiError as e:
                     log.warning("book %s: %s", ex, e)
             write_budget = max(4, self.cfg.mm_write_budget - 4)   # leave room for the tilt sleeve
-            mm_summary = self.mm.quote_cycle(books, positions, self.pressures(), open_orders, fills_count, self.cash, cycle_id, write_budget)
+            mm_summary = self.mm.quote_cycle(books, self.mm_positions(positions), self.pressures(), open_orders, fills_count, self.cash, cycle_id, write_budget)
 
         # ---- inside-spread quoting where the DMM's spread is 3+ ticks (exploit 2.2), outside the MM's own markets
         inside_summary = {}
@@ -1373,6 +1503,11 @@ class Bot:
             if dir_summary.get("traded"):
                 log.info("DIRECTION traded %d skipped %d blocked=%s", dir_summary.get("traded", 0), dir_summary.get("skipped", 0),
                          dir_summary.get("blocked"))
+        if self.catchup is not None:
+            try:
+                self.catchup_cycle(dir_summary, positions, prices, killed)
+            except Exception as e:                   # the trial must never kill the loop
+                log.exception("catchup cycle failed: %s", e)
 
 
         # ---- outside fair for the MM's gate, refreshed right after the directional poll: NOT redundant with the rebuild

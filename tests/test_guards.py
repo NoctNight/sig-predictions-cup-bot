@@ -388,5 +388,94 @@ _rs4 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 check("cash mode: recycle_pass spends outstanding credit before unwinding, and cools down a target that vanished",
       "self.spend_recycle_credit(tgt)" in _rs4 and "b.arb.cooldown[tgt] = time.time() + 60" in _rs4)
 
+# ---------------------------------------------------------------- 23 Oct: catch-up sweep trial (proposals/outside_sweep.py)
+from sigbot.proposals import outside_sweep as OS  # noqa: E402
+def _row(t, pm, k, mid, party="D", ex="10", race="Rc", bid=None, ask=None):
+    return {"ts": t, "exchange_id": ex, "race": race, "party": party, "pm": pm, "kalshi": k, "sig_mid": mid,
+            "sig_bid": mid - 0.0025 if bid is None else bid, "sig_ask": mid + 0.0025 if ask is None else ask}
+T0 = 1792700000.0
+def _cs(rows_then, rows_now):
+    cs = OS.CatchupSweep()
+    cs.push(rows_then); cs.push(rows_now)
+    return cs, cs.signals(rows_now, rows_now[0]["ts"])
+_, sg = _cs([_row(T0, 0.50, 0.50, 0.50)], [_row(T0 + 3600, 0.53, 0.53, 0.50)])
+check("catchup: PM+Kalshi up 3 pts, SIG flat -> one buy-YES signal", len(sg) == 1 and sg[0]["d"] == 1 and abs(sg[0]["gap"] - 0.03) < 1e-9, str(sg))
+_, sg = _cs([_row(T0, 0.50, 0.50, 0.50)], [_row(T0 + 3600, 0.53, 0.505, 0.50)])
+check("catchup: no signal when Kalshi did not move with Polymarket", sg == [])
+_, sg = _cs([_row(T0, 0.50, 0.50, 0.50)], [_row(T0 + 3600, 0.53, 0.53, 0.51)])
+check("catchup: no signal when SIG already followed a third of the move", sg == [])
+_, sg = _cs([_row(T0, 0.50, 0.50, 0.50)], [_row(T0 + 3600, 0.53, 0.53, 0.50, bid=0.49, ask=0.51)])
+check("catchup: no signal on a SIG spread wider than 2 ticks", sg == [])
+_, sg = _cs([_row(T0, 0.50, 0.50, 0.50, party="R"), _row(T0, 0.50, 0.50, 0.50, party="D", ex="11")],
+            [_row(T0 + 3600, 0.53, 0.53, 0.50, party="R"), _row(T0 + 3600, 0.47, 0.47, 0.50, party="D", ex="11")])
+check("catchup: one leg per race (D), never both legs of the same move", [x["exchange_id"] for x in sg] == ["11"], str(sg))
+_, sg = _cs([_row(OS.LAST_ENTRY - 3600, 0.50, 0.50, 0.50)], [_row(OS.LAST_ENTRY + 60, 0.53, 0.53, 0.50)])
+check("catchup: no entries after 2 Nov 23:30 ET", sg == [])
+cs = OS.CatchupSweep()
+check("catchup: size = 300 notional at the touch, capped by 80% of the touch", cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 5000)[2] == 600
+      and cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 400)[2] == 320 and cs.size({"d": -1, "ask": 0.705, "bid": 0.7}, 5000)[:2] == ("no", 0.3))
+check("catchup: tiny touch -> no trade", cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 100)[2] == 0)
+check("catchup: partisan cap: no D-adding entry near the cap, R-adding allowed, never past the cap",
+      not cs.can_enter(0, "D", 4850, 300) and cs.can_enter(0, "R", 4850, 300) and not cs.can_enter(0, "D", 4600, 500)
+      and cs.can_enter(0, "D", 2000, 300))
+check("catchup: at most 4 open positions", not cs.can_enter(4, "R", 0, 300) and cs.can_enter(3, "R", 0, 300))
+cs.ctx["10"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03}
+check("catchup: exit when SIG has moved 70% of the gap", cs.exit_reason("10", _row(T0 + 600, 0.53, 0.53, 0.521), T0 + 600) == "SIG caught up")
+check("catchup: hold while SIG has not caught up and the outside holds", cs.exit_reason("10", _row(T0 + 600, 0.53, 0.53, 0.51), T0 + 600) is None)
+check("catchup: exit when the outside move reverts", cs.exit_reason("10", _row(T0 + 600, 0.505, 0.505, 0.50), T0 + 600) == "outside move reverted")
+check("catchup: exit when Polymarket and Kalshi disagree by > 4 pts", cs.exit_reason("10", _row(T0 + 600, 0.58, 0.53, 0.50), T0 + 600) is not None)
+check("catchup: 12 h time stop", cs.exit_reason("10", _row(T0 + 43201, 0.53, 0.53, 0.51), T0 + 43201) == "12 h time stop")
+check("catchup: flatten everything before the punt (3 Nov 11:30 ET)", cs.exit_reason("10", _row(OS.FLATTEN_AT, 0.53, 0.53, 0.51), OS.FLATTEN_AT) is not None)
+check("catchup: a position without entry context (restart) is closed", cs.exit_reason("99", None, T0) is not None)
+pnl, op = OS.pnl_from_fills([{"exchange_id": "10", "quantity": 600, "price": 0.50}, {"exchange_id": "10", "quantity": -600, "price": 0.41}], {})
+check("catchup: P&L from fills (buy 600 @0.50, sell @0.41 = -54) and the sleeve switches itself off at -50",
+      abs(pnl + 54) < 1e-6 and op == {} and cs.check_kill(pnl) and cs.signals([_row(T0 + 3600, 0.53, 0.53, 0.50)], T0 + 3600) == [])
+check("catchup: live config: trial on, 300 per position, -50 stop", _live.get("catchup_enabled") is True and _live.get("catchup_notional") == 300.0
+      and _live.get("catchup_kill") == -50.0)
+
+# review 23 Oct (catch-up): cap per entry, missing marks, exits off a fresh/REST book, MM inventory
+pnl0, op0 = OS.pnl_from_fills([{"exchange_id": "10", "quantity": 600, "price": 0.50}], {})
+check("catchup: a position with no current mark is valued at its fill price, not 0 (no spurious kill)", abs(pnl0) < 1e-9 and op0 == {"10": 600.0})
+
+class _CStore:
+    def __init__(self, fills): self.fills, self.orders = fills, []
+    def rows(self, q, a=()):
+        if "FROM fills" in q: return self.fills
+        return []
+    def record_order(self, oid, ex, mid, side, act, px, q, purpose, **k): self.orders.append((ex, side, px, q, purpose))
+def _cbot(fills, sigs, net_d, fresh=True):
+    sent = []
+    cs = OS.CatchupSweep()
+    cs.signals = lambda rows, now: sigs
+    races = {"R%d" % i: types.SimpleNamespace(legs={}) for i in range(4)}
+    uni = types.SimpleNamespace(by_exchange={str(i): ("R%d" % i, "D") for i in range(4)}, races=races)
+    bk = {"bids": [{"price": 0.50, "quantity": 5000}], "asks": [{"price": 0.505, "quantity": 5000}]}
+    b = types.SimpleNamespace(catchup=cs, dry_run=False, store=_CStore(fills), direction=types.SimpleNamespace(rows=[{"exchange_id": "0", "race": "R0", "party": "D", "sig_mid": 0.5025}]),
+                              universe=uni, open_orders_cache={}, cfg=types.SimpleNamespace(mm=types.SimpleNamespace(portfolio_max_partisan_notional=5000.0)),
+                              fresh_book=(lambda ex, age=None: bk) if fresh else (lambda ex, age=None: None),
+                              get_book=lambda ex, depth=50, client=None, max_age=None: {"bids": [{"price": 0.48, "quantity": 5000}], "asks": [{"price": 0.485, "quantity": 5000}]},
+                              api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: sent.append((ex, side, q, px)) or {"orderId": len(sent)},
+                                                        new_key=lambda p: p),
+                              catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"))
+    _orig = R.risk.exposure
+    R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=net_d)
+    try:
+        R.Bot.catchup_cycle(b, {"polled": True}, {}, {}, False)
+    finally:
+        R.risk.exposure = _orig
+    return b, sent
+_sigs = [{"exchange_id": str(i), "race": "R%d" % i, "party": "D", "d": 1, "move": 0.03, "f_now": 0.53, "f_then": 0.50, "mid": 0.5025, "gap": 0.0275,
+          "bid": 0.50, "ask": 0.505} for i in range(4)]
+_b, _sent = _cbot([], _sigs, 4400.0)
+check("catchup: four D-adding signals in one poll at net D 4,400: entries stop before net D passes 5,000 (was: all four, 5,600)",
+      len(_sent) == 2 and 4400.0 + sum(x[2] * x[3] for x in _sent) <= 5000.0 + 1e-6, str(_sent))
+_b, _sent = _cbot([], _sigs, 0.0)
+check("catchup: ... and with room, at most 4 entries of <= 300 each", len(_sent) == 4 and all(x[2] * x[3] <= 300.0 + 1e-6 for x in _sent), str(_sent))
+_b, _sent = _cbot([{"exchange_id": "7", "quantity": 600.0, "price": 0.50}], [], 0.0, fresh=False)
+check("catchup: an exit with no fresh feed book is priced off a REST read (sell YES at its bid 0.48 = buy NO @0.52), never a stale row",
+      _sent == [("7", "no", 600, 0.52)], str(_sent))
+_mmb = types.SimpleNamespace(catchup_open={"5": 600.0})
+check("mm: the catch-up sweep's own position is not counted as MM inventory", R.Bot.mm_positions(_mmb, {"5": 650.0, "6": -10.0}) == {"5": 50.0, "6": -10.0})
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

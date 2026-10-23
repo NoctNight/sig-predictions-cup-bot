@@ -193,6 +193,9 @@ class BotConfig:
     inside_max_markets: int = 12         # markets re-posted per cycle (each costs a cancel + a share of one batch write)
     inside_ttl_sec: int = 300
     election_enabled: bool = False       # election-night sleeve (proposals/election_night): Sizhe switches it on for 3 Nov
+    catchup_enabled: bool = False        # catch-up sweep trial (proposals/outside_sweep): take SIG's stale touch when PM+Kalshi moved
+    catchup_notional: float = 300.0      # per position; at most 4 open; sleeve switches itself off at catchup_kill
+    catchup_kill: float = -50.0
     election_per_race_cap: float = 5000.0
     election_total_cap: float = 90000.0
     election_poll_sec: float = 4.0

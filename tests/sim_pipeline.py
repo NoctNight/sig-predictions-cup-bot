@@ -499,8 +499,16 @@ class Checker:
                             self.violation("mm_posted_on_gated_side", f"{c['key']} {ex} MM {'bid' if c['side'] == 'yes' else 'ask'} posted while outside "
                                            f"fair {xv[0]:.3f} is {(xv[0] - c['mid']) / SV.TICK:+.1f} ticks from mid {c['mid']:.4f}")
                 if pre == "bat" and c.get("ok") and c.get("traded", 0) > 0:
-                    self.violation("passive_order_crossed", f"{c['key']} {ex} {c['side']} x{c['qty']} @{c['price']} traded {c['traded']} on arrival "
-                                   f"(DMM touch {SV.P(v.bid_t[ex])}/{SV.P(v.ask_t[ex])})")
+                    ts_ = c.get("touch_at_send")
+                    # crossing only because the touch moved while the order was in flight (write latency): a market
+                    # race no last look can remove; a quote that already crossed the book it was sent against is a bug
+                    in_flight = ts_ is not None and ((c["side"] == "yes" and c["price"] < ts_[1] - 1e-9) or
+                                                     (c["side"] == "no" and c["price"] < 1 - ts_[0] - 1e-9))
+                    if in_flight:
+                        self.counts["crossed_in_flight"] += 1
+                    else:
+                        self.violation("passive_order_crossed", f"{c['key']} {ex} {c['side']} x{c['qty']} @{c['price']} traded {c['traded']} on arrival "
+                                       f"(DMM touch {SV.P(v.bid_t[ex])}/{SV.P(v.ask_t[ex])}; when sent {ts_})")
             elif c["kind"] == "multileg":
                 pre = c["prefix"]
                 race = self.sim.race_of(str(c["legs"][0]["exchangeId"])) if c["legs"] else None
@@ -722,6 +730,57 @@ class OutsideMove(Scenario):
                 v.flow_bias[ex] = 0.2 if gap > 0.01 else (-0.2 if gap < -0.01 else 0.0)
                 if i >= 30 and i % 4 == 0 and abs(gap) > SV.TICK:
                     v.shift(ex, 1 if gap > 0 else -1)
+
+
+class Catchup(Scenario):
+    name, cycles, seed = "catchup", 320, 28
+    cfg = {"catchup_enabled": True}
+    doc = "catch-up sweep trial: after 75 min of history, Polymarket+Kalshi move 3 pts on three races (SIG's DMM follows 10 min later, 1 tick / 2 min) and on a fourth race the outside move reverts after 10 min: enter at SIG's touch, <= 300 notional, <= 4 open, exit on convergence or reversal"
+
+    def before_cycle(self, sim, i):
+        v = sim.v
+        if i == 20:
+            # the four test races start with the outside fair at SIG's mid, so only the scripted moves create gaps
+            self.races = two_leg_mid_races(sim, 0.3, 0.7)[:4]
+            for r in self.races:
+                for ex in sim.legs(r):
+                    v.outside[ex] = round(v.mid(ex), 4)
+        if i == 150:
+            self.moved, self.noise = [], []
+            for k, r in enumerate(self.races):
+                d, rr = sim.universe.races[r].legs["D"].exchange_id, sim.universe.races[r].legs["R"].exchange_id
+                v.outside[d] = round(min(0.97, v.outside[d] + 0.03), 4)
+                v.outside[rr] = round(max(0.03, v.outside[rr] - 0.03), 4)
+                (self.noise if k == 3 else self.moved).extend([d, rr])
+            self.t_move = v.now
+        if i == 170 and getattr(self, "noise", None):
+            for ex in self.noise:                                   # the noise move reverts
+                v.outside[ex] = round(v.outside[ex] + (-0.03 if ex == self.noise[0] else 0.03), 4)
+        if i >= 170:
+            for ex in getattr(self, "moved", []):
+                gap = v.outside[ex] - v.mid(ex)
+                if i % 4 == 0 and abs(gap) > SV.TICK:
+                    v.shift(ex, 1 if gap > 0 else -1)
+
+    def final_checks(self, sim):
+        calls = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] in ("cu", "cux")]
+        entries = [c for c in calls if c["prefix"] == "cu"]
+        if not entries:
+            sim.chk.violation("catchup_none", "no catch-up entry although Polymarket+Kalshi moved 3 pts and SIG lagged")
+        for c in entries:
+            if c["qty"] * c["price"] > 300 * 1.02:
+                sim.chk.violation("catchup_oversize", f"{c['key']} {c['ex']} x{c['qty']} @{c['price']} = {c['qty'] * c['price']:.0f} > 300")
+        fills = [dict(r) for r in sim.bot.store.rows("SELECT exchange_id, quantity, filled_at FROM fills WHERE purpose IN ('catchup','catchup_exit') ORDER BY filled_at")]
+        pos, peak = {}, 0
+        for f in fills:
+            pos[f["exchange_id"]] = pos.get(f["exchange_id"], 0.0) + float(f["quantity"])
+            peak = max(peak, sum(1 for q in pos.values() if abs(q) >= 1))
+        if peak > 4:
+            sim.chk.violation("catchup_too_many", f"{peak} catch-up positions open at once (max 4)")
+        for ex in getattr(self, "noise", []):
+            if abs(pos.get(ex, 0.0)) >= 1:
+                sim.chk.violation("catchup_noise_held", f"{ex}: catch-up position still open after the outside move reverted")
+        self.summary = {"entries": len(entries), "exits": len(calls) - len(entries), "open_at_end": {e: q for e, q in pos.items() if abs(q) >= 1}}
 
 
 class Recycle(Scenario):
@@ -1042,7 +1101,7 @@ class Day(Scenario):
         self.t_end = T0
 
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
+SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
 
 
 # ======================================================================================== main
