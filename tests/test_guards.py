@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import types
+from datetime import datetime, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -476,6 +477,110 @@ check("catchup: an exit with no fresh feed book is priced off a REST read (sell 
       _sent == [("7", "no", 600, 0.52)], str(_sent))
 _mmb = types.SimpleNamespace(catchup_open={"5": 600.0})
 check("mm: the catch-up sweep's own position is not counted as MM inventory", R.Bot.mm_positions(_mmb, {"5": 650.0, "6": -10.0}) == {"5": 50.0, "6": -10.0})
+
+# ---------------------------------------------------------------- 23 Oct: deviation churn (proposals/dev_churn.py)
+from sigbot.proposals import dev_churn as DC  # noqa: E402
+_now = 1792800000.0
+# leg D quoted every 10 min (heartbeat) at 0.505, leg R changes every 20 min between 0.505 and 0.507: carried forward
+_rows = [("R2", "D", _now - 86000 + 600 * i, 0.505) for i in range(144)] + \
+        [("R2", "R", _now - 86000 + 1200 * i, 0.505 + (0.002 if i % 2 else 0.0)) for i in range(72)]
+_med = DC.medians_from_rows(_rows, {"R2": 2}, _now)
+check("churn: 24-h median of the mid overround with each leg's last quote carried forward", _med.get("R2") is not None
+      and 0.010 - 1e-9 <= _med["R2"] <= 0.012 + 1e-9, str(_med))
+check("churn: no median without 12 h of history", DC.medians_from_rows([r for r in _rows if r[2] > _now - 6 * 3600], {"R2": 2}, _now) == {})
+check("churn: no sample where a leg's last quote is over 30 min old", DC.medians_from_rows(
+      [("R2", "D", _now - 86000, 0.5)] + [("R2", "R", _now - 86000 + 300 * i, 0.51) for i in range(287)], {"R2": 2}, _now) == {})
+ch = DC.DevChurn(capital=12000, cash_floor=3000, kill=-600)
+_r2 = types.SimpleNamespace(name="R2", exchange_ids=["a", "b"], has_independent=False)
+_r3 = types.SimpleNamespace(name="R3", exchange_ids=["a", "b", "c"], has_independent=True)
+_ri = types.SimpleNamespace(name="Rhode Island Governor", exchange_ids=["a", "b"], has_independent=False)
+check("churn: two-leg races only; never RI Governor or a three-leg race", ch.eligible(_r2, _now) and not ch.eligible(_r3, _now) and not ch.eligible(_ri, _now))
+check("churn: unusually cheap = >= 4 ticks above the 24-h median", ch.unusually_cheap(0.031, 0.011) and not ch.unusually_cheap(0.030, 0.011))
+_c = types.SimpleNamespace(race="R2", kind="sell_set", qty=5000, cost=0.97)
+check("churn: entry size: 2,000 a time, within the pot, the per-race limit and the 3k cash floor",
+      ch.entry_qty(_c, 50000, 20) == 2000 and ch.entry_qty(_c, 4000, 20) == 1030 and ch.entry_qty(_c, 3010, 20) == 0
+      and ch.entry_qty(types.SimpleNamespace(race="R2", kind="buy_set", qty=5000, cost=0.95), 50000, 20) == 0)
+ch.add_lot("R2", 2000, 0.97, _now)
+_ch2 = DC.DevChurn(capital=12000, cash_floor=3000, kill=-600)
+_ch2.add_lot("R2", 3000, 0.97, _now)
+check("churn: per-race limit 4k counts what the race already holds", _ch2.entry_qty(_c, 50000, 20) == int((4000 - 2910) // 0.97), str(_ch2.entry_qty(_c, 50000, 20)))
+check("churn: no re-entry in the same race within 5 min", not ch.eligible(_r2, _now + 60))
+_lot = {"cost": 0.97, "ts": _now}
+check("churn: exit at +2 ticks per set, hold below it", ch.exit_reason(_lot, 0.980, _now + 600) == "round trip +2 ticks" and ch.exit_reason(_lot, 0.975, _now + 600) is None)
+check("churn: exit after 24 h whatever the price, and sell everything before the 3 Nov punt",
+      ch.exit_reason(_lot, 0.96, _now + 86401) == "24 h maximum hold" and ch.exit_reason(_lot, 0.96, DC.SELL_ALL_AT) is not None)
+check("churn: ledger shrinks to the sets actually held (a recycle closed some), never grows", ch.reconcile("R2", 1500) == 500 and ch.held("R2") == 1500
+      and ch.reconcile("R2", 9000) == 0 and ch.held("R2") == 1500)
+_p = ch.close("R2", 1500, 0.98, _now + 900)
+check("churn: realised P&L of an exit, and no re-entry for 30 min after it", abs(_p - 15.0) < 1e-6 and ch.held("R2") == 0 and not ch.eligible(_r2, _now + 900 + 600))
+check("churn: stops entering at -600 (realised + open)", ch.check_kill(-615.0) and not ch.eligible(_r2, _now + 99999))
+check("churn: no entries after 2 Nov 23:00 UTC", not DC.DevChurn().eligible(_r2, DC.LAST_ENTRY + 1))
+check("churn: live config: on, pot <= 12k, 3k floor, stop between -600 and 0 (launch 24 Oct at 4k / -200 until the Fable check)",
+      _live.get("churn_enabled") is True and 0 < _live.get("churn_capital", 0) <= 12000.0
+      and _live.get("churn_cash_floor") == 3000.0 and -600.0 <= _live.get("churn_kill", 1) < 0)
+
+_rs6 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("unwinds: the main-loop free unwind reads the latest snapshot under the lock, not the cycle-start positions (sim churn double unwind)",
+      "fu = self.arb.free_unwinds(held_books, self.positions_snapshot, cycle_id)" in _rs6 and "free_unwinds(held_books, positions, cycle_id)" not in _rs6)
+check("churn: re-checks the sets actually held under the lock right before selling, and updates the shared snapshot after its baskets",
+      "held = min(held, sets_held(race))" in _rs6 and "snap_add(race, held)" in _rs6 and "snap_add(race, -q)" in _rs6)
+
+# 23 Oct: churn pauses on rising gap volatility (Sizhe), and stops entering 1 Nov 00:00 UTC
+def _ser(n_races, base_sd, rec_sd):
+    import random as _rnd
+    g = _rnd.Random(7)
+    out = {}
+    for k in range(n_races):
+        v, xs = 0.01, []
+        for i in range(int((DC.VOL_BASE + DC.VOL_RECENT) / DC.GRID)):
+            t = _now - DC.VOL_BASE - DC.VOL_RECENT + DC.GRID * (i + 1)
+            v += g.gauss(0, rec_sd if t > _now - DC.VOL_RECENT else base_sd)
+            xs.append((t, v))
+        out["R%d" % k] = xs
+    return out
+_calm, _wild = DC.vol_ratio(_ser(12, 0.001, 0.001), _now), DC.vol_ratio(_ser(12, 0.001, 0.003), _now)
+check("churn: gap-movement ratio ~1 when calm, ~3 when the last 6 h move 3x as much", 0.7 < _calm < 1.4 and _wild > 2.0, f"{_calm} {_wild}")
+check("churn: too few races -> no reading (state kept)", DC.vol_ratio(_ser(5, 0.001, 0.003), _now) is None)
+_v = DC.DevChurn()
+check("churn: pause new entries at >= 1.5x, stay paused at 1.3x, resume below 1.2x",
+      _v.update_vol(1.6) == "paused" and not _v.eligible(_r2, _now) and _v.update_vol(1.3) is None and _v.vol_paused
+      and _v.update_vol(1.1) == "resumed" and _v.eligible(_r2, _now))
+_v.update_vol(2.0); _v2 = DC.DevChurn(); _v2.load(_v.to_json())
+check("churn: the volatility pause survives a restart", _v2.vol_paused)
+check("churn: no new entries from 1 Nov 00:00 UTC (Sizhe: stop 2-3 days before 3 Nov)",
+      DC.LAST_ENTRY == datetime(2026, 11, 1, 0, 0, tzinfo=timezone.utc).timestamp() and not DC.DevChurn().eligible(_r2, DC.LAST_ENTRY + 1))
+
+# 23 Oct: hourly order-book snapshots for the punt screener (no API reads)
+_tmpd = tempfile.mkdtemp(); os.makedirs(os.path.join(_tmpd, "data"))
+_oldhere = R.HERE; R.HERE = _tmpd
+try:
+    _bk = {str(i): {"bids": [{"price": 0.5, "quantity": 100}], "asks": [{"price": 0.505, "quantity": 100}]} for i in range(10)}
+    _sb = types.SimpleNamespace(feed_ok=lambda: True, feed=types.SimpleNamespace(books=lambda: _bk),
+                                universe=types.SimpleNamespace(all_exchanges=lambda: [str(i) for i in range(10)]))
+    R.Bot.snapshot_books(_sb)
+    _ok1 = _json.load(open(os.path.join(_tmpd, "data", "books_latest.json"))) == _bk and len(os.listdir(os.path.join(_tmpd, "data", "books_history"))) == 1
+    os.remove(os.path.join(_tmpd, "data", "books_latest.json"))
+    R.Bot.snapshot_books(_sb)                     # within the hour: nothing written
+    _ok2 = not os.path.exists(os.path.join(_tmpd, "data", "books_latest.json"))
+    _sb2 = types.SimpleNamespace(feed_ok=lambda: True, feed=types.SimpleNamespace(books=lambda: {"1": _bk["1"]}),
+                                 universe=_sb.universe)
+    R.Bot.snapshot_books(_sb2)                    # feed still filling: no snapshot
+    _ok3 = not os.path.exists(os.path.join(_tmpd, "data", "books_latest.json"))
+finally:
+    R.HERE = _oldhere
+check("books: hourly snapshot of the feed's books in the screener's format, history every 6 h, none while the feed is still filling",
+      _ok1 and _ok2 and _ok3, f"{_ok1} {_ok2} {_ok3}")
+# 23 Oct: the catch-up sweep loads its 60-min look-back from stored quotes at start-up (no hour of waiting)
+_vq = [(T0, "polymarket", "Rc", "D", 0.50), (T0, "kalshi", "Rc", "D", 0.50), (T0, "sig", "Rc", "D", 0.50),
+       (T0 + 3600, "polymarket", "Rc", "D", 0.53), (T0 + 3600, "kalshi", "Rc", "D", 0.53)] + \
+      [(T0 + 600 * k, "sig", "Rc", "D", 0.50) for k in range(1, 6)]            # SIG unchanged: 10-min heartbeats only
+_boot = OS.rows_from_venue_quotes(_vq, {("Rc", "D"): "10"})
+_cs = OS.CatchupSweep(); _cs.push(_boot)
+_now_row = [_row(T0 + 3600, 0.53, 0.53, 0.50)]
+check("catchup: history rebuilt from stored quotes (changes carried forward) gives a signal right after a restart",
+      _boot[-1]["sig_mid"] == 0.50 and _boot[-1]["pm"] == 0.53 and len(_cs.signals(_now_row, T0 + 3600)) == 1, str(_boot[-2:]))
+_stale = OS.rows_from_venue_quotes([(T0, "polymarket", "Rc", "D", 0.5), (T0 + 3601, "kalshi", "Rc", "D", 0.5)], {("Rc", "D"): "10"})
+check("catchup: a stored quote older than 30 min is not carried forward", _stale[-1]["pm"] is None)
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

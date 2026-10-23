@@ -163,6 +163,31 @@ class CatchupSweep:
         return self.killed
 
 
+def rows_from_venue_quotes(vq_rows, leg_of: dict) -> list[dict]:
+    """Rebuild direction-style rows from stored quotes so the 60-min history survives a restart. vq_rows: (ts, venue,
+    race, party, mid) with venue in polymarket / kalshi / sig, written on change plus a 10-min heartbeat; leg_of:
+    (race, party) -> SIG exchange id. Each (race, party, venue) value is carried forward to every later poll time."""
+    by_ts: dict = {}
+    for ts, venue, race, party, mid in vq_rows:
+        if (race, party) in leg_of and mid is not None:
+            by_ts.setdefault(float(ts), []).append((venue, race, party, float(mid)))
+    last: dict = {}
+    out = []
+    for ts in sorted(by_ts):
+        for venue, race, party, mid in by_ts[ts]:
+            last[(race, party, venue)] = (ts, mid)
+        for (race, party), ex in leg_of.items():
+            v = {}
+            for venue in ("polymarket", "kalshi", "sig"):
+                tv = last.get((race, party, venue))
+                v[venue] = tv[1] if tv is not None and ts - tv[0] <= 1800 else None
+            if v["polymarket"] is None and v["kalshi"] is None and v["sig"] is None:
+                continue
+            out.append({"ts": ts, "exchange_id": ex, "race": race, "party": party, "pm": v["polymarket"], "kalshi": v["kalshi"],
+                        "sig_mid": v["sig"]})
+    return out
+
+
 def pnl_from_fills(fills: list[dict], marks: dict) -> tuple[float, dict]:
     """P&L of the sleeve from its fills (YES terms: quantity signed, price YES price): cash flow -q*p plus open
     positions at marks. Returns (pnl, open positions by exchange)."""

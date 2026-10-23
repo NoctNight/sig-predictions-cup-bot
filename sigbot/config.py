@@ -196,6 +196,10 @@ class BotConfig:
     catchup_enabled: bool = False        # catch-up sweep trial (proposals/outside_sweep): take SIG's stale touch when PM+Kalshi moved
     catchup_notional: float = 300.0      # per position; at most 4 open; sleeve switches itself off at catchup_kill
     catchup_kill: float = -50.0
+    churn_enabled: bool = False          # deviation churn (proposals/dev_churn): buy sell-sets only when unusually cheap,
+    churn_capital: float = 12000.0       # sell after +2 ticks/set or 24 h; pot, cash floor and stop below
+    churn_cash_floor: float = 3000.0
+    churn_kill: float = -600.0
     election_per_race_cap: float = 5000.0
     election_total_cap: float = 90000.0
     election_poll_sec: float = 4.0

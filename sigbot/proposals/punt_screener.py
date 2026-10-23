@@ -70,7 +70,9 @@ def load_races(books: Optional[dict] = None, db: Optional[str] = None) -> dict:
     from .. import correlation_model as cm
     from .election_night import POLL_CLOSE_ET, race_abbr
     U = cm.load_universe()
-    books = books if books is not None else json.load(open(os.path.join(HERE, "data", "books.json")))
+    if books is None:                     # newest snapshot from the bot's feed (hourly), else the 21-Oct dump
+        latest = os.path.join(HERE, "data", "books_latest.json")
+        books = json.load(open(latest if os.path.exists(latest) else os.path.join(HERE, "data", "books.json")))
     fe = json.load(open(os.path.join(HERE, "params", "fair_explained.json")))["legs"]
     outside: dict = {}
     try:

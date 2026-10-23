@@ -783,6 +783,50 @@ class Catchup(Scenario):
         self.summary = {"entries": len(entries), "exits": len(calls) - len(entries), "open_at_end": {e: q for e, q in pos.items() if abs(q) >= 1}}
 
 
+class DevChurnSim(Scenario):
+    name, cycles, seed = "churn", 200, 29
+    cfg = {"churn_enabled": True}
+    doc = "deviation churn: 24 h of normal quotes preloaded; one race's set gap to payout jumps 6 ticks above its median, reverts 30 min later: buy once (all-or-none), sell at +2 ticks or better, ledger empty and profit at the end; a second race spikes but is Rhode Island-style excluded by a 3-leg check"
+
+    def bot_setup(self, sim):
+        v = sim.v
+        self.race = two_leg_mid_races(sim, 0.3, 0.7)[0]
+        legs = sim.universe.races[self.race].legs
+        self.base = sum(SV.P(v.bid_t[l.exchange_id]) for l in legs.values())
+        rows = []
+        for k in range(150):                       # 25 h of 10-min heartbeats at today's quotes
+            t = v.now - 90000 + 600 * k
+            for party, l in legs.items():
+                b, a = SV.P(v.bid_t[l.exchange_id]), SV.P(v.ask_t[l.exchange_id])
+                rows.append((t, "sig", self.race, party, l.exchange_id, b, a, (b + a) / 2, None, None, None, None))
+        sim.bot.store.conn.executemany("INSERT OR REPLACE INTO venue_quotes(ts,venue,race,party,instrument,bid,ask,mid,bid_sz,ask_sz,depth_usd,latency_ms) "
+                                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+        sim.bot.store.conn.commit()
+
+    def before_cycle(self, sim, i):
+        if i == 30:
+            set_race_bids_sum(sim, self.race, self.base + 0.03)
+        if i == 90:
+            set_race_bids_sum(sim, self.race, self.base)
+
+    def final_checks(self, sim):
+        calls = [c for c in sim.v.calls if c["kind"] == "multileg" and c.get("ok")]
+        ent = [c for c in calls if c["prefix"] == "arb" and sim.race_of(str(c["legs"][0]["exchangeId"])) == self.race]
+        ext = [c for c in calls if c["prefix"] == "unw" and sim.race_of(str(c["legs"][0]["exchangeId"])) == self.race]
+        ch = sim.bot.churn
+        if not ent:
+            sim.chk.violation("churn_none", f"no churn entry although {self.race}'s set gap jumped 6 ticks above its 24-h median")
+        if ent and not ext:
+            sim.chk.violation("churn_no_exit", f"{self.race}: bought but never sold after the gap reverted")
+        if ch.lots:
+            sim.chk.violation("churn_ledger_left", f"churn ledger still holds {ch.lots}")
+        if ent and ch.realised <= 0:
+            sim.chk.violation("churn_loss", f"realised {ch.realised:+.1f} on a +6-tick spike that fully reverted")
+        if sum(c["cash_before"] - c["cash_after"] for c in ent) > 12000 * 1.01:
+            sim.chk.violation("churn_over_pot", "churn bought more than its 12k pot")
+        self.summary = {"entries": len(ent), "exits": len(ext), "realised": round(ch.realised, 1)}
+
+
 class Recycle(Scenario):
     name, cycles, seed = "recycle", 80, 14
     doc = "held low-edge sets lock ~77k, cash ~23k near the 20k arb reserve; 4 races show standing 6% sell-sets"
@@ -1101,7 +1145,7 @@ class Day(Scenario):
         self.t_end = T0
 
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
+SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, DevChurnSim, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
 
 
 # ======================================================================================== main

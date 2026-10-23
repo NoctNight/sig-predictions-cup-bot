@@ -27,3 +27,6 @@ data/*
 params/*.lock
 data/polymarket_history/raw/
 !data/daily/
+data/books_history/
+data/books_latest.json
+data/books_latest.meta.json

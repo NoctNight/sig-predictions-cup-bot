@@ -1000,16 +1000,74 @@ def main():
     print("\n".join(md))
 
 
+# Plain-language names used on every figure and in arb_convergence.md.
+TRAIN_NAME = "Training days (14-21 Oct, estimated from trade prices)"
+TEST_NAME = "Test days (22-23 Oct, real quotes)"
+HOLD_NAME = "Hold to settlement (current rule)"
+HOLDDEV_NAME = "Hold, buy only when unusually cheap"
+NOHINDSIGHT = "without hindsight (a rule we could actually run)"
+HINDSIGHT = "with hindsight (best possible exit)"
+OUR_NAME = "Our actual sets"
+
+
+def churn_name(best):
+    mh = f"{best['mh'] / 3600:.0f} h" if best.get("mh") else "no time limit"
+    return f"Buy when unusually cheap, sell after +{best['k']} ticks or {mh}"
+
+
+def _header(ax, title, subtitle=None):
+    """Title (one line) and optional subtitle (one line) drawn in their own row, so constrained layout keeps them clear."""
+    ax.axis("off")
+    ax.text(0.5, 1.0, title, ha="center", va="top", fontsize=15, fontweight="bold", transform=ax.transAxes)
+    if subtitle:
+        ax.annotate(subtitle, xy=(0.5, 1.0), xycoords="axes fraction", xytext=(0, -24), textcoords="offset points",
+                    ha="center", va="top", fontsize=11, color="0.25")
+
+
+def _glossary(ax, lines, ncol=2, width=60, fontsize=9):
+    """Boxed glossary in its own row: one term per entry, wrapped to `width` characters, split into `ncol` columns."""
+    import textwrap
+    from matplotlib.patches import FancyBboxPatch
+    ax.axis("off")
+    ax.add_patch(FancyBboxPatch((0, 0), 1, 1, boxstyle="round,pad=0,rounding_size=0.01", transform=ax.transAxes,
+                                facecolor="#f6f6f2", edgecolor="0.6", lw=0.8, clip_on=False))
+    ax.text(0.01, 0.97, "Glossary", ha="left", va="top", fontsize=fontsize + 1, fontweight="bold", transform=ax.transAxes)
+    wrapped = []
+    for term, expl in lines:
+        w = textwrap.wrap(f"{term}: {expl}", width=width, subsequent_indent="    ")
+        wrapped.append("\n".join(w))
+    per = math.ceil(len(wrapped) / ncol)
+    for c in range(ncol):
+        ax.text(0.01 + c / ncol, 0.86, "\n".join(wrapped[c * per:(c + 1) * per]), ha="left", va="top",
+                fontsize=fontsize, linespacing=1.35, transform=ax.transAxes)
+
+
+GLOSS_ARB = ("arb set", "one contract on every outcome of a race; together they are guaranteed to pay a fixed amount at settlement")
+GLOSS_TICK = ("tick", "0.005, the smallest price step (half a cent)")
+GLOSS_GAP = ("gap to payout (overround)", "how far a set's price is from what it pays at settlement; the profit per set if held")
+GLOSS_RT = ("round trip", "buy the set, then sell it back, after paying the spread (best ask vs best bid) both ways")
+GLOSS_TOUCH = ("touch", "the best bid / best ask currently on offer; every sale here is at the touch")
+GLOSS_CHEAP = ("unusually cheap", "the race's gap to payout is at least 4 ticks wider than its own median of the last 24 hours")
+GLOSS_TRAIN = ("training days", "rules were chosen on these days; prices are 5-minute trade prices +/- half the usual spread")
+GLOSS_TEST = ("test days", "real best bids and asks, used only to check the rules after they were fixed")
+
+
 def figures(d):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
     res, PA, PB, lots, arb = d["res"], d["PA"], d["PB"], d["lots"], d["arb"]
     os.makedirs(FIG, exist_ok=True)
     dt = lambda t: datetime.fromtimestamp(t, UTC)
     rng = np.random.default_rng(7)
     C_IS, C_OOS, C_OUR = "tab:blue", "tab:red", "tab:green"
+    best = res["best"]
+    CHURN_NAME = churn_name(best)
+    plt.rcParams.update({"font.size": 10, "axes.titlesize": 11, "axes.labelsize": 10, "xtick.labelsize": 9.5,
+                         "ytick.labelsize": 9.5, "legend.fontsize": 9.5})
 
     # ---------------- figure 1: per-race paths
     traded = collections.Counter()
@@ -1017,17 +1075,23 @@ def figures(d):
         if kind != "unwind_set":
             traded[race] += qty * cost
     top = [r for r, _ in traded.most_common(12)]
-    fig, axs = plt.subplots(6, 2, figsize=(14, 17), sharex=True)
+    fig = plt.figure(figsize=(14, 22.5), layout="constrained")
+    gs = fig.add_gridspec(8, 2, height_ratios=[0.8] + [1] * 6 + [0.95])
+    hax = fig.add_subplot(gs[0, :])
+    first = None
+    axs = np.empty((6, 2), dtype=object)
+    for i in range(6):
+        for j in range(2):
+            axs[i, j] = fig.add_subplot(gs[1 + i, j], sharex=first)
+            first = first or axs[i, j]
     for ax, r in zip(axs.flat, top):
         for P, alpha, lab in ((PA, 0.35, "A: 5-min trade closes +- half spread (proxy)"), (PB, 0.9, "B: real touch")):
             if r not in P.sb:
                 continue
             x = [dt(t) for t in P.grid]
             ax.fill_between(x, (P.sb[r] - 1) / T, (P.sa[r] - 1) / T, color="0.5", alpha=alpha * 0.5, lw=0)
-            ax.plot(x, (P.sb[r] - 1) / T, color="tab:blue", lw=0.7, alpha=alpha,
-                    label="sum of YES bids - 1 (sell-set entry edge)" if P is PB else None)
-            ax.plot(x, (P.sa[r] - 1) / T, color="tab:orange", lw=0.7, alpha=alpha,
-                    label="sum of YES asks - 1 (sell-set exit cost; minus = buy-set edge)" if P is PB else None)
+            ax.plot(x, (P.sb[r] - 1) / T, color="tab:blue", lw=0.7, alpha=alpha)
+            ax.plot(x, (P.sa[r] - 1) / T, color="tab:orange", lw=0.7, alpha=alpha)
         ax.axhline(0, color="k", lw=0.8)
         for _id, ts, race, kind, legs, qty, edge, cost in arb:
             if race != r:
@@ -1039,22 +1103,34 @@ def figures(d):
                 ax.scatter([dt(ts)], [(cost - 1) / T], marker="v", color="tab:purple", s=s, zorder=5, edgecolor="k", lw=0.3)
             else:
                 ax.scatter([dt(ts)], [-edge / T], marker="x", color="tab:red", s=s, zorder=5, lw=1)
-        ax.set_title(f"{r} ({PB.n.get(r)} legs; traded {traded[r]:,.0f})", fontsize=10)
-        ax.set_ylabel("ticks (0.005) per set")
+        ax.set_title(f"{r}: {PB.n.get(r)} outcomes, we traded {traded[r]:,.0f} in cash", fontsize=11)
+        ax.set_ylabel("ticks per set")
         ax.grid(alpha=0.3)
         ax.axvline(dt(B0), color="k", ls=":", lw=0.8)
-    axs.flat[0].legend(loc="upper left", fontsize=7)
-    from matplotlib.lines import Line2D
-    axs.flat[1].legend(handles=[Line2D([], [], marker="^", color="tab:green", ls="", label="our sell-set entry (at its edge)"),
-                                Line2D([], [], marker="v", color="tab:purple", ls="", label="our buy-set entry (at cost - 1)"),
-                                Line2D([], [], marker="x", color="tab:red", ls="", label="our unwind (at its exit cost)")],
-                       loc="upper left", fontsize=7)
+    for ax in axs[:-1].flat:
+        ax.tick_params(labelbottom=False)
     for ax in axs[-1]:
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-        ax.set_xlabel("date (UTC); left of the dotted line = proxy panel A, right = real quotes B")
-    fig.suptitle("Overround paths of the 12 races we traded most: a sell-set entered at the blue line exits at the orange line;\n"
-                 "an early exit pays only when the orange line later falls below the blue line at entry", fontsize=12)
-    fig.tight_layout(rect=(0, 0, 1, 0.97))
+        ax.set_xlabel("date (UTC)")
+    _header(hax, "Arb set prices in our 12 most-traded races",
+            "A NO set sold early makes money only if the orange line later falls below where the blue line was when we bought")
+    hax.legend(handles=[
+        Line2D([], [], color="tab:blue", lw=2, label="Gap to payout when buying a NO set (= its profit if held to settlement)"),
+        Line2D([], [], color="tab:orange", lw=2, label="Gap to payout when selling a NO set back (below 0: a YES set is that far below payout)"),
+        Patch(color="0.5", alpha=0.45, label="Shaded: the cost of an immediate round trip (orange minus blue)"),
+        Line2D([], [], color="k", ls=":", lw=1, label=f"Dotted line: {TRAIN_NAME[0].lower() + TRAIN_NAME[1:]} on its left, {TEST_NAME[0].lower() + TEST_NAME[1:]} on its right"),
+        Line2D([], [], marker="^", color="tab:green", markeredgecolor="k", ls="", ms=8, label="We bought a NO set (drawn at its gap; bigger = more sets)"),
+        Line2D([], [], marker="v", color="tab:purple", markeredgecolor="k", ls="", ms=8, label="We bought a YES set (drawn at its gap; bigger = more sets)"),
+        Line2D([], [], marker="x", color="tab:red", ls="", ms=8, mew=1.5, label="We sold a set back early (drawn at its sell-back gap)")],
+        loc="lower center", bbox_to_anchor=(0.5, 0.0), ncol=2, frameon=False, fontsize=10)
+    _glossary(fig.add_subplot(gs[7, :], label="glossary"), [
+        GLOSS_ARB, ("NO set / YES set", "NO on every outcome (pays outcomes minus 1) / YES on every outcome (pays 1)"),
+        GLOSS_TICK, GLOSS_GAP,
+        ("blue line", "sum of the best YES bids minus 1, in ticks: what a NO set bought now earns if held"),
+        ("orange line", "sum of the best YES asks minus 1, in ticks: what selling a NO set back now gives up"),
+        GLOSS_RT, GLOSS_TOUCH, GLOSS_TRAIN, GLOSS_TEST,
+        ("outcomes", "the candidates (legs) in the race; a 3-outcome race needs 3 contracts per set")], ncol=2, width=72, fontsize=9.5)
     fig.savefig(os.path.join(FIG, "arb_convergence_paths.png"), dpi=110)
     plt.close(fig)
 
@@ -1062,9 +1138,14 @@ def figures(d):
     H = res["H"]
     hx = [h for _, h in H_LIST]
     labs = [l for l, _ in H_LIST]
-    fig, axs = plt.subplots(3, 1, figsize=(11, 14), sharex=True)
+    fig = plt.figure(figsize=(11, 21.5), layout="constrained")
+    gs = fig.add_gridspec(5, 1, height_ratios=[0.2, 1.25, 1.05, 1.05, 0.78])
+    _header(fig.add_subplot(gs[0]), "Selling arb sets early vs holding to settlement",
+            "Panels A, B: every set the bot's current rule would have bought. Panel C: the selling rule run on 32k of cash.")
+    axs = [fig.add_subplot(gs[1])]
+    axs += [fig.add_subplot(gs[i], sharex=axs[0]) for i in (2, 3)]
     ax = axs[0]
-    for key, color, ls, name in (("A_True", C_IS, ":", "IS: panel A proxy, fresh runs"), ("B_True", C_OOS, "-", "OOS: panel B real, fresh runs")):
+    for key, color, ls, name in (("A_True", C_IS, ":", TRAIN_NAME), ("B_True", C_OOS, "-", TEST_NAME)):
         rows = H[key]
         xs, med, lo, hi = [], [], [], []
         for lab, h in H_LIST:
@@ -1074,24 +1155,28 @@ def figures(d):
             xs.append(h); med.append(np.median(a) * 100); lo.append(np.percentile(a, 25) * 100); hi.append(np.percentile(a, 75) * 100)
             sub = a if len(a) <= 250 else rng.choice(a, 250, replace=False)
             ax.scatter(h * np.exp(rng.normal(0, 0.06, len(sub))), np.clip(sub * 100, -480, 380), s=5, color=color, alpha=0.15)
-        ax.plot(xs, med, ls=ls, marker="o", color=color, label=f"{name}: median exit at h (n {len(rows)})")
+        ax.plot(xs, med, ls=ls, marker="o", color=color, label=f"{name}, {NOHINDSIGHT}: median of {len(rows)} sets")
         ax.fill_between(xs, lo, hi, color=color, alpha=0.12)
         bm = [np.nanmedian([r[f"best_{lab}"] for r in rows if f"best_{lab}" in r]) * 100 for lab, h in H_LIST if h in xs]
-        ax.plot(xs, bm, ls=ls, marker="s", color=color, alpha=0.5, label=f"{name}: median BEST exit within h (hindsight)")
+        ax.plot(xs, bm, ls=ls, marker="s", color=color, alpha=0.5, label=f"{name}, {HINDSIGHT}: median")
     xs, med, lo, hi = [], [], [], []
     for lab, h in H_LIST:
         a = np.array([l[f"at_{lab}"] for l in lots if np.isfinite(l.get(f"at_{lab}", np.nan))])
         if len(a) >= 10:
             xs.append(h); med.append(np.median(a) * 100); lo.append(np.percentile(a, 25) * 100); hi.append(np.percentile(a, 75) * 100)
             ax.scatter(h * np.exp(rng.normal(0, 0.06, len(a))), np.clip(a * 100, -480, 380), s=6, color=C_OUR, alpha=0.25)
-    ax.plot(xs, med, "-", marker="D", color=C_OUR, label="our actual sets (real touch), median")
+    ax.plot(xs, med, "-", marker="D", color=C_OUR, label=f"{OUR_NAME} (real quotes), if sold at that time: median")
     ax.fill_between(xs, lo, hi, color=C_OUR, alpha=0.1)
     ax.axhline(100, color="k", lw=0.8, ls="--")
     ax.axhline(0, color="k", lw=0.8)
+    ax.text(0.2, 104, "100% = as good as holding to settlement", transform=ax.get_yaxis_transform(), fontsize=9, va="bottom")
+    ax.text(0.2, 4, "0% = no profit", transform=ax.get_yaxis_transform(), fontsize=9, va="bottom")
     ax.set_ylim(-500, 400)
-    ax.set_ylabel("A: early-exit profit as % of\nhold-to-settlement profit")
-    ax.legend(fontsize=8, loc="lower right")
+    ax.set_title("A. Profit if a set is sold after a fixed holding time", loc="left", fontweight="bold")
+    ax.set_ylabel("Profit from selling early,\nas % of the profit from holding")
+    ax.legend(loc="upper left", bbox_to_anchor=(0, -0.03), ncol=1, frameon=False)
     ax.grid(alpha=0.3)
+    ax.tick_params(labelbottom=True)
     ax = axs[1]
     for key, ls, name in (("A_True", ":", "IS"), ("B_True", "-", "OOS")):
         rows = H[key]
@@ -1105,15 +1190,21 @@ def figures(d):
                 p = np.mean(b >= X)
                 se = math.sqrt(p * (1 - p) / len(b))
                 xs.append(h); ys.append(100 * p); lo.append(100 * (p - 1.96 * se)); hi.append(100 * (p + 1.96 * se))
-            ax.plot(xs, ys, ls=ls, marker="o", color=color, label=f"{name}: best exit within h >= {int(X * 100)}% of hold profit")
+            ax.plot(xs, ys, ls=ls, marker="o", color=color)
             ax.fill_between(xs, lo, hi, color=color, alpha=0.1)
     ax.set_ylim(0, 100)
-    ax.set_ylabel("B: % of fresh entries where an early\nexit was ever available (hindsight)")
-    ax.legend(fontsize=8, loc="upper left")
+    ax.set_title(f"B. How often a good early sale existed at some point, {HINDSIGHT}", loc="left", fontweight="bold")
+    ax.set_ylabel("% of sets where selling early\nwould have earned at least ...")
+    ax.legend(handles=[Line2D([], [], color=c, marker="o", label=f"... {int(X * 100)}% of the profit from holding")
+                       for X, c in ((0.25, "tab:cyan"), (0.5, "tab:purple"), (1.0, "tab:brown"))]
+              + [Line2D([], [], color="0.3", ls=":", label=f"dotted: {TRAIN_NAME}"),
+                 Line2D([], [], color="0.3", ls="-", label=f"solid: {TEST_NAME}")],
+              loc="upper left", bbox_to_anchor=(0, -0.03), ncol=2, frameon=False)
     ax.grid(alpha=0.3)
+    ax.tick_params(labelbottom=True)
     ax = axs[2]
-    best = res["best"]
-    for key, color, ls, name in (("exA", C_IS, ":", "IS: A, 2-day windows"), ("exB", C_OOS, "-", "OOS: B, 1-day windows")):
+    for key, color, ls, name in (("exA", C_IS, ":", f"{TRAIN_NAME}: average over 2-day stretches"),
+                                 ("exB", C_OOS, "-", f"{TEST_NAME}: average over 1-day stretches")):
         xs, m, lo, hi = [], [], [], []
         for row in res["figC"]:
             v = row[key]
@@ -1121,41 +1212,62 @@ def figures(d):
                 continue
             xs.append(row["h"]); m.append(np.mean(v)); lo.append(np.percentile(v, 10)); hi.append(np.percentile(v, 90))
             ax.scatter(row["h"] * np.exp(rng.normal(0, 0.04, len(v))), v, s=10, color=color, alpha=0.3)
-        ax.plot(xs, m, ls=ls, marker="o", color=color, label=f"{name}: mean, band = 10th-90th pct of windows")
+        ax.plot(xs, m, ls=ls, marker="o", color=color, label=name)
         ax.fill_between(xs, lo, hi, color=color, alpha=0.12)
     ax.axhline(0, color="k", lw=0.8)
-    ax.set_ylabel("C: churn minus hold\n(per 1,000 capital per day)")
+    ax.text(0.005, 3, "above 0: selling rule beats holding", transform=ax.get_yaxis_transform(), fontsize=9, va="bottom")
+    ax.set_title(f"C. \"{CHURN_NAME.split(' or ')[0]}\" minus \"{HOLD_NAME}\"", loc="left", fontweight="bold")
+    ax.set_ylabel("Extra profit vs holding,\nper 1,000 of cash per day")
     ax.set_xscale("log")
     ax.set_xticks(hx)
     ax.set_xticklabels(labs)
-    ax.set_xlabel("holding time h (log scale); in C: the churn rule's maximum hold before a forced exit")
-    ax.legend(fontsize=8, loc="upper right")
+    ax.set_xlabel("Holding time before selling (log scale). In C: the longest a set may be held before it is sold anyway\n"
+                  f"(the chosen rule, \"{CHURN_NAME}\", uses 24 h)")
+    ax.legend(loc="upper left", bbox_to_anchor=(0, -0.2), ncol=1, frameon=False)
     ax.grid(alpha=0.3)
-    fig.suptitle("Exiting arb sets early. A, B: hypothetical fresh entries at the bot's thresholds (sell >= 0.5%, buy >= 2.4%),\n"
-                 "exit at the touch. C: churn = enter when the overround is >= "
-                 f"{best['dev']} ticks above its 24-h median,\nexit at round trip >= {best['k']} ticks/set or after h; "
-                 "32k capital, sets marked at their typical exit price", fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    _glossary(fig.add_subplot(gs[4], label="glossary"), [
+        GLOSS_ARB, GLOSS_TICK, GLOSS_GAP,
+        ("profit from holding", "the gap to payout when the set was bought, collected if it is kept until the election settles"),
+        ("current rule", "buy a set when its gap to payout is at least 0.5% (NO sets) or 2.4% (YES sets) of its cost"),
+        GLOSS_RT, GLOSS_TOUCH, GLOSS_CHEAP,
+        (HINDSIGHT.split(" (")[0], "the best sale price reached at any time up to then (not knowable in advance)"),
+        (NOHINDSIGHT.split(" (")[0], "sell at exactly the time on the x axis, whatever the price"),
+        ("median", "the middle value: half the sets did better, half worse"),
+        ("shaded bands", "A: range of the middle 50% of sets; B: 95% uncertainty range; C: range covering 80% of the stretches"),
+        ("dots", "A: single sets (values beyond the chart edge are drawn at the edge); C: single stretches of days"),
+        ("stretches", "overlapping 2-day (training) or 1-day (test) periods, each simulated separately"),
+        GLOSS_TRAIN, GLOSS_TEST], ncol=2, width=68, fontsize=9)
     fig.savefig(os.path.join(FIG, "arb_convergence_horizon.png"), dpi=110)
     plt.close(fig)
 
     # ---------------- figure 3: strategy value paths
     paths = res["paths"]
-    fig, axs = plt.subplots(2, 1, figsize=(12, 9))
+    fig = plt.figure(figsize=(11, 12.5), layout="constrained")
+    gs = fig.add_gridspec(4, 1, height_ratios=[0.34, 1, 1, 0.47])
+    hax = fig.add_subplot(gs[0])
+    axs = [fig.add_subplot(gs[1]), fig.add_subplot(gs[2])]
     for ax, P_ in ((axs[0], "A"), (axs[1], "B")):
-        for key, color, name in (("hold", "0.3", "hold, current entry rule"), ("holddev", "tab:orange", "hold, deviation-filtered entries"),
-                                 ("churn", "tab:red", f"churn (dev >= {best['dev']}, k {best['k']}, max hold 1 d)")):
+        for key, color, name in (("hold", "0.3", HOLD_NAME), ("holddev", "tab:orange", HOLDDEV_NAME), ("churn", "tab:red", CHURN_NAME)):
             p = paths[key + P_]
             ax.plot([dt(t) for t, _ in p], [v for _, v in p], color=color, ls=":" if P_ == "A" else "-", label=name)
         ax.axhline(0, color="k", lw=0.8)
-        ax.set_ylabel(("IS, panel A (proxy)" if P_ == "A" else "OOS, panel B (real)") + "\nvalue gain on 32k, sets at touch exit")
+        ax.set_title(TRAIN_NAME if P_ == "A" else TEST_NAME, loc="left", fontweight="bold")
+        ax.set_ylabel("Gain on 32k of cash")
         ax.grid(alpha=0.3)
-        ax.legend(fontsize=8, loc="upper left")
     axs[0].xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    axs[0].set_xlabel("date (UTC)")
     axs[1].xaxis.set_major_formatter(mdates.DateFormatter("%d %b %H:%M"))
     axs[1].set_xlabel("time (UTC)")
-    fig.suptitle("Liquid value (cash + every set marked at its touch exit value) of 32k run as hold vs churn", fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    _header(hax, "Three ways to use 32k of cash on arb sets",
+            "Value = cash plus every set still held, counted at what it would sell for right now")
+    hh, ll = axs[1].get_legend_handles_labels()
+    hax.legend(hh, ll, loc="lower center", bbox_to_anchor=(0.5, -0.05), ncol=1, frameon=False, fontsize=10.5)
+    _glossary(fig.add_subplot(gs[3], label="glossary"), [
+        GLOSS_ARB, GLOSS_TICK, GLOSS_GAP, GLOSS_CHEAP,
+        (f"+{best['k']} ticks", f"sell as soon as the round trip earns {best['k']} ticks per set, then reuse the cash"),
+        GLOSS_RT, ("what it would sell for", "each set is valued at the touch, the best bid currently on offer"),
+        GLOSS_TRAIN, GLOSS_TEST,
+        ("line style", "dotted on training days, solid on test days; colours are the same strategies")], ncol=2, width=66, fontsize=9)
     fig.savefig(os.path.join(FIG, "arb_convergence_strategy.png"), dpi=110)
     plt.close(fig)
 

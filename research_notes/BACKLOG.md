@@ -9,6 +9,38 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
 (guard test + tests/sim_pipeline.py + precheck + Fable review + 10-min post-deploy watch).
 
 ## Open
+0000. PUNT EXECUTOR (Sizhe 23 Oct: "let me verify the punts and you send the orders"). Build and fully test BEFORE 1 Nov:
+   a plan-driven executor (sigbot/proposals/punt_executor.py + Bot wiring, OFF by default, enabled only by a session in
+   which Sizhe approved the exact plan in chat). Plan = ordered steps, each with market (exchange id), side, max price,
+   max size or cash, and a trigger: "buy now", "sell when bid >= X and Polymarket AND Kalshi >= Y", "buy toward target =
+   max(T, k x best live rival balance)" (leaderboard read), "stop at time Z". Executes by walking the book in chunks never
+   above the max price; logs every action; idempotent across restarts (state file); a dry-run mode that prints what it
+   would do against live books. Needs: behaviour tests, a sim scenario of the night (stage 1 wins / loses / thin books /
+   delayed calls / restart), Fable review, botctl deploy. Uses research_notes/punt_strategy.md section on the roll and
+   the live books in data/books_latest.json. Never places anything without the approved plan.
+   FABLE CHECK OF THE PUNT PLAN (24 Oct ~01:00): roll still the only option with real prize EV, but rewrite the plan
+   before building: drop MN Sen R -> OR Gov R (stage 1 is a 13c leg; Oregon counts slowly); stage 1 at a 22-35c average
+   fill in a state whose polls close by 20:00 ET; target max(1.3M, 1.12 x live leader) (rival punts are correlated, so
+   the bar is bimodal ~1.2M / 1.3-1.5M); model the stage-1 sale at 0.85 with a netting fallback (buy the other leg's
+   asks: a pair pays 1 at once); stage 2 is a fair-price bet with a hard price cap and abort-to-cash if the count has
+   already moved it; stage 2 only in races called the same night (ranking is by SETTLED balance; avoid AZ CA NV OR WA,
+   GA runoff, AK/ME ranked choice). Executor guards: capped limit orders only, verify fills from server records before
+   stage 2, idempotency keys + retry-same-key on 502, cancel all MM orders first (self-trade), call rule = both outside
+   venues >= 0.95 for several polls (single-venue 0.97 fallback), pre-approved ordered list of stage-2 candidates, ET =
+   UTC-5 on 3 Nov, leg orientation checked at approval, dry-run default + kill switch. Still unknown: whether SIG halts
+   or auto-settles a market at the media call (find out before 3 Nov: watch any market that resolves early, or ask the
+   venue). Honest EV ~$300 (range $100-600), conditional on prize eligibility.
+   ADDENDUM (timing): no market has ever settled in this tournament, so auto-settlement speed is unknown (feed checked
+   every 4 h; no documented halt-on-call for race legs; chamber control and runoffs are manual and closed to trading
+   until settled). Executor: treat auto-settlement as a bonus (detect via settlements[]/marketSettled, confirm with
+   /portfolio/settlements, then use the cash); rest a 0.85 limit sell (or buy the other leg at <= 0.15, which nets pairs
+   to 1 at once) from the outside call; stage-1 sale deadline tied to stage 2's poll close; if < ~70% sold by then, size
+   stage 2 to the cash realised or abort to cash if the target band can't be reached; treat 403/409/503 on a sell as
+   "re-read portfolio and market status". Only fast-count states in both stages: drop any OR, NV, AK, AZ, CA, WA, ME, UT
+   or GA leg. Passing stage-1 legs: FL-13 / FL-16 D, VT Gov D, SC Sen D / SC-01 D, VA-05 D (avoid NH). Passing stage-2
+   legs: NE Gov D, KS Gov D, MN-01 D, LA Sen D (re-verify Louisiana has no December runoff). Main risk: SIG's market
+   maker lags a 20-70 point move by tens of minutes, so the >= 0.85 sale may come too late for stage 2. Night-time depth
+   on normal days is fine (touch depth is higher at night than by day).
 000. NEW OBJECTIVE (Sizhe, 23 Oct ~15:20 BST): maximise LIQUID CASH available at ~18:00 ET on 3 Nov for Sizhe's punt.
    Rank and settlement value no longer matter; a position's worth is its sale value on 3 Nov evening. Live since 23 Oct
    (main session): arb.new_sets=false (no new sets, no recycles), tilt off, direction.allow_live=false (polling stays on
@@ -95,6 +127,33 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
   tick/share, ~+1-3 S/day. Daily run: mark the outside_lead paper rows in data/volatile_paper.jsonl at 4 h / 12 h on PURE
   convergence (SIG move minus the outside's further move); go live only if 10+ post-23-Oct signals average >= +0.5 tick,
   then R-adding only, 300 notional, kill at -50, flat by 12:00 ET 3 Nov.
+
+- 23 Oct HIGH-FREQUENCY ARB (Sizhe's name for "deviation churn"; code churn_*): Sizhe chose to run it live. Built
+  (sigbot/proposals/dev_churn.py, Bot.churn_cycle), caps 12k / 3k floor / 4k per race / -600 stop, volatility pause
+  (>= 1.5x normal gap movement, resume < 1.2x), no entries from 1 Nov 00:00 UTC, sell everything from 3 Nov 22:30 UTC.
+  Launch waits on the Fable test-environment check; its recommended features follow. Watch daily: entries, exits,
+  realised P&L, rejected baskets, pause state (grep "CHURN" in data/live.log).
+
+- 23 Oct trading-firm tactics round 2 (research_notes/hft_tactics_2.md): DMM requote timing/batching/inventory skew,
+  large-taker footprints, time of day, queue age, same-state cross-race moves: all DROP (best is pulling our quotes
+  before a requote batch, < 10 S/day; following/fading big takers loses 1.2-1.3 ticks/share). Note: it says SIG has no
+  chamber-control market; contract_rules.md says SIG has "U.S. House"/"U.S. Senate" — check before relying on either.
+- 23 Oct contract rules (research_notes/contract_rules.md, data/research_contract_rules/tc_mapping.json): all venues pay
+  on the winner's party incl. runoffs; 220/237 legs same terms, 194 safe to compare. Fixes for the bot's fair value:
+  for Idaho Senate, South Dakota Senate and the Maine, Tennessee, Michigan and Alaska governor races (no SIG independent
+  leg) compare each leg with the SAME party's outside price, never 1 - other party; check the Alaska Senate Polymarket
+  R side (two Sullivan markets summed?); use Kalshi's direct CONTROLS-2026 / CONTROLH-2026 markets for chamber control.
+  An uncalled race keeps SIG cash locked past 4 Nov (payoff unchanged) — the wind-down must treat slow-count races
+  (GA runoff, AK/ME ranked choice, AZ CA NV OR WA) as late-call.
+
+- 23 Oct punt strategy double-check (Fable): keep the decision (two-stage roll aimed at 1st, >= 1.45M, no single
+  longshot before 18:00 ET, stage-2 target from the live leaderboard), but fix before 3 Nov: (1) punt_screener's
+  roll_gap_h is 1 h — expose it and re-run with a 3-4 h minimum gap (stage 1 closing 19:00 ET in FL/VT/SC/VA/GA/KY/IN,
+  stage 2 closing 23:00 ET or later, 21:00 at the earliest); (2) write the fallback for a stage 1 that wins but cannot
+  be sold at >= 0.85 in time (sell down to ~0.8 only if a stage-2 leg still clears the live 1st-place bar, else hold for
+  a 23:00+ fair-price leg); (3) do not apply the longshot haircut to 25-40c legs; (4) relabel the 2-15c statistics
+  without presidential safe states (comparable races 0/32, P = 0.13, weak evidence). Realistic EV ~$300-600 (range
+  $100-1,100), a ~2% shot at $30k. Build these into the punt executor's plan (item 0000).
 
 ## Done
 - 23 Oct: Directional trades sized by market impact / 6+ tick gap held 12 h: NEGATIVE. New day out of sample -0.49

@@ -1217,13 +1217,25 @@ def VM_at(series, t, age):
 
 
 def plot_curves(out, Ms=(1.5, 2.0)):
+    import math as _m
+    import textwrap
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import FancyBboxPatch
     plt.style.use("default")
-    fig, axes = plt.subplots(3, 1, figsize=(9, 12), sharex=True, facecolor="white")
+    plt.rcParams.update({"font.size": 10, "axes.titlesize": 11, "axes.labelsize": 10, "xtick.labelsize": 9.5,
+                         "ytick.labelsize": 9.5, "legend.fontsize": 9.5})
+    TRAIN, TEST, ALL = "Training days (8-16 Oct)", "Test days (17-23 Oct)", "All days (8-23 Oct)"
+    fig = plt.figure(figsize=(10, 20), facecolor="white", layout="constrained")
+    gs = fig.add_gridspec(5, 1, height_ratios=[0.2, 1, 1, 1.15, 0.6])
+    hax = fig.add_subplot(gs[0])
+    axes = [fig.add_subplot(gs[1])]
+    axes += [fig.add_subplot(gs[i], sharex=axes[0]) for i in (2, 3)]
     pos = lambda x: max(x, 5)                        # x = 0 drawn at 5 s on the log axis
     cols = {1.5: "#1f77b4", 2.0: "#d62728"}
+    mname = lambda M: f"moves of {M:g}+ points"
     for M in Ms:
         o = out[str(M)]
         col = cols.get(M, "k")
@@ -1231,53 +1243,91 @@ def plot_curves(out, Ms=(1.5, 2.0)):
         for scope, ls in (("all", "-"), ("OOS", "--")):
             r = [a for a in o["A"] if a["scope"] == scope and a["p"] is not None]
             xs = [pos(a["x"]) for a in r]
-            axes[0].plot(xs, [a["p"] for a in r], ls, color=col, marker="o", ms=4, label=f"M {M} pts, {scope} (n {r[0]['n'] if r else 0} at x=0)")
+            axes[0].plot(xs, [a["p"] for a in r], ls, color=col, marker="o", ms=4,
+                         label=f"{mname(M).capitalize()}, {(lambda n: n[0].lower() + n[1:])(ALL if scope == 'all' else TEST)}: {r[0]['n'] if r else 0} moves with no wait")
             if scope == "all":
                 axes[0].fill_between(xs, [a["lo"] for a in r], [a["hi"] for a in r], color=col, alpha=0.12)
         # B
         r = [b for b in o["B"] if b["scope"] == "all" and b["frac_left"] is not None]
         xs = [pos(b["x"]) for b in r]
-        axes[1].plot(xs, [b["frac_left"] for b in r], "-", color=col, marker="o", ms=4, label=f"M {M}: share of gap still available (DMM requotes + takes)")
+        axes[1].plot(xs, [b["frac_left"] for b in r], "-", color=col, marker="o", ms=4,
+                     label=f"{mname(M).capitalize()}: share of SIG's price lag still there")
         axes[1].fill_between(xs, [b["frac_left"] - 1.96 * (b["frac_left_se"] or 0) for b in r], [b["frac_left"] + 1.96 * (b["frac_left_se"] or 0) for b in r], color=col, alpha=0.12)
         rt = [b for b in o["B"] if b["scope"] == "all" and b["touch_taken_share"] is not None]
         if rt:
             axes[1].plot([pos(b["x"]) for b in rt], [1 - b["touch_taken_share"] for b in rt], ":", color=col, marker="s", ms=4,
-                         label=f"M {M}: share of stale touch depth not yet taken by others (tape, n {rt[0]['n_touch']})")
+                         label=f"{mname(M).capitalize()}: share of SIG's shares on offer at the old price that no other trader took "
+                               f"({rt[0]['n_touch']} moves with this data)")
         # C
         for scope, ls, mk in (("IS", ":", "^"), ("OOS", "-", "o")):
             r = [c for c in o["C"] if c["scope"] == scope and c["ev"] is not None]
             xs = [pos(c["x"]) for c in r]
-            axes[2].plot(xs, [c["ev"] for c in r], ls, color=col, marker=mk, ms=4, label=f"M {M}: realised EV, {scope}")
+            axes[2].plot(xs, [c["ev"] for c in r], ls, color=col, marker=mk, ms=4)
             if scope == "OOS":
                 axes[2].fill_between(xs, [c["lo"] if c["lo"] is not None else c["ev"] for c in r], [c["hi"] if c["hi"] is not None else c["ev"] for c in r], color=col, alpha=0.10)
         mo = [m for m in o["model"] if m["scope"] == "OOS"]
         if mo:
-            axes[2].plot([pos(m["x"]) for m in mo], [m["ev_model"] for m in mo], "-.", color=col, alpha=0.7, label=f"M {M}: model EV (IS-calibrated) on OOS P(real), gap")
+            axes[2].plot([pos(m["x"]) for m in mo], [m["ev_model"] for m in mo], "-.", color=col, alpha=0.7)
         # per-event points (OOS, stable trades), jittered
         pts = [p for p in out["per_event"] if p["M"] == M and p["sample"] != "IS" and p["tt"] is not None]
         import random
         rnd = random.Random(1)
         axes[2].scatter([pos(p["x"]) * (1 + 0.08 * (rnd.random() - 0.5)) * (1.06 if M == 2.0 else 0.94) for p in pts], [p["tt"] for p in pts],
                         s=6, color=col, alpha=0.25)
-    axes[0].set_ylabel("A: P(move is REAL | stable for x)")
+    # header
+    hax.axis("off")
+    hax.text(0.5, 1.0, "Waiting after an outside price move before trading on SIG", ha="center", va="top", fontsize=15,
+             fontweight="bold", transform=hax.transAxes)
+    hax.annotate("Polymarket and Kalshi move, SIG lags; we trade SIG's old price after waiting x seconds (sold after 12 h at the latest)",
+                 xy=(0.5, 1.0), xycoords="axes fraction", xytext=(0, -24), textcoords="offset points", ha="center", va="top",
+                 fontsize=10.5, color="0.25")
+    axes[0].set_title("A. Does waiting weed out false moves?", loc="left", fontweight="bold")
+    axes[0].set_ylabel("Share of moves that were real,\namong those still steady after the wait")
     axes[0].set_ylim(0.4, 1.02)
-    axes[0].legend(fontsize=8, loc="lower left")
-    axes[0].set_title("Outside move then wait x seconds before sweeping SIG (12-h stop, 2-s latency; x = 0 drawn at 5 s)", fontsize=10)
-    axes[1].set_ylabel("B: share of SIG's stale gap / depth left")
+    axes[0].legend(loc="upper left", bbox_to_anchor=(0, -0.04), frameon=False)
+    axes[1].set_title("B. Does waiting let the opportunity slip away?", loc="left", fontweight="bold")
+    axes[1].set_ylabel("Share of SIG's price lag\nstill there to trade")
     axes[1].set_ylim(0, 1.05)
-    axes[1].legend(fontsize=8, loc="lower left")
+    axes[1].legend(loc="upper left", bbox_to_anchor=(0, -0.04), frameon=False)
+    axes[2].set_title("C. Profit per share after costs", loc="left", fontweight="bold")
     axes[2].axhline(0, color="grey", lw=0.8)
-    axes[2].set_ylabel("C: net EV per share (ticks, after spread + slip)")
+    axes[2].set_ylabel("Profit per share after costs\n(ticks)")
     axes[2].set_ylim(-5, 8)
-    axes[2].legend(fontsize=7, loc="upper right")
+    axes[2].legend(handles=[Line2D([], [], color=cols[M], lw=2, label=mname(M).capitalize()) for M in Ms]
+                   + [Line2D([], [], color="0.3", ls=":", marker="^", ms=4, label=f"dotted: {TRAIN}, average"),
+                      Line2D([], [], color="0.3", ls="-", marker="o", ms=4, label=f"solid: {TEST}, average (dots: single trades)"),
+                      Line2D([], [], color="0.3", ls="-.", label=f"dash-dot: {TEST}, prediction of a simple model fitted on training days")],
+                   loc="upper left", bbox_to_anchor=(0, -0.13), ncol=1, frameon=False)
     axes[2].set_xscale("log")
-    axes[2].set_xlabel("stabilisation wait x (seconds, log scale)")
+    axes[2].set_xlabel("Wait before trading, x (seconds, log scale; no wait is drawn at the left)")
     axes[2].set_xticks([5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600])
     axes[2].set_xticklabels(["0", "15", "30", "60", "120", "300", "600", "1200", "1800", "3600"])
     for a in axes:
         a.grid(True, alpha=0.3)
         a.set_facecolor("white")
-    fig.tight_layout()
+        a.tick_params(labelbottom=True)
+    # glossary
+    gax = fig.add_subplot(gs[4], label="glossary")
+    gax.axis("off")
+    gax.add_patch(FancyBboxPatch((0, 0), 1, 1, boxstyle="round,pad=0,rounding_size=0.01", transform=gax.transAxes,
+                                 facecolor="#f6f6f2", edgecolor="0.6", lw=0.8, clip_on=False))
+    gax.text(0.01, 0.97, "Glossary", ha="left", va="top", fontsize=10, fontweight="bold", transform=gax.transAxes)
+    gl = [("outside move", "the average of the Polymarket and Kalshi prices moves at least 1.5 (or 2) points within an hour; both venues agree"),
+          ("point", "1 percentage point of probability = 0.01 in price"),
+          ("tick", "0.005, the smallest SIG price step (half a cent)"),
+          ("SIG's price lag", "how far SIG's price still is from the new outside price; we trade only when it is at least 2 ticks"),
+          ("real move", "the outside price still holds 70% of the move 1 h and 4 h later, or SIG follows at least half of it within 4 h"),
+          ("steady after the wait", "neither venue gave back more than 30% of its move during the wait; unsteady moves are not traded"),
+          ("lag shrinking", "SIG's market maker re-pricing its quotes, or other traders taking the old price"),
+          ("costs", "the bid-ask spread plus 0.05 tick of slippage each way; the trade closes when SIG has closed 70% of the lag"),
+          ("delay", "2 seconds from seeing the move to our order reaching SIG"),
+          ("shaded bands", "95% uncertainty range (A, B: all days; C: test days)"),
+          ("training / test days", "the rule was chosen on 8-16 Oct and checked on 17-23 Oct (SIG prices from 5-min trades to 21 Oct, real quotes after)")]
+    wrapped = ["\n".join(textwrap.wrap(f"{t}: {e}", width=66, subsequent_indent="    ")) for t, e in gl]
+    per = _m.ceil(len(wrapped) / 2)
+    for c in range(2):
+        gax.text(0.01 + c / 2, 0.86, "\n".join(wrapped[c * per:(c + 1) * per]), ha="left", va="top", fontsize=9,
+                 linespacing=1.35, transform=gax.transAxes)
     os.makedirs(os.path.dirname(FIG), exist_ok=True)
     fig.savefig(FIG, dpi=130, facecolor="white")
     print("saved", FIG)
@@ -1288,5 +1338,7 @@ if __name__ == "__main__":
         fetch()
     elif len(sys.argv) > 1 and sys.argv[1] == "xstudy":
         xstudy()
+    elif len(sys.argv) > 1 and sys.argv[1] == "plot":       # redraw outside_sweep_x.png from curves.json, no recompute
+        plot_curves(json.load(open(os.path.join(OUT, "curves.json"))))
     else:
         main()

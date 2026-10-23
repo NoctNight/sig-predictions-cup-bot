@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 
 from .analytics import compute as compute_overrides
 from .api import ApiError, SuperMarketClient
-from .arb import ArbEngine
+from .arb import ArbEngine, Chunk
 from .config import BotConfig
 from .mm import MarketMaker, TICK
 from .news import NewsSweeper
@@ -47,7 +47,9 @@ from .allocator import build_state_from_bot, offload_check
 from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
-from .proposals.outside_sweep import CatchupSweep, pnl_from_fills
+from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
+from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround,
+                                  LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE)
 from .proposals import election_night as EN
 from .proposals.own_book import OwnLevels
 
@@ -491,6 +493,24 @@ class Bot:
                 self.catchup.killed = bool(st.get("killed", False))
             except Exception as e:                   # missing, corrupt or not a dict: start empty (positions without
                 log.warning("catchup state unreadable (%s): starting empty", e)   # context are then closed)
+            try:                                     # the 60-min look-back from stored quotes: no hour of waiting after a restart
+                leg_of = {(r.name, p): l.exchange_id for r in self.universe.races.values() for p, l in r.legs.items()}
+                vq = self.store.rows("SELECT ts, venue, race, party, COALESCE(mid, (bid + ask) / 2.0) m FROM venue_quotes "
+                                     "WHERE ts > ? AND venue IN ('polymarket', 'kalshi', 'sig')", (time.time() - 5400,))
+                boot = rows_from_venue_quotes([(r["ts"], r["venue"], r["race"], r["party"], r["m"]) for r in vq], leg_of)
+                self.catchup.push(boot)
+                log.info("catchup: %d stored quote rows loaded as history (%d legs)", len(boot), len({r["exchange_id"] for r in boot}))
+            except Exception as e:
+                log.warning("catchup history load: %s", e)
+        self.churn = (DevChurn(capital=cfg.churn_capital, cash_floor=cfg.churn_cash_floor, kill=cfg.churn_kill)
+                      if getattr(cfg, "churn_enabled", False) else None)
+        self.churn_state_path = os.path.join(HERE, "params", "churn_state.json")
+        self.churn_med, self.churn_med_ts = {}, 0.0
+        if self.churn is not None:
+            try:
+                self.churn.load(json.load(open(self.churn_state_path)))
+            except Exception as e:                   # missing/corrupt: start empty; held sets stay under the normal rules
+                log.warning("churn state unreadable (%s): starting empty", e)
         self.move_detector = MoveDetector()
         self.volatile_paper = VolatileMoves()
         self.inside_posted: dict = {}            # ex -> time of our last inside post (re-post before the venue TTL expires)
@@ -873,6 +893,159 @@ class Bot:
         if summary["orders"]:
             log.info("INSIDE posted %d orders on %d markets (%d writes)", summary["orders"], summary["markets"], summary["writes"])
         return summary
+
+    def churn_cycle(self, positions: dict, killed: bool, cycle_id=None):
+        """Deviation churn (proposals/dev_churn.py): exits first (+2 ticks/set, 24 h, the 3 Nov sell-all), reconciled
+        against the sets actually held; then entries in two-leg races whose mid overround is >= 4 ticks above its 24-h
+        median and whose sell-set clears the arb thresholds. Baskets are all-or-none via the arb engine."""
+        ch = self.churn
+        if ch is None or self.dry_run or self.store is None:
+            return
+        now = time.time()
+        changed = False
+        if now - self.churn_med_ts > 900:            # 24-h medians from this venue's own quotes, refreshed every 15 min
+            span = VOL_RECENT + VOL_BASE
+            rows = self.store.rows("SELECT race, party, ts, COALESCE(mid, (bid + ask) / 2.0) m FROM venue_quotes "
+                                   "WHERE venue='sig' AND ts > ?", (now - span - 3600,))
+            n_legs = {r.name: len(r.exchange_ids) for r in self.universe.races.values() if len(r.exchange_ids) == 2}
+            series = overround_series([(r["race"], r["party"], r["ts"], r["m"]) for r in rows], n_legs, now - span, now)
+            self.churn_med = medians_from_series(series, now)
+            vr = vol_ratio(series, now)
+            change = ch.update_vol(vr)
+            if change:
+                changed = True
+                log.warning("CHURN: gap movement %.2fx normal: new entries %s (pause >= 1.5x, resume < 1.2x)", vr, change)
+            log.info("CHURN medians: %d two-leg races with 12+ h of history; gap movement %s x normal%s", len(self.churn_med),
+                     "?" if vr is None else "%.2f" % vr, " (entries paused)" if ch.vol_paused else "")
+            self.churn_med_ts = now
+        open_value = 0.0
+
+        def books_for(race, max_age):
+            bk = {e: self.fresh_book(e, max_age) for e in race.exchange_ids}
+            if any(v is None for v in bk.values()):
+                try:
+                    bk = {e: self.get_book(e, 50) for e in race.exchange_ids}
+                except ApiError as e:
+                    log.warning("churn books %s: %s", race.name, e)
+                    return None
+            return bk
+
+        def sets_held(race) -> int:
+            snap = self.positions_snapshot or {}
+            qs = [snap.get(e, 0.0) for e in race.exchange_ids]
+            return int(min(-q for q in qs)) if qs and all(q < 0 for q in qs) else 0
+
+        def snap_add(race, qty):
+            # keep the shared snapshot current after our own basket (other paths unwind from it); NO legs are negative
+            snap = dict(self.positions_snapshot or {})
+            for e in race.exchange_ids:
+                snap[e] = snap.get(e, 0.0) + qty
+            self.positions_snapshot = snap
+
+        for rname in sorted({l["race"] for l in ch.lots}):
+            race = self.universe.races.get(rname)
+            if race is None:
+                continue
+            with self.trade_lock:
+                dropped = ch.reconcile(rname, sets_held(race))
+            if dropped:
+                changed = True
+                log.info("CHURN %s: %d sets no longer held (closed by a recycle or free unwind); ledger adjusted", rname, dropped)
+            held = ch.held(rname)
+            if held < self.cfg.arb.min_set_qty:
+                continue
+            books = books_for(race, 30.0)
+            if books is None:
+                continue
+            uq = self.arb.unwind_quote(race, books, held)
+            proceeds = uq["proceeds"] if uq else None
+            lots = [l for l in ch.lots if l["race"] == rname]
+            avg = {"cost": sum(l["qty"] * l["cost"] for l in lots) / held, "ts": min(l["ts"] for l in lots)}
+            if proceeds is not None:
+                open_value += held * (proceeds - avg["cost"])
+            why = ch.exit_reason(avg, proceeds, now)
+            if not why:
+                continue
+            with self.trade_lock:
+                held = min(held, sets_held(race))            # re-checked under the lock, right before selling
+                res = self.arb.unwind_set(rname, books, held, why="churn: " + why) if held >= self.cfg.arb.min_set_qty else None
+                if res and not res.get("dry"):
+                    snap_add(race, held)
+            if res and not res.get("dry"):
+                pnl = ch.close(rname, held, res["proceeds"], now)
+                if proceeds is not None:
+                    open_value -= held * (proceeds - avg["cost"])
+                changed = True
+                log.info("CHURN exit %s x%d at %.4f/set (%s): %+.1f, realised so far %+.1f", rname, held, res["proceeds"], why, pnl, ch.realised)
+        was = ch.killed
+        if ch.check_kill(open_value) and not was:
+            changed = True
+            log.warning("CHURN: realised %+.1f + open %+.1f at or below %.0f: no more entries; held churn sets exit by their rules",
+                        ch.realised, open_value, ch.kill)
+        if not killed and not ch.killed and now <= CHURN_LAST_ENTRY:
+            own = own_levels(self)
+            for race in self.universe.races.values():
+                if not ch.eligible(race, now) or race.name in self.arb.hostile or self.arb.cooldown.get(race.name, 0) > now:
+                    continue
+                med = self.churn_med.get(race.name)
+                if med is None:
+                    continue
+                fb = {e: self.fresh_book(e, 10.0) for e in race.exchange_ids}
+                if any(v is None for v in fb.values()) or not ch.unusually_cheap(mid_overround(fb, race.exchange_ids), med):
+                    continue
+                nb = {e: own.net(e, b) for e, b in fb.items()}
+                chunks = [c for c in self.arb.chunks_for_race(race, nb) if c.kind == "sell_set"
+                          and c.edge >= self.cfg.arb.min_edge_sell - 1e-9 and c.ret >= max(0.0, self.cfg.arb.min_ret_sell) - 1e-9]
+                if not chunks:
+                    continue
+                best = max(chunks, key=lambda c: c.ret)
+                q = ch.entry_qty(best, self.cash, self.cfg.arb.min_set_qty)
+                if not q:
+                    continue
+                ch.last_entry[race.name] = now                 # one attempt per race per 5 min, filled or not
+                changed = True
+                with self.trade_lock:
+                    res = self.arb.execute([Chunk(best.race, "sell_set", q, best.edge, best.cost, best.limits)], cycle_id)
+                    if any(r.get("ok") for r in res):
+                        snap_add(race, -q)
+                if any(r.get("ok") for r in res):
+                    ch.add_lot(race.name, q, best.cost, now)
+                    self.cash -= q * best.cost
+                    log.info("CHURN enter %s x%d at cost %.4f/set (edge %.4f, overround %+.3f vs 24-h median %+.3f)", race.name, q,
+                             best.cost, best.edge, mid_overround(fb, race.exchange_ids), med)
+        if changed:
+            try:
+                tmp = self.churn_state_path + ".tmp"
+                with open(tmp, "w") as f:
+                    json.dump(ch.to_json(), f)
+                os.replace(tmp, self.churn_state_path)
+            except OSError as e:
+                log.warning("churn state: %s", e)
+
+    def snapshot_books(self, every: float = 3600.0, history_every: float = 6 * 3600.0):
+        """Hourly copy of every order book the feed holds (no API reads) to data/books_latest.json, the format of
+        data/books.json ({exchange_id: book}) so the punt screener reads current depth; every 6 h also to
+        data/books_history/books_<UTC time>.json to see how depth changes into 3 Nov."""
+        now = time.time()
+        if now - getattr(self, "books_snap_ts", 0.0) < every or not self.feed_ok():
+            return
+        books = self.feed.books()
+        if len(books) < 0.8 * len(self.universe.all_exchanges()):
+            return                                    # feed still filling after a (re)connect: wait for a full set
+        self.books_snap_ts = now
+        d = os.path.join(HERE, "data")
+        tmp = os.path.join(d, "books_latest.json.tmp")
+        with open(tmp, "w") as f:
+            json.dump(books, f)
+        os.replace(tmp, os.path.join(d, "books_latest.json"))
+        with open(os.path.join(d, "books_latest.meta.json"), "w") as f:
+            json.dump({"ts": now, "utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"), "n": len(books)}, f)
+        if now - getattr(self, "books_hist_ts", 0.0) >= history_every:
+            self.books_hist_ts = now
+            os.makedirs(os.path.join(d, "books_history"), exist_ok=True)
+            with open(os.path.join(d, "books_history", "books_%s.json" % datetime.now(timezone.utc).strftime("%Y%m%dT%H%MZ")), "w") as f:
+                json.dump(books, f)
+        log.info("order books saved: %d markets -> data/books_latest.json", len(books))
 
     def mm_positions(self, positions: dict) -> dict:
         """Positions the MM manages: the venue's, minus the catch-up sweep's own open positions (the MM used to count
@@ -1508,6 +1681,15 @@ class Bot:
                 self.catchup_cycle(dir_summary, positions, prices, killed)
             except Exception as e:                   # the trial must never kill the loop
                 log.exception("catchup cycle failed: %s", e)
+        try:
+            self.snapshot_books()
+        except Exception as e:                       # a snapshot must never kill the loop
+            log.warning("book snapshot: %s", e)
+        if self.churn is not None:
+            try:
+                self.churn_cycle(positions, killed, cycle_id)
+            except Exception as e:                   # the sleeve must never kill the loop
+                log.exception("churn cycle failed: %s", e)
 
 
         # ---- outside fair for the MM's gate, refreshed right after the directional poll: NOT redundant with the rebuild
@@ -1542,7 +1724,11 @@ class Bot:
                     except ApiError as e:
                         log.warning("free-unwind book %s: %s", rname, e)
                 with self.trade_lock:
-                    fu = self.arb.free_unwinds(held_books, positions, cycle_id)
+                    # the latest snapshot, not the cycle-start positions: a scanner recycle, free unwind or churn exit
+                    # earlier in this cycle may already have closed these sets (sim 'churn', 23 Oct: double unwind)
+                    fu = self.arb.free_unwinds(held_books, self.positions_snapshot, cycle_id)
+                    if fu:
+                        self.positions_snapshot = self.positions_map()[0]
                 if fu:
                     log.info("free unwinds: %s", fu)
 

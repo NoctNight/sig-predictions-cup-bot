@@ -5,6 +5,16 @@ stopped, no orders, **0 venue API reads** (everything is local data). Script: `r
 outputs in `data/research_arb_convergence/` (tables.md, results.json, race_day_overround.csv, race_paths_30min.csv);
 figures `research_notes/figures/arb_convergence_paths.png`, `arb_convergence_horizon.png`, `arb_convergence_strategy.png`.
 
+**The three strategies in plain words.** An arb set is one contract on every outcome of a race, so it is guaranteed to
+pay a fixed amount; we buy it when it costs less than that payout. **"Hold to settlement (current rule)"** buys a set
+whenever it is below payout by the bot's current thresholds and keeps it until the election settles. **"Hold, buy only
+when unusually cheap"** does the same, but only buys when the race's gap to payout is at least 4 ticks (4 x 0.005)
+wider than its own median over the last 24 hours. **"Buy when unusually cheap, sell after +2 ticks or 24 h"** (called
+"churn" or "deviation churn" in the tables below) buys on the same signal, then sells the set back as soon as the
+round trip (buy, then sell back, after paying the spread both ways) earns 2 ticks per set, or after 24 hours
+whatever the price, and reuses the cash. In the figures, "Training days (14-21 Oct, estimated from trade prices)" is
+panel A / IS below, and "Test days (22-23 Oct, real quotes)" is panel B / OOS. Each figure has its own glossary box.
+
 ## Bottom line
 
 * **Exiting an ordinary arb early loses money.** A typical 2-leg race has a sell edge of 1 tick (sum of bids - 1) and a
@@ -77,10 +87,13 @@ All thresholds and rules are chosen on A and tested on B.
 
 ![paths](figures/arb_convergence_paths.png)
 
-`arb_convergence_paths.png` shows the 12 races we traded most. Blue is sb - 1, the sell entry edge. Orange is sa - 1,
-the sell exit cost; when it is negative, its size is the buy-set edge. Panel A is to the left of the dotted line and
-panel B to the right. Our sell entries are drawn as ▲, buy entries as ▼ and unwinds as ×. A sell-set exited early makes
-money only if the orange line later drops below the blue line at entry.
+`arb_convergence_paths.png` ("Arb set prices in our 12 most-traded races") shows the 12 races we traded most. Blue,
+"gap to payout when buying a NO set", is sb - 1, the sell entry edge. Orange, "gap to payout when selling a NO set
+back", is sa - 1, the sell exit cost; when it is negative, its size is the buy-set (YES set) edge. Training days (14-21
+Oct, estimated from trade prices; panel A) are to the left of the dotted line and test days (22-23 Oct, real quotes;
+panel B) to the right. "We bought a NO set" (▲) are our sell entries, "We bought a YES set" (▼) our buy entries and
+"We sold a set back early" (×) our unwinds. A NO set (sell-set) sold early makes money only if the orange line later
+drops below where the blue line was at entry.
 
 | panel | legs | races | median mid-overround (ticks) | median sb-1 | median sa-1 | sd of deviation from the race median | half-life of a deviation | 6-h persistence | sell-set qualifies |
 |---|---|---|---|---|---|---|---|---|---|
@@ -97,6 +110,13 @@ paths for every race are in `race_paths_30min.csv`.
 ## 2. Hypothetical entries at the bot's thresholds (figure 2, panels A and B)
 
 ![horizon](figures/arb_convergence_horizon.png)
+
+Figure 2, "Selling arb sets early vs holding to settlement". Panel A ("Profit if a set is sold after a fixed holding
+time") plots the early-exit share against holding time h: "without hindsight (a rule we could actually run)" is the
+median share at h, "with hindsight (best possible exit)" the median best exit within h, and "Our actual sets" is green.
+Panel B ("How often a good early sale existed at some point") is P(best >= 25 / 50 / 100%). Panel C is "Buy when
+unusually cheap, sell after +2 ticks" minus "Hold to settlement (current rule)", per 1,000 of capital per day, with the
+24-h maximum hold replaced by the x-axis time (section 5).
 
 The entries are sell-sets with return >= 0.5% and edge >= 1 tick, and buy-sets with return >= 2.4% after x. A fresh
 entry is the first 5-min point of a qualifying run; an outage does not start a new run. A second sample takes every
@@ -187,6 +207,11 @@ edge plus the unwind edge (the unwind edge is minus the walked exit cost).
 ## 5. Hold (A) vs churn (B) simulations (figure 2 panel C, figure 3)
 
 ![strategy](figures/arb_convergence_strategy.png)
+
+Figure 3, "Three ways to use 32k of cash on arb sets": liquid value (cash plus every held set at the touch) over time
+for "Hold to settlement (current rule)" (grey), "Hold, buy only when unusually cheap" (orange) and "Buy when unusually
+cheap, sell after +2 ticks or 24 h" (red, the churn rule below), on training days (top, panel A) and test days (bottom,
+panel B).
 
 **Setup.**
 
