@@ -345,3 +345,11 @@
   buy-sets in races the arb engine bought (arb_trades buy_set) count at payout. Corrected settlement value 103,434 at
   15:00 vs 103,423 at 00:33: flat over 14 h (incl. ~2 h of Mac network outages 10:08-11:03 and 13:03-14:06), not -1,000
   as this morning's brief said. The bot's own kill switch (positions_map) already counted buy-sets correctly.
+- 15:43 (23 Oct) CASH MODE (Sizhe: objective is now the most liquid cash at ~18:00 ET 3 Nov for the punt; rank does not
+  matter). New ArbConfig.new_sets=false gates the scanner, the main-loop arb and both recycle paths; recycle_enabled,
+  tilt.enabled, direction.allow_live (polling stays on for the MM gate), allocator.offload_live and allocator.auto_apply
+  all false. Kept: free unwinds, zero-EV exits, the MM, kill switch, partisan cap. Tests: tests/test_guards.py "cash mode"
+  (live config, scanner stub that fails if a set is planned or recycled, free unwinds not gated). Sim: arb-code
+  scenarios force arbs on in their sandbox so that code stays covered; all 15 scenarios 0 violations. Fable review SAFE TO
+  DEPLOY. Deployed via botctl deploy (restart cancel-all removed resting tilt/directional orders). Wind-down routine
+  (backlog 000) to be built by the daily runs before 31 Oct.
