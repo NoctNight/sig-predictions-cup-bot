@@ -582,5 +582,10 @@ check("catchup: history rebuilt from stored quotes (changes carried forward) giv
 _stale = OS.rows_from_venue_quotes([(T0, "polymarket", "Rc", "D", 0.5), (T0 + 3601, "kalshi", "Rc", "D", 0.5)], {("Rc", "D"): "10"})
 check("catchup: a stored quote older than 30 min is not carried forward", _stale[-1]["pm"] is None)
 
+check("churn: no entries in races where we already hold > 4,000 shares on a leg (own churn sets not counted)",
+      DC.big_holding({"a": -4500.0, "b": -100.0}, ["a", "b"], 0, 4000) and not DC.big_holding({"a": -4500.0, "b": -4500.0}, ["a", "b"], 2000, 4000)
+      and not DC.big_holding({"a": -3900.0}, ["a", "b"], 0, 4000) and _live.get("churn_skip_holding") == 4000.0
+      and "big_holding(self.positions_snapshot or positions, race.exchange_ids, ch.held(race.name), lim)" in open(os.path.join(ROOT, "sigbot", "run.py")).read())
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

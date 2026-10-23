@@ -200,6 +200,7 @@ class BotConfig:
     churn_capital: float = 12000.0       # sell after +2 ticks/set or 24 h; pot, cash floor and stop below
     churn_cash_floor: float = 3000.0
     churn_kill: float = -600.0
+    churn_skip_holding: float = 4000.0   # no entries in races where we already hold > this many shares on a leg (0 = off)
     election_per_race_cap: float = 5000.0
     election_total_cap: float = 90000.0
     election_poll_sec: float = 4.0

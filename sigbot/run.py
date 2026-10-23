@@ -48,7 +48,7 @@ from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
 from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
-from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround,
+from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround, big_holding,
                                   LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE)
 from .proposals import election_night as EN
 from .proposals.own_book import OwnLevels
@@ -990,6 +990,9 @@ class Bot:
                 med = self.churn_med.get(race.name)
                 if med is None:
                     continue
+                lim = getattr(self.cfg, "churn_skip_holding", 0.0)
+                if lim > 0 and big_holding(self.positions_snapshot or positions, race.exchange_ids, ch.held(race.name), lim):
+                    continue                                   # big existing position here: leave the race alone
                 fb = {e: self.fresh_book(e, 10.0) for e in race.exchange_ids}
                 if any(v is None for v in fb.values()) or not ch.unusually_cheap(mid_overround(fb, race.exchange_ids), med):
                     continue

@@ -103,6 +103,12 @@ def vol_ratio(series: dict, now: float) -> Optional[float]:
     return median(ratios) if len(ratios) >= 10 else None
 
 
+def big_holding(positions: dict, exchange_ids: list, own_sets: int, limit: float) -> bool:
+    """True when we already hold more than `limit` shares on any leg of the race, not counting this sleeve's own sets
+    (Sizhe 24 Oct: leave races with big existing positions alone for now, a mistake there costs thousands of edge)."""
+    return any(abs(positions.get(e, 0.0)) - own_sets > limit for e in exchange_ids)
+
+
 def mid_overround(books: dict, exchange_ids: list) -> Optional[float]:
     s = 0.0
     for e in exchange_ids:

@@ -127,5 +127,6 @@
   "churn_enabled": true,
   "churn_capital": 4000.0,
   "churn_cash_floor": 3000.0,
-  "churn_kill": -200.0
+  "churn_kill": -200.0,
+  "churn_skip_holding": 4000.0
 }
