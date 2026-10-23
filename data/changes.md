@@ -358,3 +358,12 @@
   dropping (DNS errors / "can't assign requested address" as it went on AC); value was +4 at the time. Watcher fixed:
   tracebacks whose exception is a network error no longer count (deploy/watch_deploy.py code_tracebacks; checked on a
   network traceback (0) and a KeyError (1)). Bot restarted, re-watch passed (103,432 -> 103,432, no sets/recycles).
+- 16:40 (23 Oct) Cash mode keeps RECYCLING (Sizhe: "shouldn't we unwind if we detect a better trade"): a recycle swaps a
+  held set for a better one and spends only what the unwind freed (ArbEngine.follow_budget = freed in cash mode); free
+  cash still never buys a set. Review fix: unspent recycle cash (ArbEngine.recycle_credit) is re-spent before any further
+  unwind, a vanished target is cooled down 60 s, the main-loop backstop is off in cash mode and while killed. Tests:
+  tests/test_guards.py (scanner pass with a real candidate never plans in cash mode and is sensitive to the switch;
+  follow-through budget = freed; no unwind with credit outstanding); sim recycle_cash (24 swaps, spent <= freed) and
+  recycle_cash_gone (1 unwind; the pre-fix code made 12 in 30 min). 17 scenarios 0 violations; two Fable reviews (second
+  SAFE TO DEPLOY). Deployed via botctl deploy, watch passed (103,407 -> 103,409). Wind-down: unwinds NOTHING for the punt
+  until Sizhe sets RAISE_TARGET (30 Oct brief asks).
