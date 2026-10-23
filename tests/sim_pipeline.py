@@ -946,6 +946,63 @@ class RecycleOversize(Scenario):
                                                   f"({len(buys)} basket(s)); the rest sits idle and its locked profit is gone")
 
 
+class RecycleCash(Scenario):
+    name, cycles, seed = "recycle_cash", 60, 26
+    cfg = {"arb.new_sets": False, "arb.recycle_enabled": True}
+    doc = "cash mode (live config since 23 Oct): held low-edge sets lock ~40k, cash 60k ABOVE the 20k reserve, 6% sets on offer: free cash must never buy a set, recycles still swap into the better set, spending only what each unwind freed"
+
+    def venue_setup(self, sim):
+        races = two_leg_mid_races(sim, 0.2, 0.8)
+        self.held, self.targets = races[:4], races[4:7]
+        for r in self.held:
+            set_race_bids_sum(sim, r, 1.012)
+        for r in self.targets:
+            set_race_bids_sum(sim, r, 1.06)
+
+    def bot_setup(self, sim):
+        per = 40000.0 / len(self.held)
+        for r in self.held:
+            cost = sum(1 - SV.P(sim.v.bid_t[ex]) for ex in sim.legs(r))
+            sim.seed_set(r, int(per / cost))
+        sim.v.cash = 60000.0
+
+    def final_checks(self, sim):
+        calls = sorted((c for c in sim.v.calls if c["kind"] == "multileg" and c.get("ok")), key=lambda c: c["t"])
+        unwinds = [c for c in calls if c["prefix"] == "unw"]
+        if not unwinds:
+            sim.chk.violation("recycle_none", "cash mode never recycled although 6% sets were on offer and held sets earn ~1.2%")
+        freed = spent = 0.0
+        for c in calls:
+            if c["prefix"] in ("unw", "fre"):
+                freed += c["cash_after"] - c["cash_before"]
+            elif c["prefix"] == "arb":
+                spent += c["cash_before"] - c["cash_after"]
+                if spent > freed + 1.0:
+                    sim.chk.violation("cash_mode_locked_more", f"{c['key']}: arb baskets have spent {spent:.0f} but unwinds freed only "
+                                                               f"{freed:.0f}; in cash mode free cash must never buy a set")
+                    break
+        biggest = max((c["cash_after"] - c["cash_before"] for c in unwinds), default=0.0)
+        if freed - spent > 1.05 * biggest + 1.0:
+            sim.chk.violation("recycle_idle_pile", f"unwinds freed {freed:.0f} but follow-throughs spent {spent:.0f}: more than one "
+                                                   f"recycle's worth ({biggest:.0f}) of locked profit was given up for idle cash")
+
+
+class RecycleCashGone(RecycleCash):
+    name, cycles, seed = "recycle_cash_gone", 60, 27
+    doc = "cash mode, review 23 Oct: the 6% target keeps showing but every basket on it is rejected (taken first): at most one held set may be unwound for it, never one per pass"
+
+    def venue_setup(self, sim):
+        super().venue_setup(sim)
+        tg = set(self.targets)
+        sim.v.reject_aon = lambda legs, prefix: prefix == "arb" and sim.race_of(str(legs[0]["exchangeId"])) in tg
+
+    def final_checks(self, sim):
+        unw = [c for c in sim.v.calls if c["kind"] == "multileg" and c.get("ok") and c["prefix"] == "unw"]
+        if len(unw) > 1:
+            sim.chk.violation("recycle_unwind_loop", f"{len(unw)} held sets unwound for targets whose baskets are always rejected "
+                                                     f"(at most 1 allowed: the freed cash must be re-spent before another unwind)")
+
+
 class Day(Scenario):
     name, cycles, pass_dt, seed = "day", 2400, 15.0, 21
     real_books = True
@@ -985,7 +1042,7 @@ class Day(Scenario):
         self.t_end = T0
 
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Recycle, RecycleTail, RecycleRace, RecycleOversize, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
+SCENARIOS = [Calm, Sweep6, OutsideMove, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
 
 
 # ======================================================================================== main

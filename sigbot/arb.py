@@ -86,6 +86,7 @@ class ArbEngine:
         self.committed: dict[str, float] = {}      # race -> capital committed so far (this process)
         self.cooldown: dict[str, float] = {}       # race -> time until which it is skipped (after an all-or-none rejection)
         self.hostile: set = set()                  # races where a basket filled partly: never arb again this session
+        self.recycle_credit = 0.0                  # cash mode: cash recycle unwinds freed that no follow-through has spent yet
         self.x_table: dict = store.get_param("x", {}).get("x", {}) or {}
         self._x_live: dict = {}
         self._x_live_mtime = 0.0
@@ -160,6 +161,8 @@ class ArbEngine:
         total_cap = self.cfg.capital_frac * self.starting_cash
         used = sum(self.committed.values())
         cash_room = max(0.0, (cash - extra) * 0.95 - self.cfg.cash_reserve) + extra
+        if not getattr(self.cfg, "new_sets", True):
+            cash_room = extra       # cash mode: a recycle swaps one set for a better one, it never locks more cash
         return max(0.0, min(total_cap - used, cash_room, cash * 0.95))
 
     def race_budget_left(self, race: str, ret: Optional[float] = None) -> float:
@@ -343,8 +346,11 @@ class ArbEngine:
         return by recycle_min_gain, unwind that set (allOrNone, all legs) so the scanner can buy the new one."""
         if not self.cfg.recycle_enabled or not best_new or best_new["ret"] < self.cfg.recycle_min_new_ret:
             return None
-        if self.budget_left(cash) >= best_new["cost"] * max(self.cfg.min_set_qty, 1):
-            return None                                      # not capital-locked
+        if getattr(self.cfg, "new_sets", True) and self.budget_left(cash) >= best_new["cost"] * max(self.cfg.min_set_qty, 1):
+            return None                                      # not capital-locked (in cash mode free cash never buys sets)
+        if not getattr(self.cfg, "new_sets", True) and getattr(self, "recycle_credit", 0.0) >= best_new["cost"] * max(self.cfg.min_set_qty, 1):
+            return None                                      # cash mode: an earlier unwind's cash is still unspent; spend it
+                                                             # before unwinding anything else (review 23 Oct: unbounded unwinds)
         if best_new.get("failed") or best_new["race"] in self.hostile or self.cooldown.get(best_new["race"], 0) > time.time():
             return None                                      # the opportunity was not executable a moment ago: do not unwind for it
         fresh = best_new.get("fresh_books")

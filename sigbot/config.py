@@ -37,8 +37,8 @@ class ArbConfig:
     # capital recycling: when the arb budget is used up, unwind a held set at current asks (realising its edge so far)
     # if a new set's return beats the return the old set still has to earn, by at least recycle_min_gain
     recycle_enabled: bool = True
-    # False = hold and unwind only (Sizhe 23 Oct: maximise liquid cash for the 3 Nov punt): no new sets and no recycles;
-    # free unwinds, residual hedges and the scanner thread (fast requotes, offload checks) keep running
+    # False = cash mode (Sizhe 23 Oct: maximise liquid cash for the 3 Nov punt): free cash never buys a new set; recycles
+    # still swap a held set for a better one, spending only what the unwind freed; free unwinds keep running
     new_sets: bool = True
     min_ret: float = 0.0                 # new baskets must return at least this per unit of capital
     min_ret_sell: float = -1.0           # sell-sets only (riskless to settlement); < 0 means use min_ret

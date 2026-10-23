@@ -11,7 +11,7 @@
     "min_set_qty": 20,
     "x_overrides": {},
     "hedge_residual": false,
-    "recycle_enabled": false,
+    "recycle_enabled": true,
     "recycle_min_gain": 0.005,
     "recycle_min_new_ret": 0.02,
     "min_ret": 0.024,

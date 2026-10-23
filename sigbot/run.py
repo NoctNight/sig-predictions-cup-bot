@@ -194,7 +194,7 @@ class ArbScanner(threading.Thread):
         b.latest_prices = (prices, time.time())
         self.stats["passes"] += 1
         self.stats["last_pass"] = time.time()
-        if not b.cfg.arb.enabled or not b.cfg.arb.new_sets or time.time() < b.killed_until:
+        if not b.cfg.arb.enabled or time.time() < b.killed_until:
             return
         cands = b.arb.candidates_from_prices(prices)
         if not cands:
@@ -252,6 +252,8 @@ class ArbScanner(threading.Thread):
             if allc:
                 best = max(allc, key=lambda c: c.ret)
                 self.best_unfunded = {"race": best.race, "kind": best.kind, "ret": best.ret, "cost": best.cost, "qty": best.qty, "ts": time.time()}
+            if not b.cfg.arb.new_sets:
+                return      # cash mode: the best set is remembered for recycle_pass; free cash never buys a new one
             plan = b.arb.plan(cand_books, b.cash)
             if not plan:
                 return
@@ -318,12 +320,17 @@ class ArbScanner(threading.Thread):
         beats it by recycle_min_gain, and buy the new set at once from a fresh book, all inside the trade lock."""
         b = self.bot
         best = self.best_unfunded
-        if (not best or best.get("failed") or time.time() - best.get("ts", 0) > 10 or not b.cfg.arb.recycle_enabled or not b.cfg.arb.new_sets
+        if (not best or best.get("failed") or time.time() - best.get("ts", 0) > 10 or not b.cfg.arb.recycle_enabled
                 or not b.arb.committed or not b.feed_ok() or time.time() < b.killed_until):
             return
-        if b.arb.budget_left(b.cash) >= best["cost"] * max(b.cfg.arb.min_set_qty, 1):
-            return                                  # not capital-blocked: the normal scanner path takes it
+        if b.cfg.arb.new_sets and b.arb.budget_left(b.cash) >= best["cost"] * max(b.cfg.arb.min_set_qty, 1):
+            return                                  # not capital-blocked: the normal scanner path takes it (in cash mode
+                                                    # free cash never buys sets, so a better set is reached only by recycling)
         tgt = best["race"]
+        cash_mode = not b.cfg.arb.new_sets
+        if cash_mode and b.arb.recycle_credit >= best["cost"] * max(b.cfg.arb.min_set_qty, 1):
+            self.spend_recycle_credit(tgt)      # an earlier unwind's cash is still unspent: buy the better set with it,
+            return                              # never unwind another held set while it waits
         target = {ex: b.fresh_book(ex, 10.0) for ex in b.universe.races[tgt].exchange_ids}
         if any(v is None for v in target.values()):
             return
@@ -345,20 +352,48 @@ class ArbScanner(threading.Thread):
         self.best_unfunded = None
         if rec.get("dry"):
             return
+        freed = rec.get("qty", 0) * rec.get("proceeds", 0.0)
+        if cash_mode:
+            b.arb.recycle_credit += freed
         try:
             b.cash = float(b.scan_api.account().get("balance") or b.cash)
             fresh = {ex: b.get_book(ex, 50, b.scan_api, max_age=3.0) for ex in b.universe.races[tgt].exchange_ids}
             with b.trade_lock:
-                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=rec.get("qty", 0) * rec.get("proceeds", 0.0)) if c.race == tgt]
+                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=(b.arb.recycle_credit if cash_mode else freed)) if c.race == tgt]
                 if plan:
                     res = b.arb.execute(plan, None)
+                    spent = sum(r["chunk"].qty * r["chunk"].cost for r in res if r.get("ok") and r.get("chunk") is not None)
+                    if cash_mode:
+                        b.arb.recycle_credit = max(0.0, b.arb.recycle_credit - spent)
                     log.info("recycle follow-through %s: %d basket(s) filled", tgt, sum(1 for r in res if r.get("ok")))
                 else:
+                    b.arb.cooldown[tgt] = time.time() + 60      # do not unwind for this target again for 60 s
                     log.warning("recycle: target %s gone after unwind; capital stays free for the scanner", tgt)
             b.cash = float(b.scan_api.account().get("balance") or b.cash)
             b.positions_snapshot = b.positions_map()[0]
         except ApiError as e:
             log.warning("recycle follow-through %s: %s", tgt, e)
+
+    def spend_recycle_credit(self, tgt: str):
+        """Cash mode: buy the better set with cash an earlier recycle unwind freed but its follow-through could not spend."""
+        b = self.bot
+        if b.arb.cooldown.get(tgt, 0) > time.time():
+            return
+        try:
+            fresh = {ex: b.get_book(ex, 50, b.scan_api, max_age=3.0) for ex in b.universe.races[tgt].exchange_ids}
+            with b.trade_lock:
+                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=b.arb.recycle_credit) if c.race == tgt]
+                if not plan:
+                    b.arb.cooldown[tgt] = time.time() + 60
+                    return
+                res = b.arb.execute(plan, None)
+                spent = sum(r["chunk"].qty * r["chunk"].cost for r in res if r.get("ok") and r.get("chunk") is not None)
+                b.arb.recycle_credit = max(0.0, b.arb.recycle_credit - spent)
+                log.info("recycle credit spent on %s: %.0f (credit left %.0f)", tgt, spent, b.arb.recycle_credit)
+            b.cash = float(b.scan_api.account().get("balance") or b.cash)
+            b.positions_snapshot = b.positions_map()[0]
+        except ApiError as e:
+            log.warning("recycle credit %s: %s", tgt, e)
 
     def offload_pass(self):
         """Cross-sleeve offload every offload_scan_sec (was: every 5th main cycle, ~2.5 min): exit costs of every held
@@ -1184,13 +1219,14 @@ class Bot:
         elif self.scanner is not None:
             arb_summary = dict(self.scanner.stats)
             # capital recycling: unwind a held set to fund a better one the scanner could not afford
-            best = self.scanner.best_unfunded if not self.feed_ok() else None   # the scanner recycles itself when the feed is up
-            if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.cfg.arb.new_sets and self.arb.committed and not best.get("failed"):
+            best = (self.scanner.best_unfunded if not self.feed_ok() and self.cfg.arb.new_sets and time.time() >= self.killed_until
+                    else None)   # the scanner recycles itself when the feed is up; cash mode and kill pauses: no backstop
+            if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.arb.committed and not best.get("failed"):
                 try:
                     best = dict(best, fresh_books={ex: self.get_book(ex, 50) for ex in self.universe.races[best["race"]].exchange_ids})
                 except ApiError:
                     best = None
-            if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.cfg.arb.new_sets and self.arb.committed and not best.get("failed"):
+            if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.arb.committed and not best.get("failed"):
                 held_books = {}
                 for rname in list(self.arb.committed)[:3]:
                     try:

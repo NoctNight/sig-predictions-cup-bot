@@ -115,7 +115,9 @@ eng2.committed = {"X": 60000.0}
 check("arb: budget is 0 just under the reserve", eng2.budget_left(20500.0) == 0.0)
 src_arb = open(os.path.join(ROOT, "sigbot", "arb.py")).read()
 check("arb: plan() accepts the capital a recycle freed", "extra_budget" in src_arb)
-check("scanner: both recycle follow-throughs pass the freed capital", open(os.path.join(ROOT, "sigbot", "run.py")).read().count("extra_budget=rec.get") == 2)
+_rs5 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("scanner: both recycle follow-throughs pass the freed capital", "extra_budget=(b.arb.recycle_credit if cash_mode else freed)" in _rs5
+      and _rs5.count("extra_budget=rec.get") == 1)
 
 # ---------------------------------------------------------------- exits net of exit orders still resting
 rsrc = open(os.path.join(ROOT, "sigbot", "run.py")).read()
@@ -197,7 +199,8 @@ check("arb: recycle budget counts the freed capital once (capital cap binds)", e
       str(eng3.follow_budget(60000.0, 10000.0)))
 check("arb: plan() spends the follow-through budget", "self.follow_budget(cash, extra_budget) if extra_budget > 0" in open(os.path.join(ROOT, "sigbot", "arb.py")).read())
 rs2 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
-check("backstop: the main-loop recycle runs only when the scanner's feed path is down", "best_unfunded if not self.feed_ok() else None" in rs2)
+check("backstop: the main-loop recycle runs only when the scanner's feed path is down (and never in cash mode or while killed)",
+      "self.scanner.best_unfunded if not self.feed_ok() and self.cfg.arb.new_sets and time.time() >= self.killed_until" in rs2)
 seen = []
 fb = types.SimpleNamespace(feed=types.SimpleNamespace(healthy=lambda s=120: seen.append(s) or s >= 15))
 R.Bot.feed_ok(fb)
@@ -325,31 +328,65 @@ check("recycle: judged on redeployed capital, an oversized unwind (forgone 827 v
 # ---------------------------------------------------------------- 23 Oct: objective = liquid cash for the 3 Nov punt
 import json as _j3  # noqa: E402
 _live = _j3.load(open(os.path.join(ROOT, "config.json")))
-check("cash mode: live config holds and unwinds only (no new sets, no recycles, no tilt, no directional entries, no offload)",
-      _live["arb"].get("new_sets") is False and _live["arb"].get("recycle_enabled") is False and _live["tilt"].get("enabled") is False
+check("cash mode: live config: free cash buys no sets, recycles on, tilt/directional entries/offload/allocator auto-apply off",
+      _live["arb"].get("new_sets") is False and _live["arb"].get("recycle_enabled") is True and _live["tilt"].get("enabled") is False
       and _live["direction"].get("allow_live") is False and _live["allocator"].get("offload_live") is False
       and _live["allocator"].get("auto_apply") is False)
 check("cash mode: hard limits untouched (partisan 5,000, election sleeve off)",
       _live["mm"].get("portfolio_max_partisan_notional", 5000) == 5000 and not _live.get("election_enabled", False))
 
-class _NoArb:
+# one_pass with a real candidate: in cash mode it must remember the best set (for recycling) and never plan/execute
+_race = types.SimpleNamespace(name="R", exchange_ids=["a", "b"], has_independent=False)
+_bk = lambda bid, ask: {"bids": [{"price": bid, "quantity": 2000}], "asks": [{"price": ask, "quantity": 2000}], "feed_ts": 9e9}
+_books = {"a": _bk(0.60, 0.61), "b": _bk(0.45, 0.46)}
+class _Arb:
     committed = {"X": 1000.0}
-    def candidates_from_prices(self, p): raise AssertionError("candidates read with new_sets off")
-    def plan(self, *a, **k): raise AssertionError("plan() called with new_sets off")
-    def execute(self, *a, **k): raise AssertionError("execute() called with new_sets off")
-    def budget_left(self, c): return 0.0
-_cb = types.SimpleNamespace(cfg=types.SimpleNamespace(arb=types.SimpleNamespace(enabled=True, new_sets=False, recycle_enabled=True, min_set_qty=20)),
-                            feed_ok=lambda: True, rest_snapshot=({"1": {}}, time.time()), feed_prices=lambda p: p, killed_until=0.0,
-                            arb=_NoArb(), cash=50000.0)
-_sc = R.ArbScanner.__new__(R.ArbScanner)
-_sc.bot, _sc.stats = _cb, {"passes": 0, "last_pass": 0}
-_sc.best_unfunded = {"race": "Y", "kind": "sell_set", "ret": 0.06, "cost": 1.9, "qty": 500, "ts": time.time()}
-try:
-    _sc.one_pass(); _sc.recycle_pass(); _ok = True; _err = ""
-except AssertionError as e:
-    _ok, _err = False, str(e)
-check("cash mode: the scanner neither buys a new set nor recycles (even with recycle_enabled on)", _ok and _sc.stats["passes"] == 1, _err)
+    calls = []
+    def candidates_from_prices(self, p): return [_race]
+    def x_for(self, r): return 0.0
+    def race_budget_left(self, n, ret=None): return 1e9
+    def budget_left(self, c): return 1e9
+    def chunks_for_race(self, r, books): return [types.SimpleNamespace(race="R", kind="sell_set", ret=0.05, cost=0.95, qty=500)]
+    def plan(self, *a, **k): self.calls.append("plan"); return []
+    def execute(self, *a, **k): self.calls.append("execute"); return []
+def _scan(new_sets):
+    arb = _Arb(); arb.calls = []
+    b = types.SimpleNamespace(cfg=types.SimpleNamespace(arb=types.SimpleNamespace(enabled=True, new_sets=new_sets, recycle_enabled=True, min_set_qty=20,
+                                                                                  min_edge_sell=0.01, min_edge_buy=0.01),
+                                                        arb_scan_books_feed=4, arb_scan_books=2),
+                              feed_ok=lambda: True, rest_snapshot=({"a": {"bestBid": 0.60, "bestAsk": 0.61}, "b": {"bestBid": 0.45, "bestAsk": 0.46}}, time.time()),
+                              feed_prices=lambda p: p, killed_until=0.0, arb=arb, cash=50000.0, fresh_book=lambda ex, age=None: _books[ex],
+                              open_orders_cache={}, open_orders_ts=0.0, store=None, trade_lock=threading.Lock(),
+                              universe=types.SimpleNamespace(races={"R": _race}))
+    sc = R.ArbScanner.__new__(R.ArbScanner)
+    sc.bot, sc.stats, sc.best_unfunded = b, {"passes": 0, "last_pass": 0, "candidates": 0}, None
+    sc.one_pass()
+    return sc, arb
+_sc, _a = _scan(False)
+check("cash mode: the scanner remembers the best set for recycling but never plans or buys with free cash",
+      _a.calls == [] and (_sc.best_unfunded or {}).get("race") == "R", f"calls={_a.calls} best={_sc.best_unfunded}")
+_sc, _a = _scan(True)
+check("cash mode test is sensitive: with new_sets on, the same pass plans a basket", "plan" in _a.calls, str(_a.calls))
+# the follow-through after a recycle may spend only what the unwind freed, even with plenty of cash above the reserve
+eng4 = ArbEngine.__new__(ArbEngine)
+eng4.cfg = types.SimpleNamespace(capital_frac=0.9, cash_reserve=20000.0, new_sets=False)
+eng4.starting_cash, eng4.committed = 100000.0, {"X": 30000.0}
+check("cash mode: a recycle's follow-through spends only the freed 5,000 (cash 60k above the reserve)", eng4.follow_budget(60000.0, 5000.0) == 5000.0,
+      str(eng4.follow_budget(60000.0, 5000.0)))
+eng4.cfg.new_sets = True
+check("... and with new_sets on it may also use the room above the reserve", eng4.follow_budget(60000.0, 5000.0) > 5000.0)
 check("cash mode: free unwinds are not gated by new_sets", "new_sets" not in R.ArbScanner.free_unwind_pass.__code__.co_names)
+
+# review 23 Oct 16:40: in cash mode an unwind whose follow-through bought nothing must not be followed by another unwind
+eng5 = ArbEngine.__new__(ArbEngine)
+eng5.cfg = types.SimpleNamespace(recycle_enabled=True, recycle_min_new_ret=0.0, new_sets=False, min_set_qty=20, capital_frac=0.9, cash_reserve=20000.0)
+eng5.starting_cash, eng5.committed, eng5.hostile, eng5.cooldown = 100000.0, {"X": 30000.0}, set(), {}
+eng5.recycle_credit = 5000.0
+check("cash mode: no new unwind while an earlier unwind's cash is unspent", eng5.recycle({"race": "T", "kind": "sell_set", "ret": 0.06, "cost": 0.95, "qty": 500},
+                                                                                     {}, {}, 30000.0) is None)
+_rs4 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("cash mode: recycle_pass spends outstanding credit before unwinding, and cools down a target that vanished",
+      "self.spend_recycle_credit(tgt)" in _rs4 and "b.arb.cooldown[tgt] = time.time() + 60" in _rs4)
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)
