@@ -17,13 +17,18 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
    BUILD BEFORE 31 Oct (this is the capital-raise routine in 00b, now with a bigger job; off until its start time):
    a. Classify every held set by when its race is likely to be CALLED on election night (poll-closing time ET, plus how
       close the race is): early (called before ~22:00 ET 3 Nov) vs late (west coast / Hawaii / Alaska / close races).
-   b. Late-call sets: patient unwinds from 31 Oct 00:00 ET, spread over the days (limit per hour so we do not walk the
-      DMM books), cost cap starting at the set's locked return (no realised loss) and loosening to ~4.5% by 2 Nov and
-      5.5% by 17:45 ET 3 Nov; RI Governor first (00a trim).
-   c. Early-call sets: hold; on 3 Nov evening sell each set as soon as its race is called (legs at >= 0.97 / <= 0.03)
+   b. NO UNWIND WITHOUT SIZHE'S GO (Sizhe, 23 Oct ~16:20 BST: "only unwind if the money we unwind is able to make more
+      money"). Every unwind loses susqies (exit cost 3.75-4.75% ~= the locked edge); it only pays if that cash goes into
+      the punt. So the routine raises exactly the amount Sizhe sets (RAISE_TARGET, default 0 = hold everything to
+      settlement) and nothing more. The 30 Oct brief must ask Sizhe for RAISE_TARGET (0 / 30k / 50k / 70k / all), with
+      the cost of each and what it buys in punt odds. Once set: late-call sets first, cheapest exit cost per unit of cash
+      first, patient over the remaining days (limit per hour so we do not walk the DMM books), cost cap starting at the
+      set's locked return and loosening to ~4.5% by 2 Nov and 5.5% by 17:45 ET 3 Nov; stop as soon as cash >= target.
+      Exception: the RI Governor trim (00a) at no realised loss, which is risk reduction, may run without a target.
+   c. Early-call sets: hold; if (and only if) RAISE_TARGET is not yet met, on 3 Nov evening sell sets as their races are called (legs at >= 0.97 / <= 0.03)
       at near payout. This is a switch Sizhe turns on, or that turns itself on at 18:00 ET 3 Nov only if Sizhe has
       approved it by then; until then, report-only.
-   d. MM: shrink inventory from 1 Nov and be flat by 12:00 ET 3 Nov; tilt/directional holdings: exit patiently from
+   d. MM: shrink inventory from 1 Nov and be flat by 12:00 ET 3 Nov only if RAISE_TARGET > 0; tilt/directional holdings: exit patiently from
       31 Oct when the exit costs <= ~1 tick against the outside fair.
    e. Daily brief: report projected liquid cash at 18:00 ET 3 Nov (cash + sale value of everything, by call time).
    f. Refresh proposals/punt_screener.py with the projected cash and the live third-place balance before 3 Nov.
