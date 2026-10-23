@@ -251,3 +251,129 @@ separately.
   Its expected value is the whole gap if the outside venues are right, which is much larger than the 1-2 ticks a 12 h
   round trip captures. This study only says the gap does not close on SIG within a day; it says nothing about who is
   right at settlement.
+
+## Re-test 2026-10-23
+
+Backlog item 1: does the 21-22 Oct positive result survive the next day of live quotes? Read-only. No venue calls; nothing
+under sigbot/ or config.json changed. Reproduce with `python3 research_notes/directional_impact_retest.py`. The raw output
+is in `data/research_directional/out_retest_20261023.md`.
+
+**Verdict: no.** The 6+ tick / 12 h rule loses on the new outcomes, at -0.49 tick/share (t -1.1, n 100). Pooled out of
+sample (OOS1 + all live quotes) it loses -0.48 (t -3.7). Pooled over everything it loses -0.55 (t -5.7). No variant is
+positive out of sample with t > 2 once the new data are included. The 21-22 Oct result was one good night, not a new regime.
+
+### Method
+
+* **Code.** This run uses the study's own code, imported unchanged: `find_events`, `clustered`, `drop_top` and
+  `series_B` are applied to `venue_fair`.
+* **Data window.** `venue_fair` now runs from 21 Oct 23:49 to 23 Oct 10:19 UTC. The study's window ended 22 Oct 22:21.
+* **Leg universe.** It is held fixed at the study's 66 liquid legs: the 21 Oct 22:03 books, with the median spread
+  measured on the *original* window. Re-measuring the spread on the full window would give 68 legs, so the effect is
+  small.
+* **Rules.** The D leg per race, PM/Kalshi consensus within 4 points, at most one event per race per hour, and entry
+  spread of 2 ticks or less. Entry and exit are both taker at the touch (T/T). The exit is at gap close or after H hours.
+  t is clustered by race, with 2-h entry-block clustering as a check.
+* **Reproduction check.** With the data cut at 22 Oct 22:21 the script returns the study's OOS2 numbers exactly:
+  6+/12 h n 133, +1.65 (t 2.9); 6+/4 h -0.33; 4+/12 h +1.07; 10+/12 h +1.01.
+* **"New" outcomes.** A new outcome is an event whose H-hour outcome the study could not see (entry + H > 22 Oct 22:21).
+  * For 12 h holds, the new entries run from 22 Oct 11:01 to 21:59. Their exits fall on the night of 22-23 Oct.
+  * For 4 h holds, the new entries run from 22 Oct 18:42 to 23 Oct 06:04.
+  * No 12 h outcome exists yet for any entry on 23 Oct.
+
+### New outcomes only (ticks/share, T/T; t by race; liquid legs)
+
+| gap | H | n | races | T/T (t) | t by 2-h block | mid/mid | T/T without top 3 (t) |
+|---|---|---|---|---|---|---|---|
+| **6+** | **12** | **100** | 13 | **-0.49 (-1.1)** | -2.8 | +0.68 | -1.06 (-2.7) |
+| 6+ | 4 | 123 | 15 | -0.94 (-7.4) | -7.8 | +0.22 | -1.04 (-8.7) |
+| 6+ | 1 | 130 | 15 | -1.12 (-22.1) | -16.0 | +0.06 | -1.13 |
+| 4+ | 12 | 151 | 22 | -0.34 (-1.0) | -2.2 | +0.83 | -0.78 (-2.9) |
+| 4+ | 4 | 166 | 22 | -0.95 (-7.6) | -6.0 | +0.21 | -1.01 |
+| 10+ | 12 | 61 | 8 | -0.16 (-0.5) | -1.3 | +1.02 | -0.70 (-3.3) |
+| 10+ | 4 | 68 | 8 | -0.66 (-6.3) | -4.9 | +0.51 | -0.78 |
+| 4-6 | 12 | 51 | 12 | -0.06 (-0.1) | -0.3 | +1.13 | -0.83 |
+| 6-10 | 12 | 39 | 8 | -1.00 (-1.1) | -2.1 | +0.13 | -2.19 |
+
+* There are more than 20 new signals in every main variant.
+* The 24 h hold's new outcomes are the night-of-21-22 entries again: +2.11 (t 3.1), n 133. That is the same night seen
+  through a longer window, not new evidence.
+* The 6+/12 h rule by 4-h entry block makes the decay plain. The blocks starting 21 Oct 20:00 through 22 Oct 08:00 give
+  +1.42, +1.76, +1.87 and +0.71. The next three blocks (22 Oct 12:00, 16:00 and 20:00) give -0.24, -1.03 and -0.43.
+
+### Per day (full live-quote set B, by UTC entry day)
+
+| day | 6+/12 h | 6+/4 h | 4+/12 h | 10+/12 h |
+|---|---|---|---|---|
+| 21 Oct (one entry hour) | n 12, +1.42 (t 2.8) | n 12, -0.58 | n 20, +0.65 | n 8, +0.75 |
+| 22 Oct | n 221, +0.69 (t 1.3) | n 231, -0.48 (t -2.4) | n 338, +0.46 (t 1.2) | n 143, +0.52 (t 1.7) |
+| 23 Oct (to 06:04) | no 12 h outcome yet | n 72, -0.85 (t -3.6) | - | - |
+| all B | n 233, +0.73 (t 1.4); without top 3: -0.01 | n 315, -0.57 (t -3.9) | n 358, +0.47 (t 1.3) | n 151, +0.54 (t 1.9) |
+
+Across the 16 day-sets (14 days of A plus 2 of B), 5 are positive for 6+/12 h: 8, 10 and 21 Oct (A), and 21 and 22 Oct (B).
+
+### Pooled (T/T, t by race)
+
+| pool | 6+/12 h | 6+/4 h | 4+/12 h | 10+/12 h |
+|---|---|---|---|---|
+| IS (A, 7-17 Oct) | n 1873, -0.63 (-4.6) | -0.82 (-14.4) | -0.77 (-7.6) | -0.48 (-5.0) |
+| OOS1 (A, 17-21 Oct) | n 1951, -0.62 (-4.9) | -0.84 (-16.5) | -0.63 (-5.0) | -0.36 (-2.7) |
+| B (21-23 Oct, live quotes) | n 233, +0.73 (+1.4) | -0.57 (-3.9) | +0.47 (+1.3) | +0.54 (+1.9) |
+| **all out of sample (OOS1 + B)** | **n 2184, -0.48 (-3.7)** | -0.81 (-16.6) | -0.47 (-3.8) | -0.24 (-1.9) |
+| everything | n 4057, -0.55 (-5.7) | -0.81 (-20.0) | -0.63 (-8.3) | -0.34 (-3.6) |
+
+* On its own, B is now +0.73 at t 1.4, below the bar.
+* Without its top 3 races, B is -0.01. The study's single positive cell (+1.65, t 2.9) was one night.
+
+### Live direction sleeve (fills, purpose = direction)
+
+The sleeve placed 51 orders on 21 races, for 12,028 shares and 9,659 S of cost, between 22 Oct 00:42 and 23 Oct 06:26.
+Markouts are measured against the fill price, in bought-side ticks per share, share-weighted, with t by race. The mid
+comes from venue_fair and quotes.
+
+| horizon | orders | markout (t) | S |
+|---|---|---|---|
+| half-spread paid at entry | 51 | +0.54 (+25.8) | (cost 32) |
+| fair - fill at entry | 48 | +15.6 | - |
+| +5 min | 51 | -0.25 (-1.6) | -15 |
+| +30 min | 49 | -0.08 (-0.5) | -4 |
+| +2 h | 42 | +0.12 (+0.4) | +5 |
+| +12 h | 45 | **+1.93 (+3.9)** | +100 |
+| to the 23 Oct 10:19 mid | 44 | +2.98 (+5.9) | +168 |
+
+By 4-h entry block, the 12 h markouts are:
+
+| entry block (UTC) | 12 h markout |
+|---|---|
+| 22 Oct 00:00 | +2.48 (n 20) |
+| 22 Oct 12:00 | +3.31 (n 4) |
+| 22 Oct 16:00 | +0.51 (n 11) |
+| 22 Oct 20:00 | +1.61 (n 10) |
+
+**Reading the sleeve numbers.**
+
+* The sleeve is not this rule. It buys at a median gap of about 15 ticks (fair minus fill), on any leg that passes its
+  own filters (not only the 66 liquid ones), and it holds toward settlement rather than round-tripping.
+* Its 12 h mark gain of about 1.9 ticks, or about 1.4 after a 0.5-tick exit half-spread, is a mark to mid, not realised
+  cash. Exits run through the shared `exit` purpose and cannot be cleanly attributed to the sleeve.
+* It is 45 orders on 21 races over about 30 hours, dominated by the 22 Oct night, so it is suggestive, not proof.
+* It is consistent with the study's caveat that holding large gaps is a different trade from a 12 h round trip.
+* It also contains our own impact. Section 4 measured 0.1-0.3 tick of drift toward our trade.
+
+### Caveats
+
+* There is still only about 1.4 days of live quotes. The new 12 h sample is one afternoon of entries (22 Oct 11:00-22:00),
+  and 2-h blocks within it are not independent.
+* The 23 Oct entries have only 4 h outcomes so far.
+* Set A has not been extended, because `model_history.json` and `candles_5m.json` end 21 Oct. The pooled out-of-sample
+  figure is therefore dominated by OOS1 (candle method, no bid/ask).
+* The liquid-leg universe is fixed from one book snapshot (21 Oct 22:03).
+
+**Recommendation.** Do not build or scale the 12 h round-trip rule, and do not start the gated trial in section 6. The
+regime gate in section 6 would have reacted too late.
+
+* Its trailing-48 h mean of closed 12 h trades fell from +1.77 (22 Oct 20:00) to +0.73 (23 Oct 10:00), still above the
+  +0.5 bar.
+* Only the "4 of the last 6 4-h blocks positive" test fails, and only once the 22 Oct 20:00 block closes, around
+  23 Oct 08:00-10:00.
+* The gate would therefore have traded the whole losing 22 Oct afternoon. If the direction sleeve's hold-to-settlement markouts stay positive over more days, that
+belongs in a separate review of the existing sleeve, not this rule.

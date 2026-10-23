@@ -44,6 +44,7 @@ class ArbConfig:
     high_ret_race_frac: float = 0.40     # hft_strategies.md: ~120k of riskless sell-sets at 4-6.5% stand unfilled (Idaho Governor)
     three_leg_race_frac: float = 0.25    # per-race ceiling for races with an Independent leg (3-leg sets: riskless, deepest edge)
     recycle_min_gain: float = 0.01       # new return minus forgone return, per unit of capital
+    recycle_fit_tolerance: float = 0.05   # unwind only what the follow-through will spend, within this fraction
     recycle_min_new_ret: float = 0.02    # only recycle into sets returning at least this much
 
 

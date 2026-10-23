@@ -290,6 +290,53 @@ class ArbEngine:
         return {"proceeds": proceeds, "forgone_edge": payout - proceeds, "forgone_ret": (payout - proceeds) / proceeds if proceeds > 0 else 9.0,
                 "limits": limits}
 
+    def follow_through_plan(self, best_new: dict, unwound_race: str, freed: float, cash: float) -> list:
+        """What plan() would buy of best_new's race right after an unwind of `unwound_race` that freed `freed`: the same
+        budget terms the real follow-through uses (capital cap with the unwound race's commitment reduced, per-race cap,
+        the cash reserve rule of follow_budget, the fresh books' depth and min_ret). Nothing is sent."""
+        books = best_new.get("fresh_books")
+        if not books:
+            return []
+        saved = self.committed.get(unwound_race)
+        self.committed[unwound_race] = max(0.0, (saved or 0.0) - freed)
+        try:
+            return [c for c in self.plan({best_new["race"]: books}, cash + freed, extra_budget=freed) if c.race == best_new["race"]]
+        finally:
+            if saved is None:
+                self.committed.pop(unwound_race, None)
+            else:
+                self.committed[unwound_race] = saved
+
+    def fit_recycle_qty(self, best_new: dict, rname: str, books: dict, q: int, cash: float, rounds: int = 4):
+        """Shrink the unwind of `rname` until the follow-through can spend (nearly) all of what it frees, then judge the
+        recycle on capital actually redeployed: locked profit gained by the new baskets minus locked profit given up by the
+        unwind, per unit of capital unwound, must still clear recycle_min_gain. Returns (q, unwind_quote, deployed, gain)
+        or None when no quantity works. Without fresh books for the target nothing is known about the follow-through, so
+        the recycle is refused (both live call sites pass fresh_books)."""
+        race = self.u.races[rname]
+        if not best_new.get("fresh_books"):
+            return None
+        for _ in range(rounds):
+            if q < self.cfg.min_set_qty:
+                return None
+            uq = self.unwind_quote(race, books, q)
+            if not uq or uq["proceeds"] <= 0:
+                return None
+            freed = q * uq["proceeds"]
+            plan = self.follow_through_plan(best_new, rname, freed, cash)
+            deployed = sum(c.qty * c.cost for c in plan)
+            gained = sum(c.qty * c.edge for c in plan)
+            if deployed <= 0:
+                return None
+            if deployed < freed * (1.0 - self.cfg.recycle_fit_tolerance):
+                q = min(q - 1, int(deployed // uq["proceeds"]))          # free only what will be spent; re-quote (shallower walk)
+                continue
+            gain = (gained - q * uq["forgone_edge"]) / freed
+            if gain < self.cfg.recycle_min_gain:
+                return None
+            return q, uq, deployed, gain
+        return None
+
     def recycle(self, best_new: Optional[dict], held_books: dict[str, dict[str, dict]], positions: dict[str, float], cash: float,
                 cycle_id: Optional[int] = None) -> Optional[dict]:
         """If the arb budget is exhausted and `best_new` (race, kind, ret, cost, qty) beats a held set's remaining
@@ -329,13 +376,20 @@ class ArbEngine:
             return None
         gain, rname, q, uq = candidates[0]
         race = self.u.races[rname]
+        # 23 Oct 06:14 UTC: 33,458 Idaho Governor sets were unwound (forgoing 1,021 of locked profit) to fund baskets that the
+        # follow-through plan() could only size at 17,166 (gain 639): the unwind was sized by the target's book depth alone,
+        # not by what plan() would actually buy (capital cap, per-race cap, the reserve). Fit the unwind to the follow-through.
+        fit = self.fit_recycle_qty(best_new, rname, held_books[rname], q, cash)
+        if fit is None:
+            return None
+        q, uq, deployed, gain = fit
         legs = [{"exchangeId": e, "side": "yes", "action": "buy", "quantity": q, "price": lim, "tournamentId": self.api.tournament_id}
                 for e, lim in uq["limits"].items()]
         log.info("RECYCLE %s: unwind %d sets at proceeds %.4f/set (forgone ret %.2f%%) to fund %s %s at %.2f%% (gain %.2f%%)", rname, q,
                  uq["proceeds"], 100 * uq["forgone_ret"], best_new["race"], best_new["kind"], 100 * best_new["ret"], 100 * gain)
         if self.dry_run:
             self.store.record_arb(rname, "unwind_set", legs, q, -uq["forgone_edge"], uq["proceeds"], False, {"dry_run": True, "fund": best_new})
-            return {"race": rname, "qty": q, "dry": True}
+            return {"race": rname, "qty": q, "proceeds": uq["proceeds"], "dry": True}
         try:
             resp = self.api.place_multi_leg(legs, all_or_none=True, key=self.api.new_key("unw"))
         except ApiError as e:

@@ -908,6 +908,35 @@ class InsideOn(Scenario):
                 n += 1
 
 
+class RecycleOversize(Scenario):
+    name, cycles, seed = "recycle_oversize", 40, 25
+    cfg = {"arb.max_race_frac": 0.02, "arb.high_ret_min": 0.99}
+    doc = "23 Oct 06:14: one 30,000-set held at low edge, cash 5k (below the 20k reserve), a deep 6% target the per-race cap limits to 2,000: an unwind may free only what the follow-through buys"
+
+    def venue_setup(self, sim):
+        races = two_leg_mid_races(sim, 0.3, 0.7)
+        self.held, self.target = races[0], races[1]
+        set_race_bids_sum(sim, self.held, 1.012)
+        set_race_bids_sum(sim, self.target, 1.06)
+
+    def bot_setup(self, sim):
+        sim.seed_set(self.held, 30000)
+        sim.v.cash = 5000.0
+
+    def final_checks(self, sim):
+        calls = [c for c in sim.v.calls if c["kind"] == "multileg" and c.get("ok")]
+        unwinds = [c for c in calls if c["prefix"] == "unw"]
+        if not unwinds:
+            sim.chk.violation("recycle_none", "the scenario never recycled: the held set was not unwound for the 6% target")
+        for u in unwinds:
+            freed = u["cash_after"] - u["cash_before"]
+            buys = [c for c in calls if c["prefix"] == "arb" and u["t"] <= c["t"] <= u["t"] + 90]
+            deployed = sum(c["cash_before"] - c["cash_after"] for c in buys)
+            if deployed < 0.9 * freed - 1.0:
+                sim.chk.violation("recycle_idle", f"{u['key']} freed {freed:.0f} but the follow-through bought only {deployed:.0f} within 90 s "
+                                                  f"({len(buys)} basket(s)); the rest sits idle and its locked profit is gone")
+
+
 class Day(Scenario):
     name, cycles, pass_dt, seed = "day", 2400, 15.0, 21
     real_books = True
@@ -947,7 +976,7 @@ class Day(Scenario):
         self.t_end = T0
 
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Recycle, RecycleTail, RecycleRace, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
+SCENARIOS = [Calm, Sweep6, OutsideMove, Recycle, RecycleTail, RecycleRace, RecycleOversize, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
 
 
 # ======================================================================================== main

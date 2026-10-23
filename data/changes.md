@@ -320,3 +320,18 @@
   Tests: tests/test_guards.py (behaviour tests for budget, gate wait, own-order netting, buy-set netting, feed health).
   Directional-impact study (research_notes/directional_impact.md): do not scale directional trades; edge, not impact,
   is the limit. Daily 06:00 research task set up until 2 Nov (research_notes/BACKLOG.md, briefs in data/daily/).
+- 12:40 (23 Oct) DAILY RUN: recycle sizing fix. Finding: at 07:14 BST the recycler unwound 33,458 Idaho Governor sets
+  (forgoing 1,021 of locked profit) to fund baskets that plan() could only size at 17,166 (gain 639); the unwind quantity
+  was min(held, target depth) and ignored the follow-through's real budget (per-race cap, capital cap, reserve). Over 24 h
+  unwinds forgave 4,143 to gain 4,887, with two episodes redeploying only 22-50% of the freed capital. Fix (sigbot/arb.py):
+  ArbEngine.follow_through_plan() dry-runs plan() on the target's fresh books with the unwound race's commitment reduced;
+  ArbEngine.fit_recycle_qty() shrinks the unwind until >= 95% of the freed capital is spent (recycle_fit_tolerance 0.05,
+  sigbot/config.py) and requires (locked edge gained - locked edge forgone)/freed >= recycle_min_gain; wired into recycle()
+  after the candidate choice; dry-run return carries proceeds. Tests: tests/test_guards.py (7 behaviour checks: 2,000-cap
+  target -> ~2,067 sets not 34,479; nothing to buy -> no unwind; no fresh books -> no unwind; default 15k race ceiling
+  sizes the unwind; good recycle still fires; oversized unwind with forgone 827 vs gained 62 refused);
+  tests/sim_pipeline.py scenario recycle_oversize (violation recycle_idle when freed capital is not redeployed within 90 s;
+  the reviewer confirmed it fails on the old code). Full sim 15 scenarios incl. day: 0 violations. Fable review: SAFE TO
+  DEPLOY (notes: only the top candidate is fitted; if recycles stop entirely, check committed > capital cap first).
+  Rollback: git revert <this commit> && deploy/mac/botctl.sh deploy. Deployed via botctl deploy (bot stopped and restarted
+  by the deploy; orders cancelled on stop), 10-min watch follows.

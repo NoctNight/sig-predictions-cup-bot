@@ -26,3 +26,4 @@ data/*
 !data/leaderboard_snapshot.json
 params/*.lock
 data/polymarket_history/raw/
+!data/daily/

@@ -253,5 +253,74 @@ _i = _rs3.find("self.direction.cycle(prices")
 check("gate: the outside fairs are refreshed right after the directional poll (fast requotes read them between cycles)",
       _i > 0 and "self.mm.xv_fair = {" in _rs3[_i:_i + 1500])
 
+# ---------------------------------------------------------------- 23 Oct 06:14 UTC: recycle unwound 33,458 Idaho Governor sets
+# (forgoing 1,021 of locked profit) to fund baskets the follow-through could only size at 17,166 (gain 639). The unwind must
+# be sized by what plan() will actually buy, and the recycle judged on the capital actually redeployed.
+from sigbot.arb import ArbEngine  # noqa: E402
+from sigbot.config import ArbConfig  # noqa: E402
+from sigbot.universe import Race, Leg  # noqa: E402
+
+
+def _race(name, exs):
+    return Race(name, {p: Leg(p, e, e, name) for p, e in zip("DR", exs)})
+
+
+def _book(bid, ask, qty):
+    return {"bids": [{"price": bid, "quantity": qty}], "asks": [{"price": ask, "quantity": qty}]}
+
+
+def _engine(race_cap=None, committed=None, cash_reserve=20000.0):
+    eng = ArbEngine.__new__(ArbEngine)
+    eng.cfg = ArbConfig(capital_frac=0.9, max_race_frac=0.15, min_set_qty=20, cash_reserve=cash_reserve, min_ret=0.024, min_ret_sell=0.005,
+                        recycle_enabled=True, recycle_min_gain=0.005, recycle_min_new_ret=0.02, high_ret_min=0.10, high_ret_race_frac=0.40)  # high-ret bypass off: the race cap must bind as it did for the MN-05 buy-set
+    eng.u = types.SimpleNamespace(races={"HELD": _race("HELD", ["h1", "h2"]), "TGT": _race("TGT", ["t1", "t2"])})
+    eng.starting_cash = 100000.0
+    eng.dry_run = True
+    eng.committed = dict(committed or {"HELD": 32000.0, "OTHER": 28000.0})
+    eng.cooldown, eng.hostile = {}, set()
+    eng.x_table, eng._x_live, eng._x_live_mtime, eng._x_hist = {}, {}, 0.0, {}
+    eng.store = types.SimpleNamespace(rows=lambda *a, **k: [{"race": "HELD"}], record_arb=lambda *a, **k: None)
+    eng.api = types.SimpleNamespace(tournament_id="t")
+    if race_cap is not None:
+        eng.race_caps, eng.race_cap_default, eng.race_cap_floor = {"TGT": race_cap}, 15000.0, 0.0
+    return eng
+
+
+# held: 34,479 two-leg sets (payout 1 each); unwinding buys YES on both legs at the asks
+held_books = {"h1": _book(0.51, 0.5165, 50000), "h2": _book(0.51, 0.5165, 50000)}   # exit buys YES at 0.5165 x 2 -> proceeds 0.967, forgone 3.3%
+# target: standing 6% sell-set (bids sum 1.06), 50,000 deep on both legs -> best_new qty 50,000 at ret 6/94
+tgt_books = {"t1": _book(0.53, 0.535, 50000), "t2": _book(0.53, 0.535, 50000)}
+best = {"race": "TGT", "kind": "sell_set", "ret": 0.06 / 0.94, "cost": 0.94, "qty": 50000, "ts": time.time(), "fresh_books": tgt_books}
+positions = {"h1": -34479.0, "h2": -34479.0}
+eng = _engine(race_cap=2000.0)                       # the allocator caps the target race at 2,000 of capital
+rec = eng.recycle(best, {"HELD": held_books}, positions, 4919.0)
+check("recycle: the unwind is sized to what the follow-through will buy (2,000 cap -> ~2,100 sets, not 34,479)",
+      rec is not None and 2000 <= rec["qty"] <= 2200, str(rec))
+if rec:
+    freed = rec["qty"] * rec["proceeds"]
+    plan = eng.follow_through_plan(best, "HELD", freed, 4919.0)
+    dep = sum(c.qty * c.cost for c in plan)
+    check("recycle: the freed capital is (nearly) all redeployed", dep >= 0.95 * freed, f"freed {freed:.0f} deployed {dep:.0f}")
+eng = _engine(race_cap=2000.0, committed={"HELD": 32000.0, "TGT": 2000.0})   # the target race is already at its cap
+check("recycle: nothing to buy -> no unwind", eng.recycle(best, {"HELD": held_books}, positions, 4919.0) is None)
+check("recycle: no fresh books for the target -> no unwind", _engine(race_cap=2000.0).recycle(dict(best, fresh_books=None), {"HELD": held_books}, positions, 4919.0) is None)
+# no allocator cap: the default per-race ceiling (max_race_frac 0.15 -> 15k) is what plan() can buy
+eng = _engine(committed={"HELD": 32000.0, "OTHER": 56000.0})
+rec = eng.recycle(best, {"HELD": held_books}, positions, 4919.0)
+check("recycle: without an allocator cap the default per-race ceiling (15k) sizes the unwind, not the 34,479 held sets",
+      rec is not None and rec["qty"] < 34479 and 14250 <= rec["qty"] * rec["proceeds"] <= 15000, str(rec))
+# the gain is judged on redeployed capital: a target barely better than the held set, with only part of the proceeds deployable,
+# is refused (old code: ret 3.0% - forgone 2.4% = +0.6% passes recycle_min_gain 0.5% while the real swap loses money)
+tgt2 = {"t1": _book(0.515, 0.52, 50000), "t2": _book(0.515, 0.52, 50000)}           # bids sum 1.03 -> ret 3.09%
+best2 = dict(best, ret=0.03 / 0.97, cost=0.97, fresh_books=tgt2)
+held2 = {"h1": _book(0.505, 0.512, 50000), "h2": _book(0.505, 0.512, 50000)}        # exit at 0.976 -> forgone 2.46%
+eng = _engine(race_cap=2000.0)
+r2 = eng.recycle(best2, {"HELD": held2}, positions, 4919.0)
+check("recycle: a 3.09% target vs a 2.46% exit still recycles when the unwind fits the purchase", r2 is not None and r2["qty"] <= 2100, str(r2))
+eng = _engine(race_cap=2000.0)
+eng.cfg.recycle_fit_tolerance = 1.0                                                  # tolerance off: unwind would stay oversized
+r3 = eng.fit_recycle_qty(best2, "HELD", held2, 34479, 4919.0)
+check("recycle: judged on redeployed capital, an oversized unwind (forgone 827 vs gained 62) is refused", r3 is None, str(r3))
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)
