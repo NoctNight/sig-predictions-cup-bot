@@ -353,3 +353,8 @@
   scenarios force arbs on in their sandbox so that code stays covered; all 15 scenarios 0 violations. Fable review SAFE TO
   DEPLOY. Deployed via botctl deploy (restart cancel-all removed resting tilt/directional orders). Wind-down routine
   (backlog 000) to be built by the daily runs before 31 Oct.
+- 15:56 POST-DEPLOY WATCH STOPPED THE BOT: traceback or kill switch after the deploy (start value 103428.8, now 103433.1; {'unwinds': 0, 'recycles': 0, 'exits': 2, 'failed_baskets': 0, 'kill': 0, 'traceback': 4, 'arb_fills': 0}).
+- 16:08 (23 Oct) The first cash-mode watch stopped the bot at 15:54 on 4 tracebacks that were all the Mac's network
+  dropping (DNS errors / "can't assign requested address" as it went on AC); value was +4 at the time. Watcher fixed:
+  tracebacks whose exception is a network error no longer count (deploy/watch_deploy.py code_tracebacks; checked on a
+  network traceback (0) and a KeyError (1)). Bot restarted, re-watch passed (103,432 -> 103,432, no sets/recycles).

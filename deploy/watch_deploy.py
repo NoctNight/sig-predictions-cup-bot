@@ -52,6 +52,24 @@ def log_since(ts0: str) -> list[str]:
     return out
 
 
+NET = re.compile(r"URLError|urlopen error|gaierror|nodename nor servname|Can't assign requested address|ConnectionResetError|"
+                 r"RemoteDisconnected|TimeoutError|timed out|Network is unreachable|ssl\.SSL")
+EXC = re.compile(r"^[A-Za-z_][\w.]*(Error|Exception|Interrupt)\b")
+
+
+def code_tracebacks(lines: list[str]) -> int:
+    """Tracebacks NOT caused by the Mac's network dropping (DNS failures, closed sockets): those are retried and recovered
+    by the bot and are not a bug in a deploy (false stop on 23 Oct 15:54, network loss while the Mac went on AC)."""
+    n = 0
+    for i, l in enumerate(lines):
+        if "Traceback" not in l:
+            continue
+        exc = next((x for x in lines[i + 1:i + 80] if EXC.match(x.strip())), "")
+        if not NET.search(exc):
+            n += 1
+    return n
+
+
 def running() -> bool:
     ps = subprocess.run(["ps", "-eo", "command"], capture_output=True, text=True).stdout
     return any("sigbot.run --live" in l and "caffeinate" not in l for l in ps.splitlines())
@@ -76,6 +94,7 @@ def main():
             "unwinds": re.compile(r"UNWIND \("), "recycles": re.compile(r"RECYCLE "), "exits": re.compile(r"ZERO-EV EXIT|OFFLOAD: exit \d"),
             "failed_baskets": re.compile(r"not filled atomically"), "kill": re.compile(r"KILL SWITCH"),
             "traceback": re.compile(r"Traceback"), "arb_fills": re.compile(r"INFO sigbot.arb: ARB ")}.items()}
+        c["traceback"] = code_tracebacks(lines)
         if tick % 2 == 0:
             v = settlement_value() or v
         drop = (v0 - v) if (v0 is not None and v is not None) else 0.0
