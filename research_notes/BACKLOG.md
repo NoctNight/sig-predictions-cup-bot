@@ -87,6 +87,15 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
   down 262 min of that day (incl. the 23:25-00:33 fix pause and the 10:08-11:03 network outage); find the rest and cut it
   (laptop power/network; a server would remove both). Fable double-check of the lookback not yet run (nothing acted on).
 
+- 23 Oct "sweep SIG when Polymarket+Kalshi move" (research_notes/outside_stable_sweep.md, figure outside_sweep_x.png):
+  optimal wait x = 0 (waiting to see the outside "stabilise" adds nothing; other bots rarely take SIG's stale side; the DMM
+  leaves ~99% of the gap at 60 s). Fable double-check: PAPER-TRADE ONLY. The headline cell (+1.46 t 2.3) was picked on the
+  out-of-sample data (best of ~28 cells, p ~0.07 by chance); over half the OOS edge is the outside continuing to move, not
+  SIG catching up; pooled pure convergence net of cost +0.52 with 22 Oct, +0.17 without; honest edge +0.3 (-0.5..+1.2)
+  tick/share, ~+1-3 S/day. Daily run: mark the outside_lead paper rows in data/volatile_paper.jsonl at 4 h / 12 h on PURE
+  convergence (SIG move minus the outside's further move); go live only if 10+ post-23-Oct signals average >= +0.5 tick,
+  then R-adding only, 300 notional, kill at -50, flat by 12:00 ET 3 Nov.
+
 ## Done
 - 23 Oct: Directional trades sized by market impact / 6+ tick gap held 12 h: NEGATIVE. New day out of sample -0.49
   ticks/share (t -1.1, n 100); pooled out of sample -0.48 (t -3.7, n 2,184); no variant positive with t > 2. The 21-22 Oct
