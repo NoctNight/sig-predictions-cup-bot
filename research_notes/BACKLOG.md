@@ -9,6 +9,25 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
 (guard test + tests/sim_pipeline.py + precheck + Fable review + 10-min post-deploy watch).
 
 ## Open
+00. SIZHE'S DECISIONS 23 Oct ~11:45 BST (do these first, under the normal gates):
+   a. Rhode Island Governor: CAP IT. Its three legs (D 1073, R 1074, I 880) are separate binary markets (the I market was
+      created 24 Aug, D/R on 18 Sep); nothing guarantees exactly one resolves YES. Our sell-set (NO x3) pays 2 only if
+      exactly one wins; two YES (fusion/independent-label ambiguity or a settlement error) pays 1: about -13k on the
+      14,793 sets. Step 1: no new RI Governor sets (per-race cap at the current holding; the 3-leg / high-ret ceilings
+      must not override it). Step 2: trim toward the normal 15% race ceiling, only by patient unwinds whose walked exit
+      cost <= the set's locked return (no realised loss), via the capital-raise routine (b). Step 3: check NE Senate and
+      MT Senate (the other 3-leg sets) for the same multi-YES / resolution-wording risk and report.
+   b. Capital-raise routine: APPROVED to build. Patient arb-set unwinds with a per-set cost cap (default: walked exit
+      cost <= locked return; election-night schedule 4.0% loosening to 5.5% by 17:45 ET on 3 Nov), a cross-sleeve cash
+      floor, OFF by default. Allowed live use before 3 Nov: only the RI trim in (a), at no realised loss. Any raise for
+      the election-night sleeve or the punt waits for Sizhe's go on 3 Nov.
+   c. Election-night cash amount (30k/50k/70k): undecided, Sizhe decides on 3 Nov.
+0. Partisan cap overshoot: the block is checked once per cycle against positions only. 23 Oct 07:21 BST: exposure dipped to
+   4,826, the block lifted for two cycles, tilt posted a 6-hour ladder of longshot sells and exposure jumped to 5,723 in one
+   cycle (5,630 at 12:00 after five of those orders filled). Make the check count resting orders that would add to the
+   direction, and cancel resting adds when the block is on. The 5,000 figure is a hard limit and does not change; this
+   only makes it bite earlier. Needs: guard test (block lifts for one cycle, ladder posted, exposure must stay <= cap),
+   sim scenario, Fable review. Decision 5 in data/daily/2026-10-23.md (default: build unless Sizhe says no).
 1. Recycle sizing fix (deployed 23 Oct): watch for a day that unwinds free capital the follow-through does not spend
    (data/live.log RECYCLE lines vs the ARB fills after them; arb_trades). If freed/deployed stays within 5%, close.
 2. Settlement-basis value is not logged per cycle (only marked value in `cycles`), so the daily brief cannot compare
