@@ -70,20 +70,28 @@ def main():
     out = {"ts": datetime.now(timezone.utc).isoformat(), "account": {k: pnl.get(k) for k in ("totalAccountValue", "totalHoldingsValue", "totalCostBasis", "unrealizedPnl")}}
     sleeves = defaultdict(lambda: {"cost": 0.0, "marked": 0.0, "settle": 0.0, "n": 0})
     sets = []
+    # buy-sets (YES on every leg, pays 1) count at payout too, but only in races the arb engine really bought them:
+    # without this, recycling a sell-set into a buy-set showed as a settlement loss (23 Oct: RI -> Hawaii Governor)
+    try:
+        buy_races = {r[0] for r in db.execute("SELECT DISTINCT race FROM arb_trades WHERE ok=1 AND kind='buy_set'")}
+    except Exception:
+        buy_races = set()
     for race, legs in by_race.items():
         n_legs = sum(1 for e in leg.values() if e[0] == race)
         qs = [p["quantity"] for p in legs.values()]
-        if len(legs) == n_legs and n_legs >= 2 and all(q < 0 for q in qs):
-            k = min(-q for q in qs)
-            cost_set = sum(p["costBasis"] * (k / -p["quantity"]) for p in legs.values())
-            mark_set = sum(p["marketValue"] * (k / -p["quantity"]) for p in legs.values())
-            locked = (n_legs - 1) * k - cost_set
+        sell = all(q < 0 for q in qs)
+        buy = race in buy_races and all(q > 0 for q in qs)
+        if len(legs) == n_legs and n_legs >= 2 and (sell or buy):
+            k = min(abs(q) for q in qs)
+            cost_set = sum(p["costBasis"] * (k / abs(p["quantity"])) for p in legs.values())
+            mark_set = sum(p["marketValue"] * (k / abs(p["quantity"])) for p in legs.values())
+            locked = ((n_legs - 1) if sell else 1) * k - cost_set
             sets.append({"race": race, "sets": k, "cost": round(cost_set, 1), "marked_pnl": round(mark_set - cost_set, 1), "locked_profit": round(locked, 1)})
             s = sleeves["arb_sets"]; s["cost"] += cost_set; s["marked"] += mark_set - cost_set; s["settle"] += locked; s["n"] += 1
             for ex, p in legs.items():           # leftover beyond the common quantity is ordinary inventory
-                extra = -p["quantity"] - k
+                extra = abs(p["quantity"]) - k
                 if extra > 0:
-                    frac = extra / -p["quantity"]
+                    frac = extra / abs(p["quantity"])
                     s2 = sleeves[sleeve_of.get(ex, "?") + "_residual"]
                     s2["cost"] += p["costBasis"] * frac; s2["marked"] += (p["marketValue"] - p["costBasis"]) * frac
                     s2["settle"] += (p["marketValue"] - p["costBasis"]) * frac; s2["n"] += 1

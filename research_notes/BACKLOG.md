@@ -50,6 +50,13 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
 9. Directional 6+ tick / 12 h rule: re-test again only if two more days of live quotes accumulate; as of 23 Oct it is
    negative out of sample (t -3.7 pooled). Low priority.
 
+- 23 Oct lookback (research_notes/volatile_lookback_2026-10-23.md): 28 moves of 5+ ticks, all DMM re-pricing, none
+  tradeable; fade/momentum/imbalance rules lose or are noise. Two follow-ups: (i) fold "follow a 3+ point Polymarket AND
+  Kalshi move SIG has not followed" into the catch-up paper test (item 4): pooled +1.27 t (t 2.1, n 62) but +0.29 (t 0.9)
+  without the top 3 races; trade only after 30+ new signals clear +1 t with t > 2 ex-top-3. (ii) Bot downtime: it was
+  down 262 min of that day (incl. the 23:25-00:33 fix pause and the 10:08-11:03 network outage); find the rest and cut it
+  (laptop power/network; a server would remove both). Fable double-check of the lookback not yet run (nothing acted on).
+
 ## Done
 - 23 Oct: Directional trades sized by market impact / 6+ tick gap held 12 h: NEGATIVE. New day out of sample -0.49
   ticks/share (t -1.1, n 100); pooled out of sample -0.48 (t -3.7, n 2,184); no variant positive with t > 2. The 21-22 Oct

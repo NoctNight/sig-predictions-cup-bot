@@ -338,3 +338,10 @@
 - 11:50 (23 Oct) Post-deploy watch passed (settlement 102,445 -> 102,479, 0 unwinds, 0 kills, 0 tracebacks). Brief:
   data/daily/2026-10-23.md. Found but not changed (decision for Sizhe): the partisan block is checked once per cycle on
   positions only; at 07:21 it lifted for two cycles and tilt's fresh ladder pushed net D from 4,826 to 5,723 (BACKLOG 0).
+- 15:10 (23 Oct) REPORTING FIX, no trading change: sigbot/review.py (the settlement value used by the daily brief and
+  deploy/watch_deploy.py) counted only sell-sets at their locked payout; buy-sets (YES on every leg, pays 1) were marked
+  at mids. Recycles of sell-sets into buy-sets therefore showed as settlement losses: Idaho -> MN-05 House buy-sets
+  (21,162 sets, +986 locked, 00:33-07:24) and RI -> Hawaii Governor buy-sets (7,199 sets, +387 locked, 14:16-14:41). Now
+  buy-sets in races the arb engine bought (arb_trades buy_set) count at payout. Corrected settlement value 103,434 at
+  15:00 vs 103,423 at 00:33: flat over 14 h (incl. ~2 h of Mac network outages 10:08-11:03 and 13:03-14:06), not -1,000
+  as this morning's brief said. The bot's own kill switch (positions_map) already counted buy-sets correctly.
