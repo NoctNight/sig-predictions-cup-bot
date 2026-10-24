@@ -1077,7 +1077,7 @@ class Bot:
 
     def churn_cycle(self, positions: dict, killed: bool, cycle_id=None):
         """Deviation churn (proposals/dev_churn.py), "high-frequency arb": exits first (+2 ticks/set, 24 h; the stop or a
-        6-tick loss per set sells at the touch), reconciled against the sets actually held (sets another path closed are
+        9-tick loss per set sells at the touch), reconciled against the sets actually held (sets another path closed are
         booked as an exit); from 3 Nov 22:30 UTC every two-leg set in a race it traded is sold, halving on thin asks,
         retried every cycle; then entries in two-leg races whose mid overround is >= 4 ticks above its 24-h median and
         whose sell-set clears the arb thresholds. Baskets are all-or-none via the arb engine; only what traded is booked."""

@@ -1060,7 +1060,7 @@ class ChurnBase(Scenario):
 
 class ChurnWiden(ChurnBase):
     name, cycles, seed, n_races = "churn_widen", 420, 31, 3
-    doc = "3 races: +6 ticks at cycle 20, then +2 ticks every 10 min up to +20: each race is sold at the touch at a 6-tick loss, never re-bought, loss bounded by the stop"
+    doc = "3 races: +6 ticks at cycle 20, then +2 ticks every 10 min up to +20: each race is sold at the touch at a 9-tick loss or by the stop, never re-bought, loss bounded by the stop"
 
     def bot_setup(self, sim):
         super().bot_setup(sim)

@@ -793,19 +793,33 @@ try:
 finally:
     DC.SELL_ALL_AT = _old_sa
 
-# fix 4: a 6-tick loss per set, or the stop, sells the race at the touch (not held to 24 h); no re-entry there for 24 h
-_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.52, 0.525), lots=[("CA", 2000, 0.985, _t - 100)])
+# fix 4: a 9-tick loss per set (6 until param_audit.md, 24 Oct), or the stop, sells the race at the touch (not held to
+# 24 h); no re-entry there for 24 h. Cost 0.985 per set: loss = sum of the two asks - 1.015
+_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.525, 0.53), lots=[("CA", 2000, 0.985, _t - 100)])
 R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
-check("hf arb: a race 6+ ticks per set under water is sold at the touch, and is not bought again for 24 h",
+check("hf arb: a race 9+ ticks per set under water is sold at the touch, and is not bought again for 24 h",
       _sold(_v) == [2000] and _ch.held("CA") == 0 and "CA" in _ch.last_loss and not _ch.eligible(_HR["CA"], time.time() + 23 * 3600)
       and _ch.eligible(_HR["CA"], time.time() + 25 * 3600), str(_sold(_v)))
+# loss exit widened to 9 ticks: a set 7 or 8 ticks under water is held (no sale, no 24-h lockout); 9 and 10 ticks are sold
+_lx = {}
+for _tk, (_a1, _a2) in {7: (0.525, 0.525), 8: (0.525, 0.53), 9: (0.53, 0.53), 10: (0.53, 0.535)}.items():
+    _bk = dict(zip(_HR["CA"].exchange_ids, (_book(_a1 - 0.005, _a1, 50000), _book(_a2 - 0.005, _a2, 50000))))
+    _b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _bk, lots=[("CA", 2000, 0.985, _t - 100)])
+    R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+    _lx[_tk] = (_sold(_v), _ch.held("CA"), "CA" in _ch.last_loss)
+check("hf arb: 7 and 8 ticks per set under water are held; 9 and 10 ticks are sold at the touch with the 24-h lockout",
+      _lx[7] == ([], 2000, False) and _lx[8] == ([], 2000, False) and _lx[9] == ([2000], 0, True) and _lx[10] == ([2000], 0, True),
+      str(_lx))
+check("hf arb: the loss exit is 9 ticks per set", abs(DC.LOSS_EXIT - 0.045) < 1e-12 and "9 ticks" in DC.LOSS_WHY, f"{DC.LOSS_EXIT} {DC.LOSS_WHY}")
 _b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.51, 0.5175), lots=[("CA", 2000, 0.97, _t - 100)], kill=-5.0)
 R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
 check("hf arb: when the stop trips, every churn set is sold at the touch in the same cycle", _ch.killed and _sold(_v) == [2000], str(_sold(_v)))
-check("hf arb: exit reasons: stop and 6-tick loss before take-profit / 24 h",
+check("hf arb: exit reasons: stop and 9-tick loss before take-profit / 24 h (6 and 8 ticks under water are held)",
       DC.DevChurn(kill=-1).exit_reason({"cost": 0.97, "ts": _t}, 0.969, _t) is None
-      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.940, _t) == DC.LOSS_WHY
-      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.9405, _t) is None)
+      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.925, _t) == DC.LOSS_WHY
+      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.9255, _t) is None
+      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.930, _t) is None
+      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.940, _t) is None)
 _k = DC.DevChurn(); _k.killed = True
 check("hf arb: a tripped stop gives the stop exit", _k.exit_reason({"cost": 0.97, "ts": _t}, 0.99, _t) == DC.STOP_WHY)
 

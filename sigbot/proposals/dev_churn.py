@@ -4,7 +4,7 @@ round trip earns 2 ticks per set, or after 24 h; the cash is then reused for the
 Evidence: research_notes/arb_convergence.md (a race's gap to payout sits around its own normal level and only the part
 above that level reverts, halving in 2-5 h). Fable double-check: honest estimate +0.4k to 3 Nov (range -1k..+2k), 20%
 of baskets rejected in the bot's own logs; Sizhe chose to run it live. Hence the caps: 12k pot, cash floor 3k, the sleeve
-stops entering at -600 (realised + open at the touch) and then sells at the touch, a race 6 ticks per set under water is
+stops entering at -600 (realised + open at the touch) and then sells at the touch, a race 9 ticks per set under water is
 sold at the touch (no re-entry there for 24 h), no entries after 1 Nov 00:00 UTC and every set in a race it traded sold by
 3 Nov 22:30 UTC (17:30 ET), before the punt.
 
@@ -37,9 +37,10 @@ VOL_BASE = 72 * 3600.0          # ... vs the 3 days before it
 VOL_PAUSE = 1.5                 # pause new entries when recent gap movement >= 1.5x normal
 VOL_RESUME = 1.2                # resume only below 1.2x (no flapping)
 SELL_ALL_AT = datetime(2026, 11, 3, 22, 30, tzinfo=timezone.utc).timestamp()   # 17:30 ET, before the punt
-LOSS_EXIT = 0.030               # sell a race at the touch once its open loss reaches 6 ticks per set (Fable 24 Oct) ...
+LOSS_EXIT = 0.045               # sell a race at the touch once its open loss reaches 9 ticks per set (Fable 24 Oct: 6; widened
+                                # to 9 after research_notes/param_audit.md: 4 of 17 replayed trades sold at -6..-9 and recovered) ...
 LOSS_REENTRY_GAP = 24 * 3600.0  # ... and leave that race alone for 24 h (no buy-lose-rebuy loop on a gap that keeps widening)
-LOSS_WHY = "loss >= 6 ticks per set"
+LOSS_WHY = "loss >= 9 ticks per set"
 STOP_WHY = "stop reached: sell at the touch"
 
 
@@ -207,7 +208,7 @@ class DevChurn:
 
     # ------------------------------------------------------------------ exits
     def exit_reason(self, lot: dict, proceeds: Optional[float], now: float) -> Optional[str]:
-        """proceeds = what selling one set back fetches now (unwind_quote, walked asks). The stop and a 6-tick loss per set
+        """proceeds = what selling one set back fetches now (unwind_quote, walked asks). The stop and a 9-tick loss per set
         sell at the touch instead of holding to 24 h (Fable 24 Oct: a widening gap was held to the 24-h exit)."""
         if sell_all_due(now):
             return "sell everything before the 3 Nov punt"
