@@ -411,3 +411,8 @@
 - 2026-10-24 15:24 BST: High-frequency arb loss exit widened 6 -> 9 ticks (param audit; t +2.1 on unseen data, 4-5
   events; -200 stop still binds first). Tests: guards 207/207, precheck sim 29/29, full --churn incl. day 30/30, Opus
   SAFE TO DEPLOY. Rollback: git revert + botctl deploy.
+
+- 2026-10-24 16:53 BST: MM last look uses the freshest touch when the feed book is stale (skips the quote if none)
+  instead of posting unchecked (day replay passive_order_crossed on 932). Opus SAFE TO DEPLOY; precheck 30/30. Precheck
+  now also runs tests/test_strategy_monitor.py. Cash raise (+ RI trim, shock reserve) FAILED precheck (cash_raise_sets
+  counted the HF arb's 9-tick loss exit as a raise); backed out, being fixed. Rollback: git revert + botctl deploy.
