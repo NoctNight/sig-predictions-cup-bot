@@ -416,3 +416,9 @@
   instead of posting unchecked (day replay passive_order_crossed on 932). Opus SAFE TO DEPLOY; precheck 30/30. Precheck
   now also runs tests/test_strategy_monitor.py. Cash raise (+ RI trim, shock reserve) FAILED precheck (cash_raise_sets
   counted the HF arb's 9-tick loss exit as a raise); backed out, being fixed. Rollback: git revert + botctl deploy.
+
+- 2026-10-24 17:12 BST: Cash raise ON: tier 1 (non-set holdings < 1% exit cost, only when a higher-edge sleeve is short
+  of cash), RI Governor trim (<= 4,500 sets, 1,000-set clips <= 1/30 min at level 0, no realised loss), 15k shock
+  reserve (inert until shock mode). First 10 min: 16 raise fills (3,062 shares), one RI trim clip (1,000 sets), and
+  cheap favourites resumed buying with the freed cash (24 fills). 10-min watch passed (settlement 103,887 -> 103,800:
+  the locked profit given up on the trimmed sets). Rollback: raise_enabled false + botctl deploy.
