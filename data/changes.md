@@ -422,3 +422,9 @@
   reserve (inert until shock mode). First 10 min: 16 raise fills (3,062 shares), one RI trim clip (1,000 sets), and
   cheap favourites resumed buying with the freed cash (24 fills). 10-min watch passed (settlement 103,887 -> 103,800:
   the locked profit given up on the trimmed sets). Rollback: raise_enabled false + botctl deploy.
+
+- 2026-10-24 17:36 BST: Wind-down (backlog 000) deployed: inert before 31 Oct 00:00 ET except an hourly cash projection
+  (params/wind_down_report.json); from then late-call sets, legs and MM inventory to cash by 18:00 ET 3 Nov in 1,000-set
+  clips at level 0, timed by deviation, cost cap loosening; RI forced late; early-call sets held, sell-at-call
+  report-only until Sizhe approves. Tests: fake-clock guards, sim 34/34 with live params, day 0 violations, Opus merge
+  review SAFE TO DEPLOY. 10-min watch passed. Rollback: wind_down_enabled false + botctl deploy.
