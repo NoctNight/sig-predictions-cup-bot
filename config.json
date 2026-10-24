@@ -154,5 +154,6 @@
   "shock_kill": -2500.0,
   "shock_poll_sec": 5.0,
   "shock_full_sec": 30.0,
-  "shock_exit_maker": true
+  "shock_exit_maker": true,
+  "strategy_stops_enabled": true
 }

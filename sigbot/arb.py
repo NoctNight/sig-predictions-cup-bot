@@ -587,6 +587,10 @@ class ArbEngine:
             try:
                 resp = self.api.place_multi_leg(legs, all_or_none=True, key=self.api.new_key("fre"))
                 self.store.record_arb(rname, "unwind_set", legs, q, -uq["forgone_edge"], uq["proceeds"], True, resp)
+                for r in resp.get("results", []):   # record the legs so their fills are attributed (they landed as purpose None)
+                    d = r.get("data") or {}
+                    self.store.record_order(d.get("orderId"), d.get("exchangeId"), None, "yes", "buy", d.get("price"), q, "arb",
+                                            cycle_id=cycle_id, status="filled" if not d.get("open") else "open", response=d)
                 self.committed[rname] = max(0.0, self.committed.get(rname, 0.0) - q * uq["proceeds"])
                 out.append({"race": rname, "qty": q, "proceeds": uq["proceeds"]})
             except ApiError as e:

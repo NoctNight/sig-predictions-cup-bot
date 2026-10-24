@@ -253,6 +253,10 @@ class BotConfig:
     shock_kill: float = -1500.0          # sleeve P&L stop: entries off, open positions closed
     shock_exit_maker: bool = False       # R3: rest the exit at the 70%-convergence price (the DMM's walk fills it) instead of
                                          # taking the bid at convergence; any exit rule cancels it and takes. Off: see shock_mode.md
+    strategy_stops_enabled: bool = False     # strategy_stops.py: per-strategy P&L stops replace the bot-wide kill switch
+    stop_limits: dict = field(default_factory=dict)   # {strategy: P&L floor since armed}; defaults in strategy_stops.DEFAULT_LIMITS
+    unattributed_limit: float = 2000.0       # unexplained account loss that pauses the strategies on its legs (or all entries)
+    untagged_limit: float = 200.0            # loss on fills no strategy owns that does the same
     election_per_race_cap: float = 5000.0
     election_total_cap: float = 90000.0
     election_poll_sec: float = 4.0

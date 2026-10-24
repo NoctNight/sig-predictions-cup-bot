@@ -8,6 +8,7 @@ fail() { echo "PRECHECK FAILED: $1"; exit 1; }
 python3 -m py_compile sigbot/*.py sigbot/proposals/*.py || fail "compile"
 python3 tests/test_guards.py || fail "guard tests"
 python3 tests/test_strategy_monitor.py > /tmp/sigbot_monitor.txt 2>&1 || { grep FAIL /tmp/sigbot_monitor.txt | head; fail "strategy monitor tests"; }
+python3 tests/test_strategy_stops.py > /tmp/sigbot_stops.txt 2>&1 || { grep FAIL /tmp/sigbot_stops.txt | head; fail "strategy stops tests"; }
 python3 tests/test_autotune.py "$ROOT" > /tmp/sigbot_autotune.txt 2>&1 || { tail -5 /tmp/sigbot_autotune.txt; fail "tuner tests"; }
 # 4. the whole pipeline on the fake venue (tests/sim_pipeline.py): every sleeve against invariants, all scenarios but the
 #    24-h replay (4 min; run it by hand with: python3 tests/sim_pipeline.py day)

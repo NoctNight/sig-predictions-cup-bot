@@ -418,9 +418,28 @@ class MarketMaker:
         writes = 0
         ttl = (datetime.now(timezone.utc) + timedelta(seconds=self.cfg.order_ttl_sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
         paused = self.news_paused()
+        # legs of a strategy the stops just paused (strategy_stops.py quarantine): the MM keeps off them; only its own
+        # resting quotes there are pulled, order by order (never cancel_all on the leg: exits and raise clips rest there)
+        quar = {ex for ex, until in (getattr(self, "quarantine", None) or {}).items() if until > now_ts}
         raising = {ex: t for ex, t in (getattr(self, "raise_pause", None) or {}).items() if t > now_ts}
         start = (cycle_id or 0) % max(1, len(self.quoted))          # rotate so the same markets are not always starved by the budget
         for ex in self.quoted[start:] + self.quoted[:start]:
+            if ex in quar:
+                for o in open_orders.get(ex, []):
+                    if writes >= write_budget:
+                        break
+                    meta = self.store.order_meta(o.get("id")) if self.store is not None and o.get("id") is not None else None
+                    if meta is None or meta["purpose"] not in ("mm", "inside"):
+                        continue
+                    if not self.dry_run:
+                        try:
+                            self.api.cancel_order(o["id"])
+                            self.store.mark_orders([o["id"]], "cancelled")
+                        except Exception as e:           # a network error must not abort this quote cycle
+                            log.warning("quarantine cancel %s on %s failed: %s", o.get("id"), ex, e)
+                    writes += 1
+                summary.setdefault("quarantined", []).append(ex)
+                continue
             if ex in raising:
                 # the cash raise is selling this leg: no quotes here (they would buy it back); pull any still resting
                 oo = open_orders.get(ex, [])

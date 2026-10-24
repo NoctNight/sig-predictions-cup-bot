@@ -437,6 +437,7 @@ class Checker:
         self.unwind_seq = collections.defaultdict(list)    # race -> [(t, 'entry'|'unwind')]
         self.gated_flagged = set()
         self.kills: list = []
+        self.stops: list = []                       # per-strategy stop pauses (strategy_stops.py)
         self.own_guard = None                              # scenario: (race, exchange, order id) of our own top-of-book bid
         self.cash_mode_baskets: list = []                  # ok arb baskets in cash mode that were not high-frequency arb entries
         self.strict_unwinds = False                        # scenario: > 12 unwinds in 10 min is a violation, not a note
@@ -488,6 +489,8 @@ class Checker:
         for t, lv, name, msg in CAP.step_lines:
             if msg.startswith("KILL SWITCH"):
                 self.kills.append(f"{datetime.fromtimestamp(t, timezone.utc).strftime('%H:%M:%S')} {msg[:90]}")
+            elif msg.startswith("KILL-STRATEGY") or msg.startswith("KILL-ENTRIES"):
+                self.stops.append(f"{datetime.fromtimestamp(t, timezone.utc).strftime('%H:%M:%S')} {msg[:160]}")
         for t, name, msg, tb in CAP.errors[self.ei:]:
             self.violation("logged_exception", f"{name}: {msg[:200]}", trace=tb[-1500:] if tb else None)
         self.ei = len(CAP.errors)
@@ -684,6 +687,8 @@ class Checker:
         self.notes = []
         if self.kills:
             self.notes.append(f"kill switch fired {len(self.kills)}x, first: {self.kills[0]}")
+        for s in self.stops:
+            self.notes.append(f"stop: {s}")
         for (cat, obj), (w, mx) in NOTE_LIMITS.items():
             n = worst(self.events.get((cat, obj), []), w)
             if n > mx and self.strict_unwinds:
@@ -2377,7 +2382,8 @@ def main(argv):
         mods = import_sandbox(sb)
         for a in argv:
             if a.startswith("--patch="):
-                exec(compile(open(a.split("=", 1)[1]).read(), a, "exec"), {"mods": mods, "__name__": "sim_patch"})
+                exec(compile(open(a.split("=", 1)[1]).read(), a, "exec"), {"mods": mods, "__name__": "sim_patch",
+                                                                       "__file__": os.path.abspath(a.split("=", 1)[1])})
         lg = logging.getLogger("sigbot")
         lg.setLevel(logging.INFO)
         lg.propagate = False

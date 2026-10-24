@@ -10,6 +10,8 @@ Each tick (DB and log only, plus 2 API reads every other tick for the settlement
   * whether the bot process is alive
 Stops the bot via deploy/mac/botctl.sh stop and exits 2 when: settlement value falls more than --max-drop below the start,
 or more than 3 offload unwinds, more than 30 recycles, or more than 40 exits, or a traceback / kill switch appears. Exit 0 when the window passes cleanly.
+Per-strategy stops (KILL-STRATEGY / KILL-ENTRIES, sigbot/strategy_stops.py) are printed as ALERT lines but never stop the
+bot: each already paused the entries concerned while exits keep running, and the process is never stopped for P&L.
 """
 from __future__ import annotations
 
@@ -86,6 +88,7 @@ def main():
     v0 = settlement_value()
     print(f"{ts0} watch start: settlement value {v0}, {a.minutes:.0f} min at {a.every:.0f} s", flush=True)
     tick, v = 0, v0
+    seen_stops: set = set()
     while time.time() - t_start < a.minutes * 60:
         time.sleep(a.every)
         tick += 1
@@ -93,6 +96,7 @@ def main():
         c = {k: sum(1 for l in lines if p.search(l)) for k, p in {
             "unwinds": re.compile(r"UNWIND \("), "recycles": re.compile(r"RECYCLE "), "exits": re.compile(r"ZERO-EV EXIT|OFFLOAD: exit \d"),
             "failed_baskets": re.compile(r"not filled atomically"), "kill": re.compile(r"KILL SWITCH"),
+            "stops": re.compile(r"KILL-STRATEGY|KILL-ENTRIES"),
             "traceback": re.compile(r"Traceback"), "arb_fills": re.compile(r"INFO sigbot.arb: ARB ")}.items()}
         c["traceback"] = code_tracebacks(lines)
         if tick % 2 == 0:
@@ -100,6 +104,10 @@ def main():
         drop = (v0 - v) if (v0 is not None and v is not None) else 0.0
         alive = running()
         print(f"{datetime.now():%H:%M:%S} tick {tick}: settlement {v} (drop {drop:+.1f}) alive={alive} {c}", flush=True)
+        for l in lines:
+            if c["stops"] and ("KILL-STRATEGY" in l or "KILL-ENTRIES" in l) and l not in seen_stops:
+                seen_stops.add(l)
+                print(f"ALERT (bot keeps running, the stop already paused those entries): {l.strip()[:300]}", flush=True)
         reason = None
         if drop > a.max_drop:
             reason = f"settlement value fell {drop:.0f} since the deploy"

@@ -152,6 +152,78 @@ check("exits: no second exit while the first rests for the whole holding", len(s
 bot.open_orders_cache = {}
 R.Bot.zero_ev_exits(bot, {"1068": 1203.0}, [row])
 check("exits: one exit for exactly the held quantity once nothing rests", sent == [("1068", "no", 1203)], str(sent))
+# behaviour: a zero-EV exit never closes what catch-up / cheap favourites / shock hold on the same leg (24 Oct: the venue
+# position nets every sleeve, so without the cap a direction exit sells the cheapfav lot and crosses the account)
+check("exits: the venue position is capped by the sleeves' own holdings",
+      all(a in rsrc for a in ('"catchup_open"', '"cheapfav_open"', '"shock_open"')) and "for a in (\"catchup_open\", \"cheapfav_open\", \"shock_open\")" in rsrc)
+for attr in ("catchup_open", "cheapfav_open", "shock_open"):
+    sent.clear()
+    bot.open_orders_cache = {}
+    for a in ("catchup_open", "cheapfav_open", "shock_open"):
+        setattr(bot, a, {})
+    setattr(bot, attr, {"1068": 800.0})           # that sleeve holds 800 YES of the venue's 1203 YES
+    R.Bot.zero_ev_exits(bot, {"1068": 1203.0}, [row])
+    check(f"exits: {attr} keeps its 800, the exit closes only the other 403", sent == [("1068", "no", 403)], str(sent))
+    sent.clear()
+    setattr(bot, attr, {"1068": 1203.0})          # the sleeve holds all of it: no exit at all
+    R.Bot.zero_ev_exits(bot, {"1068": 1203.0}, [row])
+    check(f"exits: nothing sent when {attr} holds the whole venue position", sent == [], str(sent))
+for a in ("catchup_open", "cheapfav_open", "shock_open"):
+    setattr(bot, a, {})
+# a failed positions read ({} with positions_ok False) sends nothing, even with a sleeve holding the other side
+sent.clear()
+bot.cheapfav_open = {"1068": -400.0}
+bot.positions_ok = False
+R.Bot.zero_ev_exits(bot, {}, [row])
+check("exits: nothing sent on a failed positions read", sent == [], str(sent))
+bot.positions_ok = True
+R.Bot.zero_ev_exits(bot, {}, [row])
+check("exits: an empty account with a sleeve on the other side makes no room to close", sent == [], str(sent))
+# the shock's ledger read after the venue's (an add in between) must not make room either: venue -500, shock -750
+sent.clear()
+bot.cheapfav_open = {}
+bot.shock_open = {"1068": -750.0}
+R.Bot.zero_ev_exits(bot, {"1068": -500.0}, [row])
+check("exits: a sleeve ledger ahead of the positions read sends nothing", sent == [], str(sent))
+# never more than the venue position alone would allow (the cap before the sleeves were netted)
+import random as _rnd
+_g = _rnd.Random(7)
+_worse = []
+for _ in range(300):
+    sent.clear()
+    vp = float(_g.choice([-1500, -800, -300, 0, 200, 600, 1203, 2000]))
+    for a in ("catchup_open", "cheapfav_open", "shock_open"):
+        setattr(bot, a, {"1068": float(_g.choice([-900, -400, 0, 0, 300, 700]))})
+    R.Bot.zero_ev_exits(bot, {"1068": vp}, [row])
+    sl = sum(max(0.0, getattr(bot, a)["1068"]) for a in ("catchup_open", "cheapfav_open", "shock_open"))
+    want = max(0, int(min(1203.0, vp - sl)))
+    got = sum(q for _, _, q in sent)
+    if got > max(0, int(min(1203.0, vp))) or got != want:
+        _worse.append((vp, [getattr(bot, a)["1068"] for a in ("catchup_open", "cheapfav_open", "shock_open")], got))
+check("exits: the sleeve cap never sends more than the venue position alone allows", not _worse, str(_worse[:3]))
+# the same on the held-NO side (closing buys YES at the ask)
+class StoreNo(Store):
+    def rows(self, q, a=()):
+        if "purpose IN ('direction','tilt')" in q:
+            return [{"exchange_id": "1068", "side": "no", "q": 1203.0}]
+        return Store.rows(self, q, a)
+bot.store = StoreNo()
+_worse = []
+for _ in range(300):
+    sent.clear()
+    vp = float(_g.choice([-2000, -1203, -600, -200, 0, 300, 800, 1500]))
+    for a in ("catchup_open", "cheapfav_open", "shock_open"):
+        setattr(bot, a, {"1068": float(_g.choice([-700, -300, 0, 0, 400, 900]))})
+    R.Bot.zero_ev_exits(bot, {"1068": vp}, [row])
+    sl = sum(max(0.0, -getattr(bot, a)["1068"]) for a in ("catchup_open", "cheapfav_open", "shock_open"))
+    want = max(0, int(min(1203.0, -vp - sl)))
+    got = sum(q for _, s_, q in sent if s_ == "yes")
+    if got > max(0, int(min(1203.0, -vp))) or got != want or any(s_ != "yes" for _, s_, _ in sent):
+        _worse.append((vp, [getattr(bot, a)["1068"] for a in ("catchup_open", "cheapfav_open", "shock_open")], sent[:]))
+check("exits: held NO too: the sleeve cap never sends more than the venue position alone allows", not _worse, str(_worse[:3]))
+bot.store = Store()
+for a in ("catchup_open", "cheapfav_open", "shock_open"):
+    setattr(bot, a, {})
 
 # ---------------------------------------------------------------- kill switch on settlement basis (21:49 false trip on recycling)
 rs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
@@ -2975,7 +3047,7 @@ _rs_m = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 check("merge: the RI trim and tier 2 also leave a wind-down race (or one the wind-down clipped < 30 min ago) alone; the wind-down sells YES "
       "sets through the cash raise's unwind_buy_set",
       "if rname in Bot.wind_down_owned(self, now) or Bot.exit_locked(self, rname, \"raise\", now=now):" in _rs_m
-      and 'self.arb.unwind_buy_set(race.name, c["books"], q, why="wind-down", purpose="arb")' in _rs_m
+      and 'self.arb.unwind_buy_set(race.name, c["books"], q, why="wind-down", purpose="wind_down")' in _rs_m
       and 's_excl |= Bot.wind_down_owned(self, now) | {r for r in race_legs if Bot.exit_locked(self, r, "raise", now=now)}' in _rs_m
       and _rs_m.count("    def unwind_buy_set(") == 0 and open(os.path.join(ROOT, "sigbot", "arb.py")).read().count("    def unwind_buy_set(") == 1)
 

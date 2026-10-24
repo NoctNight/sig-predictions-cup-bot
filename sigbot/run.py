@@ -61,6 +61,7 @@ from .proposals import election_night as EN
 from .proposals import wind_down as WD
 from .proposals.own_book import OwnLevels
 from . import strategy_monitor as SMON
+from . import strategy_stops as STOPS
 
 
 def cheapfav_races_of(bot) -> set:
@@ -146,7 +147,8 @@ def shock_reserve(bot) -> float:
     sm = sys.modules.get("sigbot.proposals.shock_mode")          # (loaded by shock mode's wiring when it deploys)
     if sm is not None and time.time() > float(getattr(sm, "LAST_ENTRY", float("inf"))):
         return 0.0                                     # no more shock entries: the reserve is free (review 7)
-    if getattr(bot, "strategy_kill", None) is not None and strategy_paused(bot, "shock"):
+    kf = getattr(bot, "strategy_kill", None)
+    if kf is not None and (kf.paused("shock") is not None or kf.paused("all") is not None):   # written pauses, not holds
         return 0.0                                     # the sleeve is stopped: nothing to keep the cash for
     return float(getattr(cfg, "shock_reserve", 0.0) or 0.0)
 
@@ -157,13 +159,29 @@ def spendable_cash(bot) -> float:
     return float(getattr(bot, "cash", 0.0) or 0.0) - shock_reserve(bot)
 
 
+# entry paths gated by another strategy's pause: recycles and offload fund set arb, the inside quoter is MM, tilt / lag /
+# news are directional. "all" (KILL-ENTRIES, strategy_stops.py) pauses every entry path; exit paths ("exit:...") are
+# paused only by name (an exit that closed more than it held) and never by "all".
+PAUSE_ALIASES = {"recycle": ("arb",), "offload": ("arb",), "inside": ("mm",), "tilt": ("direction",), "lag": ("direction",),
+                 "news": ("direction",)}
+
+
 def strategy_paused(bot, name: str) -> bool:
-    """True when params/strategy_kill.json pauses this sleeve's NEW entries (strategy monitor or by hand); each pause is
-    logged once. A bot without the kill file (test stubs) is never paused."""
+    """True when params/strategy_kill.json pauses this sleeve's NEW entries (strategy monitor, strategy stops or by
+    hand), directly, through PAUSE_ALIASES or through "all"; each pause is logged once. A bot without the kill file (test
+    stubs) is never paused."""
     kf = getattr(bot, "strategy_kill", None)
     if kf is None:
         return False
-    why = kf.paused(name)
+    why = None
+    held = getattr(getattr(bot, "stops", None), "hold", None) or {}
+    for n in (name,) + PAUSE_ALIASES.get(name, ()) + (() if name.startswith("exit:") else ("all",)):
+        why = kf.paused(n)
+        if why is None and held.get(n, 0.0) > time.time():
+            why = "held by the strategy stops (first breach)"
+        if why is not None:
+            why = why if n == name else "%s (via %s)" % (why, n)
+            break
     logged = bot.monitor_logged
     if why is None:
         logged.discard(name)
@@ -258,7 +276,7 @@ class ArbScanner(threading.Thread):
         b.latest_prices = (prices, time.time())
         self.stats["passes"] += 1
         self.stats["last_pass"] = time.time()
-        if not b.cfg.arb.enabled or time.time() < b.killed_until:
+        if not b.cfg.arb.enabled or time.time() < b.killed_until or strategy_paused(b, "arb"):
             return
         cands = b.arb.candidates_from_prices(prices)
         if not cands:
@@ -351,6 +369,8 @@ class ArbScanner(threading.Thread):
         if len(self.fast_log) >= n_max:
             return
         for ex in list(b.mm.quoted):
+            if strategy_paused(b, "mm"):
+                break                                # paused or held while this pass ran (a pass can take minutes)
             st = b.mm.state.get(ex)
             touch = getattr(st, "last_touch", None) if st is not None else None
             if not touch or touch[0] is None or touch[1] is None or st.last_reserve is None:
@@ -469,7 +489,7 @@ class ArbScanner(threading.Thread):
         """Cross-sleeve offload every offload_scan_sec (was: every 5th main cycle, ~2.5 min): exit costs of every held
         set and tilt/directional position are recomputed from the latest feed-overlaid prices each run."""
         b = self.bot
-        if time.time() - self.last_offload < b.cfg.offload_scan_sec or time.time() < b.killed_until:
+        if time.time() - self.last_offload < b.cfg.offload_scan_sec or time.time() < b.killed_until or strategy_paused(b, "offload"):
             return
         self.last_offload = time.time()
         b.offload_report(0)
@@ -479,7 +499,7 @@ class ArbScanner(threading.Thread):
         less (the locked profit is realised at no cost and the capital comes back). Positions are re-read after any
         unwind so a stale snapshot can never buy legs for sets we no longer hold."""
         b = self.bot
-        if not b.arb.committed or not b.feed_ok() or time.time() < b.killed_until:
+        if not b.arb.committed or not b.feed_ok() or time.time() < b.killed_until or strategy_paused(b, "exit:unwinds"):
             return
         if time.time() - b.last_free_unwind < b.cfg.free_unwind_scan_sec:
             return
@@ -658,6 +678,12 @@ class Bot:
         self.strategy_kill = SMON.KillFile(os.path.join(HERE, "params", SMON.KILL_FILE))
         self.monitor_ts = 0.0
         self.monitor_logged: set = set()
+        # per-strategy stops (strategy_stops.py) replace the bot-wide 30-min kill switch when enabled
+        self.stops = (STOPS.StrategyStops(cfg, self.store, os.path.join(HERE, "params"),
+                                          [r.exchange_ids for r in self.universe.races.values()], write=not dry_run)
+                      if getattr(cfg, "strategy_stops_enabled", False) and self.store is not None else None)
+        self.stops_log_ts = 0.0
+        self.pos_mv: dict = {}
         self.move_detector = MoveDetector()
         self.volatile_paper = VolatileMoves()
         self.inside_posted: dict = {}            # ex -> time of our last inside post (re-post before the venue TTL expires)
@@ -828,6 +854,8 @@ class Bot:
         """Close directional and tilt holdings once this venue's price is within exit_band of the outside fair value:
         the edge is gone, the exit costs ~nothing in expectation and frees the collateral. Arb-set legs are untouched
         (only the sleeve's own filled quantity is closed). Exits cross the spread with a 60 s limit order."""
+        if getattr(self, "positions_ok", True) is False:   # an unread account is not an empty one (review 24 Oct)
+            return 0
         band = self.cfg.exit_band
         fair = {r["exchange_id"]: r for r in (dir_rows or []) if r.get("fair") is not None and r.get("sig_bid") is not None and r.get("sig_ask") is not None}
         held, strict = {}, set()
@@ -848,6 +876,12 @@ class Bot:
         # on top (review 22 Oct: two positions were closed past zero and flipped)
         # (the cash raise's clips close holdings the same way: count them too)
         exit_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose IN ('exit', 'raise') AND order_id IS NOT NULL")}
+        # a leg with an exit / raise order placed in the last 90 s is left alone: positions and open orders are read at
+        # different moments, so a 60-s exit can be missing from both and be sent again (live 23 Oct leg 960, 24 Oct leg
+        # 898: -300 -> +300 / +100, two exits seconds apart; review 24 Oct)
+        recent_exit = {str(r["exchange_id"]) for r in self.store.rows(
+            "SELECT DISTINCT exchange_id FROM orders WHERE purpose IN ('exit', 'raise') AND placed_at > ?", (time.time() - 90.0,))
+            if "exchange_id" in r.keys()}
         resting_exit: dict = {}
         for ex_o, lst in (getattr(self, "open_orders_cache", None) or {}).items():
             for o in lst:
@@ -858,10 +892,15 @@ class Bot:
         done = 0
         ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
         for (ex, side), q in held.items():
-            if done >= write_budget or q < 1 or ex not in fair:
+            if done >= write_budget or q < 1 or ex not in fair or ex in recent_exit:
                 continue
+            # catch-up / cheap favourites / shock keep their own: what they hold on this side is not ours to close. One-sided,
+            # so never more than the venue position alone allows (their ledgers and the positions read are taken at
+            # different moments; a sleeve on the other side must not make room; review 24 Oct)
+            sleeves = [(getattr(self, a, None) or {}).get(ex, 0.0) for a in ("catchup_open", "cheapfav_open", "shock_open")]
             pos = positions.get(ex, 0.0)
-            q = int(min(q, -pos if side == "no" else pos) - resting_exit.get((ex, side), 0.0))   # never close more than held, net of resting exits
+            cap = -pos - sum(max(0.0, -v) for v in sleeves) if side == "no" else pos - sum(max(0.0, v) for v in sleeves)
+            q = int(min(q, cap) - resting_exit.get((ex, side), 0.0))   # never close more than held, net of resting exits
             if q < 1:
                 continue
             f = fair[ex]
@@ -922,6 +961,8 @@ class Bot:
         # settlement adjustment: real arb sets valued at their locked payout instead of their marks (the kill switch's
         # drawdown must not count profitable recycling, which closes sets at the asks, as a loss; 22 Oct 21:49)
         mv = {str(x["exchangeId"]): float(x.get("marketValue") or 0.0) for x in p.get("positions", []) if not x.get("settled")}
+        self.pos_mv = mv
+        self.pos_settled = {str(x["exchangeId"]) for x in p.get("positions", []) if x.get("settled")}
         adj = 0.0
         # read every time (one small query per cycle): a 5-min cache left sets bought in a NEW race unadjusted, so their
         # spread counted as drawdown and tripped the kill switch a minute after an arb burst (sim_pipeline aon_reject, 22 Oct)
@@ -1040,6 +1081,8 @@ class Bot:
         to exit, cheapest first, at the touch; the MM stops quoting a leg being sold; net D stays inside the cap. Tier 2
         (raise_sets_enabled): whole sets, all-or-none, only when tier 1 cannot cover it, high-frequency arb skipped
         >= raise_set_min_skips entries for cash in 6 h and the exit costs <= raise_set_max_cost."""
+        if strategy_paused(self, "exit:raise"):
+            return                                   # a raise clip closed more than the account held (strategy stops)
         cfg = self.cfg
         reserve = shock_reserve(self)
         shock_on = bool(getattr(self, "shock_active", lambda: False)())   # a shock holds or is entering positions
@@ -1245,6 +1288,8 @@ class Bot:
                         break
                     log.warning("raise clip %s: %s", ex, e)
             for p in pieces:
+                if strategy_paused(self, "exit:unwinds"):
+                    break                                # an unwind took a leg through zero (strategy stops)
                 try:
                     for e in race_legs[p["race"]]:
                         pull(e)
@@ -1285,6 +1330,8 @@ class Bot:
         at most one per raise_ri_trim_gap_sec, only when the clip's walked exit cost is at or under the race's trailing
         24-h median (level 0, research_notes/ladder_exits.md) and its proceeds cover the sets' cost basis (no realised
         loss), net D inside the cap, until raise_ri_trim_sets have been unwound or the need is met."""
+        if strategy_paused(self, "exit:raise") or strategy_paused(self, "exit:unwinds"):
+            return                                   # its set unwinds stop with the raise / unwind exit paths
         cfg = self.cfg
         races = list(getattr(cfg, "raise_sets_races", None) or [])
         cf = getattr(self, "cheapfav", None)
@@ -1440,11 +1487,13 @@ class Bot:
     def ingest_fills(self) -> dict[str, int]:
         """Pull fills newest-first until we hit ones we already have. Returns per-exchange total fill counts."""
         new = 0; cursor = None; pages = 0
+        self.fills_read_ok = True
         while pages < 5:
             try:
                 page = self.api.fills(self.slug, 200, cursor)
             except ApiError as e:
                 log.warning("fills: %s", e)
+                self.fills_read_ok = False               # the strategy stops do not confirm a crossing this cycle
                 break
             data = page.get("data", [])
             n = self.store.ingest_fills(data)
@@ -1570,6 +1619,81 @@ class Bot:
         if summary["orders"]:
             log.info("INSIDE posted %d orders on %d markets (%d writes)", summary["orders"], summary["markets"], summary["writes"])
         return summary
+
+    def stops_cycle(self, cash: Optional[float], positions: dict, mv: dict, prices: dict, open_orders: dict, hl: dict,
+                    settled: Optional[set] = None):
+        """Per-strategy stops (strategy_stops.py), every cycle; never raises (a failure keeps the last pauses in force)."""
+        try:
+            self._stops_cycle(cash, positions, mv, prices, open_orders, hl, settled)
+            if getattr(self, "stops_fallback", False):
+                log.warning("STRATEGY STOPS: working again: the bot-wide kill switch is off again")
+            self.stops_failures, self.stops_fallback = 0, False
+        except Exception as e:                       # the stops must never kill the loop (or skip this cycle's exits)
+            log.exception("strategy stops failed: %s", e)
+            self.stops_failures = getattr(self, "stops_failures", 0) + 1
+            if self.stops_failures >= 3 and not getattr(self, "stops_fallback", False):
+                self.stops_fallback = True           # never fail open: today's switch takes over until the stops work
+                log.error("STRATEGY STOPS: failed %d cycles in a row: the bot-wide kill switch is back on", self.stops_failures)
+
+    def _stops_cycle(self, cash, positions, mv, prices, open_orders, hl, settled):
+        st = self.stops
+        now = time.time()
+        touch = {}
+        for ex, p in (prices or {}).items():
+            touch[str(ex)] = (p.get("bestBid"), p.get("bestAsk"))
+        # the feed's live books where it has them: the cycle's price snapshot can be a scanner pass old, and a jump must
+        # be seen in the same cycle as the venue's marks see it (sim zz_swing: one cycle after today's switch otherwise)
+        if self.feed_ok():
+            for ex in list(touch):
+                fb = self.fresh_book(ex, 10.0)
+                if fb is not None and fb.get("bestBid") is not None and fb.get("bestAsk") is not None:
+                    touch[ex] = (fb["bestBid"], fb["bestAsk"])
+        ch, cs = self.churn, self.catchup
+        churn = None
+        if ch is not None:
+            # its ledger (realised, lots) is restored from its state at start; its open value once its cycle valued it
+            churn = {"realised": ch.realised, "open": getattr(ch, "last_open_value", None), "lots": list(ch.lots),
+                     "legs": {e for l in ch.lots if l["race"] in self.universe.races for e in self.universe.races[l["race"]].exchange_ids}}
+        ok = cash is not None                        # None: this cycle's account or positions read failed
+        res = st.evaluate(now, touch=touch, cash=cash, positions=positions if ok else None, mv=mv if ok else None,
+                          settled=settled, churn=churn, churn_killed=bool(ch is not None and ch.killed),
+                          catchup_killed=bool(cs is not None and cs.killed),
+                          shock_killed=bool(getattr(self, "shock", None) is not None and getattr(self.shock, "killed", False)),
+                          fills_ok=bool(getattr(self, "fills_read_ok", True)),
+                          markout=(hl.get("markout30"), hl.get("n_markout", 0)), open_orders=open_orders)
+        self.mm.quarantine = dict(st.quarantine)    # a copy: the scanner thread's fast requotes read it
+        # today's switch cancelled every resting order; scoped to the paused strategy's legs: our resting ENTRY orders
+        # there are pulled (sim churn_widen: an MM order left at the ask made churn's all-or-none exit unfillable, so the
+        # widening sets were sold 10 min and 2 ticks later than under the old switch). Only purposes in
+        # strategy_stops.PULLABLE: never exits, punt, raise, hedge or election orders. 8 cancels per cycle.
+        pull = []
+        legs = set(open_orders or {}) if strategy_paused(self, "all") else set(st.quarantine)   # KILL-ENTRIES: every leg
+        if legs and open_orders:
+            ids = [str(o.get("id")) for ex in legs if ex in open_orders for o in open_orders[ex] if o.get("id") is not None]
+            if ids:
+                ex_purp = {str(r["order_id"]): r["purpose"] for r in self.store.rows(
+                    "SELECT order_id, purpose FROM orders WHERE order_id IN (%s)" % ",".join("?" * len(ids)), tuple(int(i) for i in ids))}
+                pull = [i for i in ids if ex_purp.get(i) in STOPS.PULLABLE and i not in getattr(self, "stops_pulled", set())]
+        # at most 4 + 4 writes: the exits later in this cycle use the same write budget
+        todo = [(oid, "stuck") for oid in res["cancel"][:4]] + [(int(i), "pull") for i in pull[:4]]
+        t_c = time.time()
+        for oid, why in todo:
+            if self.dry_run or time.time() - t_c > 10.0:
+                break                                # a slow venue must not hold up this cycle's exits
+            try:
+                self.api.cancel_order(oid)
+                self.store.mark_orders([oid], "cancelled")
+                if why == "pull":
+                    self.stops_pulled = getattr(self, "stops_pulled", set()) | {str(oid)}
+                    log.info("STRATEGY STOPS: pulled order %s on a paused strategy's leg", oid)
+                else:
+                    log.warning("STRATEGY STOPS: cancelled %s order %s", why, oid)
+            except Exception as e:                   # any failure (network too): next order, the cycle goes on
+                log.warning("stops cancel %s: %s", oid, e)
+        if res["new"] or now - self.stops_log_ts >= 300:
+            self.stops_log_ts = now
+            s = res["status"]
+            log.info("STOPS pnl since armed %s; unattributed %s (untagged %s)", s["pnl"], s["unattributed"], s["untagged"])
 
     def monitor_cycle(self):
         """Every strategy_monitor_sec: test each sleeve on its own results; new kills go to params/strategy_kill.json.
@@ -1765,6 +1889,7 @@ class Bot:
             if proceeds is not None:
                 open_value += held * (proceeds - avg["cost"])
             plans.append((race, books, held, avg, proceeds))
+        ch.last_open_value = open_value                # the strategy stops read the sleeve's own P&L (realised + open)
         was = ch.killed
         if ch.check_kill(open_value) and not was:
             changed = True
@@ -2180,9 +2305,9 @@ class Bot:
             wd.last_race[race.name] = now
             self.stamp_exit(race.name, "wind_down", now)
             if kind == "sell_set":
-                res = self.arb.unwind_set(race.name, c["books"], q, why="wind-down", min_qty=1)
+                res = self.arb.unwind_set(race.name, c["books"], q, why="wind-down", min_qty=1, purpose="wind_down")
             else:
-                res = self.arb.unwind_buy_set(race.name, c["books"], q, why="wind-down", purpose="arb")
+                res = self.arb.unwind_buy_set(race.name, c["books"], q, why="wind-down", purpose="wind_down")
             if not res or res.get("dry"):
                 self.wind_down_save()
                 return None
@@ -2308,8 +2433,9 @@ class Bot:
             if done >= self.cfg.wind_down_clips_per_cycle:
                 break
             late = now >= c["fallback"]
-            if killed and not late:
-                continue                                   # kill switch: only clips that cannot wait any longer
+            if (killed or strategy_paused(self, "exit:raise")
+                    or (c["type"] != "set" and strategy_paused(self, "exit:zero_ev"))) and not late:
+                continue                                   # kill switch / stops: only clips that cannot wait any longer
             # past its fallback a clip may use the kill switch's room: the drawdown already holds this hour's exits, so the
             # larger of the two is counted once (review 2)
             used = max(spent, getattr(self, "wd_drawdown", 0.0)) if late else spent
@@ -2549,7 +2675,7 @@ class Bot:
         exited = {str(r["exchange_id"]) for r in self.store.rows(
             "SELECT exchange_id FROM orders WHERE purpose='cheapfav_exit' AND placed_at > ?", (now - 300,))}
         for ex, q in open_pos.items():
-            if ex in resting or ex in exited or ex not in race_of:
+            if ex in resting or ex in exited or ex not in race_of or strategy_paused(self, "exit:cheapfav"):
                 continue
             why = cf.exit_reason(ex, q, byex.get(ex), race_of[ex][0], now)
             if not why:
@@ -3065,6 +3191,8 @@ class Bot:
                     if not q:
                         continue
                     cost = q * max(px, SHK.SHARE_PRICE_FLOOR)   # spend counted on the same floor the shares were sized on
+                    if strategy_paused(self, "shock"):
+                        break                                # paused / held while this tick ran (strategy stops)
                     resp, unknown = None, False
                     try:
                         resp = self.api.place_order(ex, side, "buy", q, px, expiration=ttl, key=self.api.new_key("shk"))
@@ -3208,6 +3336,8 @@ class Bot:
                 log.info("ELECTION %s %s %s x%s at %s: %s", o.get("kind"), o.get("exchangeId"), o.get("side"), o.get("quantity"), o.get("price"), o.get("reason"))
                 if self.dry_run:
                     continue
+                if o.get("kind") != "exit" and strategy_paused(self, "election"):
+                    continue                           # paused (strategy stops / KILL-ENTRIES): its exits still go out
                 try:
                     with self.trade_lock:
                         resp = self.api.place_order(str(o["exchangeId"]), o["side"], "buy", int(o["quantity"]), float(o["price"]),
@@ -3466,13 +3596,19 @@ class Bot:
         # the two reads (or between them and the health check) made the account look ~1,100 lower for one cycle and
         # tripped the drawdown kill switch on 22 Oct 15:39. cycle_cash is the cash that matches pos_value.
         with self.trade_lock:
+            acct_ok = False
             try:
                 acct = self.api.account()
                 self.cash = float(acct.get("balance") or self.cash)
+                acct_ok = acct.get("balance") is not None
             except ApiError as e:
                 log.warning("account: %s", e)
             positions, pos_value, n_pos = self.positions_map()
             cycle_cash = self.cash
+            # the stops reconcile cash, positions and these values together: only when both reads succeeded
+            cycle_ok = acct_ok and getattr(self, "positions_ok", False)
+            cycle_mv = dict(self.pos_mv)
+            cycle_settled = set(getattr(self, "pos_settled", ()) or ())
             cycle_adj = getattr(self, "settle_adj", 0.0)   # positions_map() set it from these positions; later calls
                                                           # (scanner thread, recycle backstop) move it, so keep this one
             # read by the scanner thread (free unwinds between cycles); set under the lock: set after it, a scanner unwind
@@ -3511,7 +3647,7 @@ class Bot:
 
         # ---- arbs first (riskless, capital priority)
         arb_summary = {"candidates": 0, "planned": 0, "executed": 0}
-        if self.cfg.arb.enabled and self.cfg.arb.new_sets and self.scanner is None:
+        if self.cfg.arb.enabled and self.cfg.arb.new_sets and self.scanner is None and not strategy_paused(self, "arb"):
             cands = self.arb.candidates_from_prices(prices)
             arb_summary["candidates"] = len(cands)
             cand_books = {}
@@ -3617,8 +3753,12 @@ class Bot:
         self.mm.prices = prices
         hl = self.health(cycle_cash + pos_value + cycle_adj - shock_pnl, cycle_id)
         self.wd_drawdown = float(hl.get("drawdown") or 0.0)       # the wind-down's budget past a fallback uses the kill headroom
+        if self.stops is not None:
+            # per-strategy stops: a pause stops only that strategy's NEW entries (exits, unwinds and quote cancels go on);
+            # the 30-min bot-wide switch below is off (killed stays False, so no exit path waits on it)
+            self.stops_cycle(cycle_cash if cycle_ok else None, positions, cycle_mv, prices, open_orders, hl, cycle_settled)
         killed = time.time() < self.killed_until
-        if not killed and (hl["drawdown"] > self.cfg.kill_drawdown or (hl["n_markout"] >= 20 and hl["markout30"] is not None and hl["markout30"] < self.cfg.kill_markout_ticks)):
+        if (self.stops is None or getattr(self, "stops_fallback", False)) and not killed and (hl["drawdown"] > self.cfg.kill_drawdown or (hl["n_markout"] >= 20 and hl["markout30"] is not None and hl["markout30"] < self.cfg.kill_markout_ticks)):
             self.killed_until = time.time() + self.cfg.kill_pause_sec
             killed = True
             log.warning("KILL SWITCH: drawdown %.0f, markout30 %s (n=%d); cancelling MM/tilt quotes for %ds", hl["drawdown"], hl["markout30"], hl["n_markout"], self.cfg.kill_pause_sec)
@@ -3648,7 +3788,23 @@ class Bot:
                 mm_paused = True
         if mm_paused and not self.dry_run and any(open_orders.values()):
             try:
-                n = self.cancel_mm_quotes(open_orders, max(4, self.cfg.mm_write_budget - 4))
+                ids = [o.get("id") for lst in open_orders.values() for o in lst if o.get("id") is not None]
+                purp = {str(r["order_id"]): r["purpose"] for r in self.store.rows(
+                    "SELECT order_id, purpose FROM orders WHERE order_id IN (%s)" % ",".join("?" * len(ids)), tuple(ids))} if ids else {}
+                with self.trade_lock:                 # no shock / scanner order is placed between the check and the cancel
+                    newer = self.store.one("SELECT 1 FROM orders WHERE purpose NOT IN ('mm', 'inside') AND placed_at >= ? LIMIT 1",
+                                           (getattr(self, "open_orders_ts", 0.0) - 60.0,))
+                    allmm = ids and newer is None and all(purp.get(str(i)) in ("mm", "inside") for i in ids)
+                    if allmm:
+                        self.api.cancel_all()
+                if allmm:
+                    # nothing but MM quotes rests (no exit, raise, punt or manual order): one account-wide cancel, as
+                    # fast as today's switch, instead of up to 14 markets a cycle through the write budget
+                    self.store.mark_orders([int(i) for i in ids], "cancelled")
+                    log.warning("MM paused: every resting MM quote cancelled at once (%d orders)", len(ids))
+                    n = 1
+                else:
+                    n = self.cancel_mm_quotes(open_orders, max(4, self.cfg.mm_write_budget - 4))
                 mm_summary["monitor_cancels"] = mm_summary["writes"] = n     # the tilt budget below counts these writes
             except Exception as e:                   # a network error must not skip the exits later in this cycle
                 log.exception("monitor MM cancel: %s", e)
@@ -3684,7 +3840,7 @@ class Bot:
 
         # ---- inside-spread quoting where the DMM's spread is 3+ ticks (exploit 2.2), outside the MM's own markets
         inside_summary = {}
-        if self.inside is not None and not killed and self.feed_ok():
+        if self.inside is not None and not killed and self.feed_ok() and not strategy_paused(self, "inside"):
             try:
                 inside_summary = self.inside_cycle(positions, prices, blocked, cycle_id)
             except Exception as e:
@@ -3692,13 +3848,13 @@ class Bot:
 
         # ---- tilt harvest (tails only, disjoint from the MM band)
         tilt_summary = {}
-        if self.cfg.tilt.enabled and not killed:
+        if self.cfg.tilt.enabled and not killed and not strategy_paused(self, "tilt"):
             tilt_summary = self.tilt.cycle(prices, positions, open_orders, set(self.mm.quoted), max(0.0, spendable_cash(self)), cycle_id,
                                            max(2, self.cfg.mm_write_budget - (mm_summary.get("writes", 0) if mm_summary else 0)))
 
         # ---- news sweeper (feeds polled every news.poll_sec; taker orders only when --live)
         news_summary = {}
-        if self.news is not None:
+        if self.news is not None and not strategy_paused(self, "news"):
             try:
                 news_summary = self.news.cycle(prices, max(0.0, spendable_cash(self)), cycle_id)
             except Exception as e:                 # the sweeper must never kill the loop
@@ -3707,7 +3863,9 @@ class Bot:
         # ---- directional sleeve: explained legs only, small size (orders only if direction.allow_live)
         dir_summary = {}
         if not killed:
-            dir_summary = self.direction.cycle(prices, positions, max(0.0, spendable_cash(self)), write_budget=2, dry_run=self.dry_run)
+            # paused: the poll still runs (exits read it), its orders do not
+            dp = self.dry_run or strategy_paused(self, "direction")
+            dir_summary = self.direction.cycle(prices, positions, max(0.0, spendable_cash(self)), write_budget=2, dry_run=dp)
             if dir_summary.get("traded"):
                 log.info("DIRECTION traded %d skipped %d blocked=%s", dir_summary.get("traded", 0), dir_summary.get("skipped", 0),
                          dir_summary.get("blocked"))
@@ -3753,7 +3911,7 @@ class Bot:
                 log.warning("volatile moves: %s", e)
 
         # ---- outside-move follower: take the DMM touch when Polymarket/Kalshi moved and SIG has not (exploit 2.1)
-        if self.lag is not None and not killed:
+        if self.lag is not None and not killed and not strategy_paused(self, "lag"):
             try:
                 self.lag_cycle(positions, blocked)
             except Exception as e:
@@ -3761,8 +3919,10 @@ class Bot:
 
         # ---- zero-EV exits (directional / tilt) and free arb-set unwinds
         if not killed:
-            self.zero_ev_exits(positions, getattr(self.direction, "rows", []))
-            if self.arb.committed and time.time() - self.last_free_unwind > self.cfg.free_unwind_every_sec:
+            if not strategy_paused(self, "exit:zero_ev"):
+                self.zero_ev_exits(positions, getattr(self.direction, "rows", []))
+            if (self.arb.committed and time.time() - self.last_free_unwind > self.cfg.free_unwind_every_sec
+                    and not strategy_paused(self, "exit:unwinds")):
                 self.last_free_unwind = time.time()
                 held_books = {}
                 cf_races = cheapfav_races_of(self) | shock_races_of(self)   # a cheap-favourite or shock position next to
@@ -3825,6 +3985,10 @@ class Bot:
                     log.warning("MARKET WATCH: %d new exchange(s) %s, %d closed/voided %s", len(added), sorted(added)[:10], len(gone), sorted(gone)[:10])
                 self.universe = new_u
                 self.arb.u = self.mm.u = self.tilt.u = self.universe
+                if self.stops is not None:          # sets in a race the watch adds are valued at payout too; a race
+                    known = {tuple(r) for r in self.stops.races}   # that leaves the read keeps its payout value
+                    known |= {tuple(r.exchange_ids) for r in new_u.races.values() if len(r.exchange_ids) >= 2}
+                    self.stops.races = [list(r) for r in known]
                 if self.news is not None:
                     self.news.u = self.universe
                 self.last_universe_refresh = time.time()
