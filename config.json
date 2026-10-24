@@ -124,7 +124,7 @@
   "catchup_enabled": true,
   "catchup_notional": 300.0,
   "catchup_kill": -50.0,
-  "churn_enabled": true,
+  "churn_enabled": false,
   "churn_capital": 4000.0,
   "churn_cash_floor": 3000.0,
   "churn_kill": -200.0,

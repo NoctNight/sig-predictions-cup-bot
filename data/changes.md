@@ -376,3 +376,9 @@
   quotes at start-up, main-loop free unwinds read the latest positions under the lock (double-unwind fix found by the sim).
   Tests: tests/test_guards.py (churn:, books:, catchup history), sim scenario 'churn'; 19 scenarios 0 violations. Watch
   passed (Mac network dropped 00:18-00:21, recovered). 114 races have medians; gap movement 0.72x normal.
+- 01:00 (24 Oct) HIGH-FREQUENCY ARB SWITCHED OFF (churn_enabled=false, bot restarted, no code change). It had made 0 live
+  entries. The Fable test-environment check's adversarial runs found real stress-scenario failures: entries continued
+  after the volatility pause triggered (162; the pause is only refreshed every 15 min), cumulative buys far beyond the
+  pot and per-race caps in a blowout, and buy/unwind ping-pong with the recycler (27x in one race); the 24-h replay
+  fails with it on and passes with it off. To fix and re-test before any relaunch. NOTE: tests/test_guards.py still
+  expects churn_enabled=true in the live config; update that check with the fix.
