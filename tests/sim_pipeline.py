@@ -672,7 +672,7 @@ class Checker:
 
 
 # ======================================================================================== scenarios
-ARB_CODE_SCENARIOS = {"sweep6", "recycle", "recycle_tail", "recycle_race", "own_bid", "aon_reject", "recycle_oversize"}
+ARB_CODE_SCENARIOS = {"sweep6", "recycle", "recycle_tail", "recycle_race", "own_bid", "aon_reject", "recycle_oversize", "recycle_stale_fill"}
 ARB_CODE_CFG = {"arb.new_sets": True, "arb.recycle_enabled": True}
 
 
@@ -1307,6 +1307,35 @@ class RecycleTail(Recycle):
         sim.v.cash = 21000.0          # the rest of the capital is tied up elsewhere
 
 
+class RecycleStaleFill(RecycleTail):
+    name, cycles, seed = "recycle_stale_fill", 30, 25
+    doc = ("Fable review 3: as recycle_tail (300-set holdings), but right before the first recycle a taker hits our MM bid for "
+           "100 YES on one leg of every held set, after the positions snapshot the recycle is sized from: the unwind is "
+           "re-sized to the 200 sets held then, no leg crosses zero")
+
+    def bot_setup(self, sim):
+        super().bot_setup(sim)
+        arb = sim.bot.arb
+        real = arb.recycle
+        self.hit = 0
+
+        def wrapped(best, held_books, positions, cash, cycle_id=None, **kw):
+            if not self.hit:
+                self.hit = 1                      # lands between the snapshot and the unwind (the sim applies flow only between steps)
+                for r in self.held:
+                    sim.seed_holding(sim.legs(r)[0], "yes", 100, "mm")
+            return real(best, held_books, positions, cash, cycle_id, **kw)
+        arb.recycle = wrapped
+
+    def final_checks(self, sim):
+        unw = [c for c in sim.v.calls if c["kind"] == "multileg" and c["prefix"] == "unw" and c.get("ok")]
+        self.summary = {"hit": self.hit, "unwinds": len(unw), "first_qty": unw[0]["legs"][0]["quantity"] if unw else None}
+        if not self.hit:
+            sim.chk.violation("stale_fill_not_exercised", "no recycle was attempted")
+        if not unw:
+            sim.chk.violation("recycle_none", "no recycle unwind after the fill (the scenario must still recycle)")
+
+
 class RecycleRace(RecycleTail):
     name, cycles, seed = "recycle_race", 30, 24
     interleave = True
@@ -1612,7 +1641,7 @@ class Day(Scenario):
 
 
 SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
-             ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
+             ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
              Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
 
 

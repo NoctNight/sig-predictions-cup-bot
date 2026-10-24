@@ -351,10 +351,31 @@ class ArbEngine:
             return q, uq, deployed, gain
         return None
 
+    def held_sets(self, race: Race, positions: dict[str, float]) -> int:
+        """Sell-sets held: the common NO quantity on every leg (0 unless every leg is short)."""
+        qs = [positions.get(l.exchange_id, 0.0) for l in race.legs.values()]
+        return int(min(-q for q in qs)) if qs and all(q < 0 for q in qs) else 0
+
+    def resize_to_fresh(self, race: Race, books: dict, qty: int, refresh, min_qty: int):
+        """Right before an unwind is sent (caller holds the trade lock): re-read positions with refresh() and shrink qty to
+        the sets held now, re-quoting the walk. Returns (qty, unwind_quote) or None (read failed / too few sets / no depth).
+        Fable 24 Oct (reviews 2-3): an MM fill since the snapshot the unwind was sized from takes a leg through zero."""
+        fresh = refresh()
+        if fresh is None:
+            log.warning("unwind %s skipped: positions re-read failed", race.name)
+            return None
+        q = min(int(qty), self.held_sets(race, fresh))
+        if q < max(1, min_qty):
+            log.info("unwind %s skipped: %d sets held now (sized for %d)", race.name, q, qty)
+            return None
+        uq = self.unwind_quote(race, books, q)
+        return (q, uq) if uq else None
+
     def recycle(self, best_new: Optional[dict], held_books: dict[str, dict[str, dict]], positions: dict[str, float], cash: float,
-                cycle_id: Optional[int] = None) -> Optional[dict]:
+                cycle_id: Optional[int] = None, refresh=None) -> Optional[dict]:
         """If the arb budget is exhausted and `best_new` (race, kind, ret, cost, qty) beats a held set's remaining
-        return by recycle_min_gain, unwind that set (allOrNone, all legs) so the scanner can buy the new one."""
+        return by recycle_min_gain, unwind that set (allOrNone, all legs) so the scanner can buy the new one. refresh: see
+        resize_to_fresh (the unwind is re-sized to the positions read right before it is sent; nothing if the read fails)."""
         if not self.cfg.recycle_enabled or not best_new or best_new["ret"] < self.cfg.recycle_min_new_ret:
             return None
         if getattr(self.cfg, "new_sets", True) and self.budget_left(cash) >= best_new["cost"] * max(self.cfg.min_set_qty, 1):
@@ -403,6 +424,11 @@ class ArbEngine:
         if fit is None:
             return None
         q, uq, deployed, gain = fit
+        if refresh is not None:
+            rs = self.resize_to_fresh(race, held_books[rname], q, refresh, self.cfg.min_set_qty)
+            if rs is None:
+                return None
+            q, uq = rs
         legs = [{"exchangeId": e, "side": "yes", "action": "buy", "quantity": q, "price": lim, "tournamentId": self.api.tournament_id}
                 for e, lim in uq["limits"].items()]
         log.info("RECYCLE %s: unwind %d sets at proceeds %.4f/set (forgone ret %.2f%%) to fund %s %s at %.2f%% (gain %.2f%%)", rname, q,
@@ -425,14 +451,20 @@ class ArbEngine:
         return {"race": rname, "qty": q, "proceeds": uq["proceeds"], "fund": best_new}
 
     def unwind_set(self, rname: str, books: dict, qty: int, why: str = "offload", new_ret: Optional[float] = None,
-                   min_gain: float = 0.0, allow_protected: bool = False, min_qty: Optional[int] = None) -> Optional[dict]:
+                   min_gain: float = 0.0, allow_protected: bool = False, min_qty: Optional[int] = None,
+                   refresh=None) -> Optional[dict]:
         """Unwind `qty` held sets of `rname` now, all legs or none, at limits from walking the asks. With new_ret, only if
         the trade being funded beats the REAL exit cost (walked asks, not a snapshot estimate) by min_gain. A protected
-        race (high-frequency arb lots) is unwound only by that sleeve itself (allow_protected)."""
+        race (high-frequency arb lots) is unwound only by that sleeve itself (allow_protected). refresh: see resize_to_fresh."""
         if rname in self.protected() and not allow_protected:
             log.info("unwind %s (%s) skipped: high-frequency arb holds sets there", rname, why)
             return None
         race = self.u.races[rname]
+        if refresh is not None:
+            rs = self.resize_to_fresh(race, books, qty, refresh, self.cfg.min_set_qty if min_qty is None else min_qty)
+            if rs is None:
+                return None
+            qty = rs[0]
         uq = self.unwind_quote(race, books, qty)
         if not uq or qty < (self.cfg.min_set_qty if min_qty is None else min_qty) or qty <= 0:
             return None

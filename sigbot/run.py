@@ -349,7 +349,7 @@ class ArbScanner(threading.Thread):
         if not held_books:
             return
         with b.trade_lock:
-            rec = b.arb.recycle(dict(best, fresh_books=target), held_books, b.positions_snapshot, b.cash, None)
+            rec = b.arb.recycle(dict(best, fresh_books=target), held_books, b.positions_snapshot, b.cash, None, refresh=b.fresh_positions)
             if rec and not rec.get("dry"):
                 b.refresh_snapshot(b.unwind_deltas([rec]))
         if not rec:
@@ -1494,7 +1494,8 @@ class Bot:
                     q = int(min(u["qty"], math.ceil(opp["capital"] / max(u["proceeds"], 0.05))))
                     with self.trade_lock:
                         res = self.arb.unwind_set(rname, books, q, why=f"fund {opp['kind']} {opp.get('exchange_id')}",
-                                                  new_ret=opp["ret_net"], min_gain=self.cfg.arb.recycle_min_gain)
+                                                  new_ret=opp["ret_net"], min_gain=self.cfg.arb.recycle_min_gain,
+                                                  refresh=self.fresh_positions)
                         if res and not res.get("dry"):
                             self.refresh_snapshot(self.unwind_deltas([res]))
                     funded[okey] = time.time()
@@ -1721,7 +1722,7 @@ class Bot:
                     except ApiError as e:
                         log.warning("recycle book %s: %s", rname, e)
                 with self.trade_lock:
-                    rec = self.arb.recycle(best, held_books, self.positions_snapshot, self.cash, cycle_id)
+                    rec = self.arb.recycle(best, held_books, self.positions_snapshot, self.cash, cycle_id, refresh=self.fresh_positions)
                     if rec and not rec.get("dry"):
                         self.refresh_snapshot(self.unwind_deltas([rec]))
                 if rec and not rec.get("dry"):

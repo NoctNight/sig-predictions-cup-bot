@@ -46,7 +46,7 @@ def offload_bot(cash, tilt_free):
                               arb=Arb(), universe=types.SimpleNamespace(races=races), fresh_book=lambda ex, age=None: {"asks": []},
                               trade_lock=threading.Lock(), tilt=types.SimpleNamespace(unfunded=[1], free_last=tilt_free),
                               api=types.SimpleNamespace(account=lambda: {"balance": cash}), store=None, universe_races=races,
-                              refresh_snapshot=lambda deltas=None: None, unwind_deltas=lambda u: {})
+                              refresh_snapshot=lambda deltas=None: None, unwind_deltas=lambda u: {}, fresh_positions=lambda: {})
     return b, calls
 
 
@@ -865,6 +865,27 @@ except _ApiErr:
     _strict_raises = True
 check("positions: a failed read raises in strict mode (exits) and flags positions_ok; the lenient read still returns {}",
       _strict_raises and _pm.positions_ok is False and R.Bot.positions_map(_pm)[0] == {})
+
+
+# Fable review 3 (24 Oct): recycle and offload unwinds are re-sized to a positions read right before they are sent
+_e = _hengine()
+_r_stale = _e.recycle(dict(best), {"HELD": held_books}, _hpos, 1000.0)
+_e = _hengine()
+_r_fresh = _e.recycle(dict(best), {"HELD": held_books}, _hpos, 1000.0, refresh=lambda: {"h1": -5000.0, "h2": -34479.0})
+_e = _hengine()
+_r_fail = _e.recycle(dict(best), {"HELD": held_books}, _hpos, 1000.0, refresh=lambda: None)
+check("recycle: an MM fill since the snapshot (leg h1 down to 5,000 NO) shrinks the unwind to the sets held now; a failed re-read sends nothing",
+      _r_stale is not None and _r_stale["qty"] > 5000 and _r_fresh is not None and _r_fresh["qty"] <= 5000 and _r_fail is None,
+      f"stale {_r_stale and _r_stale['qty']} fresh {_r_fresh and _r_fresh['qty']} fail {_r_fail}")
+_b, _v, _ch = _hbot({"CB1": -1700.0, "CB2": -2000.0}, _legs("CB", 0.47, 0.48))
+_res = _b.arb.unwind_set("CB", _legs("CB", 0.47, 0.48), 2000, why="fund tilt", refresh=lambda: dict(_v.pos))
+check("offload unwind_set: re-sized to the 1,700 sets held now; no leg goes through zero",
+      _res is not None and _res["qty"] == 1700 and _sold(_v) == [1700] and _v.pos["CB1"] == 0.0 and _v.pos["CB2"] == -300.0, f"{_res} {_v.pos}")
+_b, _v, _ch = _hbot({"CB1": -2000.0, "CB2": -2000.0}, _legs("CB", 0.47, 0.48))
+check("offload unwind_set: a failed re-read sends nothing",
+      _b.arb.unwind_set("CB", _legs("CB", 0.47, 0.48), 2000, why="fund tilt", refresh=lambda: None) is None and _v.sent == [])
+check("recycle and offload call sites pass the re-read hook",
+      _rs6.count("refresh=b.fresh_positions") >= 2 and "cycle_id, refresh=self.fresh_positions)" in _rs6 and _rs6.count("refresh=self.fresh_positions") >= 3)
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)
