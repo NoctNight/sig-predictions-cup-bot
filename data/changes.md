@@ -401,3 +401,9 @@
   6 min: 22 fills, 6,188 shares, ~5.7k cost (RI Sen D, CO Sen D, MA Sen D, WY/WV/OK Sen R, TN Sen R via D NO, CT Gov D);
   cash 8.1k -> 2.4k. 10-min watch passed (settlement 103,847 -> 103,828, the spread paid). Rollback: cheapfav_enabled
   false + botctl deploy (positions are kept; its exits keep running only while enabled).
+
+- 2026-10-24 14:52 BST: Strategy monitor ON (52526c7): pauses a sleeve's new entries (MM resting quotes pulled) when it
+  is losing with statistical significance, until Sizhe reviews; exits, unwinds, sell-alls and the global kill switch are
+  untouched. First check: mm ok (n 190, +0.084 tick), recycle ok, catch-up / HF arb / cheapfav too few trades. Tests:
+  guards, test_strategy_monitor, precheck sim 28/28 with it on, two Opus reviews SAFE TO DEPLOY. 10-min watch passed.
+  Rollback: strategy_monitor_enabled false + botctl deploy.
