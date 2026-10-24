@@ -2996,5 +2996,19 @@ finally:
 check("merge (review M1): tier 2 skips a race the wind-down clipped < 30 min ago (RI Governor: A only) and sends no set at all in the window",
       "Rhode Island Governor" not in _r1 and _RA in _r1 and getattr(_v, "sent_ml", []) == [], f"{_r1} {getattr(_v, 'sent_ml', [])}")
 
+# 24 Oct (3f51a2b precheck): the wind_down sim jumps the clock by hours or days. The jump is modelled as a restart: the MM
+# waits for a fresh outside fair before quoting (mm_gate_ready's restart path), instead of quoting one cycle with a day-old
+# fair (stale fairs never gate, by design) and getting a fill on a side the fresh fair blocks (mm_filled_on_gated_side).
+_gb = types.SimpleNamespace(cfg=types.SimpleNamespace(mm=types.SimpleNamespace(xv_gate_ticks=3.0)), direction=types.SimpleNamespace(),
+                            mm=types.SimpleNamespace(xv_fair={"907": (0.13, 0.13, 0.13, 1000.0)}), mm_need_xv=True)
+_g1 = R.Bot.mm_gate_ready(_gb, False, now=1000.0 + 27 * 3600)            # a day-old fair, restart flag set: wait
+_gb.mm.xv_fair = {"907": (0.13, 0.13, 0.13, 1000.0 + 27 * 3600 - 30)}    # a fresh poll 30 s ago: quote
+_g2 = R.Bot.mm_gate_ready(_gb, False, now=1000.0 + 27 * 3600)
+_sp = open(os.path.join(ROOT, "tests", "sim_pipeline.py")).read()
+check("sim wind_down: a clock jump re-arms the MM's restart wait (no quote on a day-old outside fair); mm_gate_ready waits on a stale fair "
+      "while the flag is set and quotes once a fresh fair is in",
+      _g1 is False and _g2 is True and _gb.mm_need_xv is False
+      and "                self.preload(sim)\n" in _sp and "sim.bot.mm_need_xv = True" in _sp, f"{_g1} {_g2}")
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

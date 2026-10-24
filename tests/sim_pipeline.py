@@ -2154,6 +2154,12 @@ class WindDown(Scenario):
             if i == at:
                 CLOCK.t = max(CLOCK.t, WD.et_ts(*ymdhm))
                 self.preload(sim)
+                # a jump of hours or days skips every outside-fair poll in between: the bot's last fair is then a day old,
+                # which never happens while it runs (it polls every cycle), and the MM would quote one cycle with the xv
+                # gate open (stale fairs never gate, by design) on whichever markets it quotes. Model the jump like the
+                # restart it stands for: the MM waits for a fresh outside fair first (mm_gate_ready's restart path).
+                # (24 Oct: failed on 3f51a2b when the volume cache made the MM quote a market 11 ticks off its fair.)
+                sim.bot.mm_need_xv = True
 
     def after_cycle(self, sim, i):
         CLOCK.advance(180.0)
