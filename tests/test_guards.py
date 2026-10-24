@@ -1207,5 +1207,44 @@ finally:
 check("cheapfav bot: an entry whose response has no orderId blocks that leg for 1 h (its fill could not be attributed)",
       _n1 == 1 and len(_bad) == 1 and _b.cheapfav_skip.get("r1", 0) > 0, f"{_bad} {_b.cheapfav_skip}")
 
+# ---------------------------------------------------------------- 24 Oct: MM last look when the feed book is stale (sim 'day' cycle 1500)
+from sigbot.mm import MarketMaker as _MMk  # noqa: E402
+_Q = lambda ex, side, yp: types.SimpleNamespace(exchange_id=ex, side=side, yes_price=yp)
+_looks = []
+def _tf(ex):
+    _looks.append(ex)
+    return {"932": (0.75, 0.76), "940": None}.get(ex, (0.40, 0.45))
+_llst = {}
+_kept = _MMk.last_look([(_Q("932", "yes", 0.76), {}), (_Q("932", "yes", 0.755), {}), (_Q("932", "no", 0.75), {}), (_Q("932", "no", 0.765), {}),
+                        (_Q("940", "yes", 0.30), {}), (_Q("950", "yes", 0.41), {})], _tf, _llst)
+check("mm last look: a bid at the ask and an ask at the bid are dropped, passive quotes kept",
+      [(q.exchange_id, q.side, q.yes_price) for q, _ in _kept] == [("932", "yes", 0.755), ("932", "no", 0.765), ("950", "yes", 0.41)],
+      str([(q.exchange_id, q.side, q.yes_price) for q, _ in _kept]))
+check("mm last look: an unknown touch drops the quote instead of sending it unchecked", not any(q.exchange_id == "940" for q, _ in _kept))
+check("mm last look: one look per exchange per batch", sorted(_looks) == ["932", "940", "950"], str(_looks))
+check("mm last look: unknown-touch drops are counted apart from crossings", _llst == {"crossing": 2, "unknown": 1}, str(_llst))
+_now = time.time()
+def _mtb(feed=None, cache=None, cache_ts=None, snap=None, snap_ts=0.0):
+    return types.SimpleNamespace(fresh_book=lambda ex, age=None: feed, book_cache={"932": (cache, 0, 0, 0)} if cache else {},
+                                 book_ts={"932": cache_ts} if cache_ts is not None else {}, rest_snapshot=(snap or {}, snap_ts))
+_bk = lambda b, a: {"bids": [{"price": b, "quantity": 5}], "asks": [{"price": a, "quantity": 5}]}
+check("mm_touch: a fresh feed book is used as is", R.Bot.mm_touch(_mtb(feed=_bk(0.70, 0.72)), "932") == (0.70, 0.72))
+check("mm_touch: stale feed book -> this cycle's REST book (3 s old): touch 0.75/0.76, so the 0.76 bid is dropped",
+      R.Bot.mm_touch(_mtb(cache=_bk(0.75, 0.76), cache_ts=_now - 3), "932") == (0.75, 0.76))
+check("mm_touch: stale feed book -> the newer of the REST book and the price snapshot",
+      R.Bot.mm_touch(_mtb(cache=_bk(0.75, 0.765), cache_ts=_now - 10, snap={"932": {"bestBid": 0.755, "bestAsk": 0.76}}, snap_ts=_now - 2), "932")
+      == (0.755, 0.76))
+check("mm_touch: stale feed book and only touches older than 15 s -> None (the quote is dropped, never sent unchecked)",
+      R.Bot.mm_touch(_mtb(cache=_bk(0.75, 0.76), cache_ts=_now - 40, snap={"932": {"bestBid": 0.75, "bestAsk": 0.76}}, snap_ts=_now - 40), "932") is None
+      and R.Bot.mm_touch(_mtb(), "932") is None)
+check("mm_touch: a book_cache entry without a REST read time (a feed book) is never used as a fallback",
+      R.Bot.mm_touch(_mtb(cache=_bk(0.75, 0.76)), "932") is None)
+_mmsrc = open(os.path.join(ROOT, "sigbot", "mm.py")).read()
+check("mm: with no touch to check against, a market keeps its resting quotes (no cancel, not left dark)",
+      _mmsrc.find("if tf is not None and tf(ex) is None:") != -1 and _mmsrc.find("if tf is not None and tf(ex) is None:") < _mmsrc.find("self.api.cancel_all(exchange_id=ex)\n                        self.store.mark_orders"))
+_rs7 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("mm_touch: the snapshot fallback is the REST snapshot stamped at read time; feed books written to book_cache clear its REST stamp",
+      'getattr(self, "rest_snapshot", None)' in _rs7 and _rs7.count("book_ts.pop(ex, None)") >= 2)
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

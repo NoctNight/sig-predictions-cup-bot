@@ -366,6 +366,28 @@ class MarketMaker:
             return True
         return False
 
+    @staticmethod
+    def last_look(to_place: list, touch_fn, stats: Optional[dict] = None) -> list:
+        """Quotes (q, info) that do not cross the freshest touch. touch_fn(ex) -> (best bid, best ask) or None; one look
+        per exchange (it may cost a REST read while the feed is down); an unknown touch drops the quote instead of
+        sending it unchecked (sim 'day' 24 Oct: a bid went into the 0.76 ask during the feed outage)."""
+        kept, looked = [], {}
+        for q, info in to_place:
+            if q.exchange_id not in looked:
+                looked[q.exchange_id] = touch_fn(q.exchange_id)
+            t = looked[q.exchange_id]
+            st = stats if stats is not None else {}
+            if t is None:
+                st["unknown"] = st.get("unknown", 0) + 1
+                continue
+            bb, ba = t
+            if (q.side == "yes" and ba is not None and q.yes_price >= ba - 1e-9) or \
+               (q.side == "no" and bb is not None and q.yes_price <= bb + 1e-9):
+                st["crossing"] = st.get("crossing", 0) + 1
+                continue
+            kept.append((q, info))
+        return kept
+
     def quote_cycle(self, books: dict[str, dict], positions: dict[str, float], pressures: dict[str, float],
                     open_orders: dict[str, list], fills_count: dict[str, int], cash: float, cycle_id: int,
                     write_budget: int) -> dict:
@@ -424,6 +446,11 @@ class MarketMaker:
             if writes + 1 + math.ceil((len(to_place) + len(quotes)) / self.cfg.batch_size) > write_budget:
                 summary["skipped_budget"] += 1
                 continue
+            tf = getattr(self, "touch_fn", None)
+            if tf is not None and tf(ex) is None:
+                # no touch to check new quotes against: keep the resting ones rather than cancel and go dark (review 24 Oct)
+                summary["skipped_unknown"] = summary.get("skipped_unknown", 0) + 1
+                continue
             if oo or getattr(self, "force_cancel", False):
                 if self.dry_run:
                     log.info("[DRY] cancel-all exchange %s (%d orders)", ex, len(oo))
@@ -444,22 +471,20 @@ class MarketMaker:
         # last look before sending: the touch can move inside the cycle (another sleeve's taker order, a DMM requote),
         # and a resting bid at or above the current ask fills at once as a taker (sim 'day' 23 Oct: bid 0.76 into a
         # 0.75/0.76 book). Drop any quote that would cross the freshest book.
+        # One look per exchange (the touch_fn may cost a REST read when the feed is down). An unknown touch drops the
+        # quote rather than sending it unchecked (sim 'day' 24 Oct, feed outage).
         touch_fn = getattr(self, "touch_fn", None)
-        if touch_fn is not None and to_place:
-            kept = []
-            for q, info in to_place:
-                t = touch_fn(q.exchange_id)
-                if t is not None:
-                    bb, ba = t
-                    if q.side == "yes" and ba is not None and q.yes_price >= ba - 1e-9:
-                        continue
-                    if q.side == "no" and bb is not None and q.yes_price <= bb + 1e-9:
-                        continue
-                kept.append((q, info))
-            summary["dropped_crossing"] = len(to_place) - len(kept)
-            to_place = kept
+        summary["dropped_crossing"] = summary["dropped_unknown"] = 0
         for i in range(0, len(to_place), self.cfg.batch_size):
             chunk = to_place[i : i + self.cfg.batch_size]
+            if touch_fn is not None and chunk:
+                # looked right before each batch is sent, so a look is never several REST reads old (review 24 Oct)
+                st = {}
+                chunk = self.last_look(chunk, touch_fn, st)
+                summary["dropped_crossing"] += st.get("crossing", 0)
+                summary["dropped_unknown"] += st.get("unknown", 0)
+                if not chunk:
+                    continue
             orders = [dict(exchangeId=q.exchange_id, side=q.side, action="buy", quantity=q.qty, price=q.price, expirationDate=ttl,
                            tournamentId=self.api.tournament_id) for q, _ in chunk]
             if self.dry_run:

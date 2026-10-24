@@ -1552,6 +1552,53 @@ class FeedSilent(Scenario):
                 v.shift(ex, -3)
 
 
+class MMOutageLastLook(Scenario):
+    name, cycles, seed = "mm_outage_lastlook", 90, 32
+    doc = "MM last look through a 10-min feed outage (sim 'day' 24 Oct): the feed goes silent while quoted touches keep moving; " \
+          "no MM quote may be sent for a market whose last look found no touch (it used to be sent unchecked)"
+
+    def bot_setup(self, sim):
+        b = sim.bot
+        self.last = {}
+        self.unchecked = []
+        orig = b.mm.touch_fn
+
+        def look(ex):
+            r = orig(ex)
+            self.last[str(ex)] = r
+            return r
+        b.mm.touch_fn = look
+        api = b.mm.api
+        orig_pb = api.place_batch
+
+        self.sent_in_outage = 0
+
+        def pb(orders, *a, **k):
+            for o in orders:
+                ex = str(o["exchangeId"])
+                if ex in self.last and self.last[ex] is None:
+                    self.unchecked.append((sim.v.now, ex, o["side"], o["price"]))
+            if sim.v.silent():
+                self.sent_in_outage += len(orders)
+            return orig_pb(orders, *a, **k)
+        api.place_batch = pb
+
+    def before_cycle(self, sim, i):
+        v = sim.v
+        if i == 20:
+            v.begin_silence(600)
+        if i in (22, 30, 38):
+            for ex in [ex for ex in sim.bot.mm.quoted if 0.2 <= v.mid(ex) <= 0.8][:4]:
+                v.shift(ex, -1 if i != 30 else 1)
+
+    def final_checks(self, sim):
+        for t, ex, side, px in self.unchecked:
+            sim.chk.violation("mm_quote_unchecked", f"{ex} {side} @{px} sent with no known touch (feed outage, t+{(t - T0) / 60:.1f} min)")
+        if self.sent_in_outage == 0:
+            sim.chk.violation("mm_dark_in_outage", "the MM sent no quote at all during the 10-min feed outage (checked quotes are expected)")
+        self.summary = {"unchecked": len(self.unchecked), "sent_in_outage": self.sent_in_outage}
+
+
 class AonReject(Scenario):
     name, cycles, seed = "aon_reject", 60, 19
     doc = "standing 4% sell-sets in four races; baskets on two of them are always rejected (someone else takes the size first)"
@@ -1722,7 +1769,7 @@ class Day(Scenario):
 
 SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
              ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
-             Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
+             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, Day]
 
 
 # ======================================================================================== main

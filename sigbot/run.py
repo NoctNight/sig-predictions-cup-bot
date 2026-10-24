@@ -62,6 +62,9 @@ def cheapfav_races_of(bot) -> set:
     return f() if callable(f) else set()
 
 
+LASTLOOK_MAX_AGE = 15.0     # seconds: the oldest REST touch the MM's last look accepts when the feed book is stale
+
+
 class ExplainedDirection(DirectionTrader):
     """Directional sleeve restricted to legs whose gap versus outside markets has been explained and marked tradable
     (params/fair_explained.json verdict trade_yes / trade_no), value signals only, one leg per race (both legs of a
@@ -333,6 +336,7 @@ class ArbScanner(threading.Thread):
                 finally:
                     b.mm.force_cancel = False
             b.book_cache[ex] = (fb, bb, ba, fb.get("latestPrice"))
+            b.book_ts.pop(ex, None)                  # a feed book: never a last-look fallback under an older REST stamp
             if summ.get("requoted"):
                 self.fast_log.append(time.time())
                 self.stats["fast_requotes"] = self.stats.get("fast_requotes", 0) + 1
@@ -608,6 +612,7 @@ class Bot:
         except Exception:
             self.offload_live = False
         self.latest_prices: tuple = ({}, 0.0)
+        self.book_ts: dict = {}                  # ex -> when book_cache[ex] was read from REST (MM last look)
         self.rest_snapshot: tuple = ({}, 0.0)    # last REST bulk price snapshot (feed quotes are overlaid on it)
         self.trade_lock = threading.Lock()
         self.scanner = None
@@ -1346,12 +1351,27 @@ class Bot:
         return {ex: q - cu.get(ex, 0.0) for ex, q in positions.items()}
 
     def mm_touch(self, ex: str):
-        """Freshest (best bid, best ask) for the MM's last look before it sends quotes; None when no fresh book."""
-        bk = self.fresh_book(ex, 10.0)
-        if not bk:
-            return None
-        return ((bk.get("bids") or [{}])[0].get("price") if bk.get("bids") else None,
-                (bk.get("asks") or [{}])[0].get("price") if bk.get("asks") else None)
+        """Freshest (best bid, best ask) for the MM's last look before it sends quotes, with no new read: the feed book when
+        the feed counts it fresh, else the newest of this cycle's REST order book for `ex` and the REST price snapshot
+        (rest_snapshot), if it is at most LASTLOOK_MAX_AGE old. None otherwise, and the MM then drops the quote. Before,
+        a stale feed book returned None and the quote went out unchecked (sim 'day' 24 Oct: during the feed outage an
+        MM bid went into the 0.76 ask on 932)."""
+        def touch(bk):
+            return ((bk.get("bids") or [{}])[0].get("price") if bk.get("bids") else None,
+                    (bk.get("asks") or [{}])[0].get("price") if bk.get("asks") else None)
+        bk = self.fresh_book(ex)
+        if bk:
+            return touch(bk)
+        now, best = time.time(), None
+        c, t = (self.book_cache.get(ex) or (None,))[0], (getattr(self, "book_ts", None) or {}).get(ex)
+        if c and t is not None and now - t <= LASTLOOK_MAX_AGE:
+            best = (t, touch(c))
+        snap, snap_ts = getattr(self, "rest_snapshot", None) or ({}, 0.0)   # stamped when REST was read (not when overlaid)
+        p = (snap or {}).get(ex) or {}
+        if (p.get("bestBid") is not None or p.get("bestAsk") is not None) and now - snap_ts <= LASTLOOK_MAX_AGE \
+                and (best is None or snap_ts > best[0]):
+            best = (snap_ts, (p.get("bestBid"), p.get("bestAsk")))
+        return best[1] if best else None
 
     def catchup_cycle(self, dir_summary: dict, positions: dict, prices: dict, killed: bool):
         """Catch-up sweep trial (proposals/outside_sweep.py): exits first (convergence, 12 h stop, outside disagreement or
@@ -2089,6 +2109,7 @@ class Bot:
                 if fb is not None:
                     books[ex] = fb
                     self.book_cache[ex] = (fb, fb.get("bestBid"), fb.get("bestAsk"), p.get("latestPrice"))
+                    self.book_ts.pop(ex, None)
                     continue
                 cached = self.book_cache.get(ex)
                 st = self.mm.state.get(ex)
@@ -2101,6 +2122,7 @@ class Bot:
                     b = self.api.orderbook(ex, 10)
                     books[ex] = b
                     self.book_cache[ex] = (b,) + key
+                    self.book_ts[ex] = time.time()               # the MM's last look may use it while it is fresh
                 except ApiError as e:
                     log.warning("book %s: %s", ex, e)
             write_budget = max(4, self.cfg.mm_write_budget - 4)   # leave room for the tilt sleeve
