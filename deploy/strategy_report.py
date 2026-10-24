@@ -122,12 +122,16 @@ def purpose_section(db, purposes, quotes, since):
     pos, cash, last = {}, 0.0, {}
     for ex, q, p, _ in fills:
         pos[ex] = pos.get(ex, 0.0) + q; cash -= q * p; last[ex] = p
+    # fills are in YES terms (q signed, p the YES price), so value in YES terms too: a long closes at the bid (+q*bid),
+    # a short (a NO holding) closes by paying the ask (q*ask, negative). Mixing NO-terms values with YES-terms cash
+    # overstated NO holdings by 1 per share (24 Oct: cheap favourites showed +517 instead of about -50).
     value = 0.0
     for ex, q in pos.items():
         if abs(q) < 1:
             continue
-        v = close_value(q, quotes.get(str(ex)))
-        value += v if v is not None else (q * last[ex] if q > 0 else -q * (1 - last[ex]))
+        b = quotes.get(str(ex))
+        px = (b[0] if q > 0 else b[1]) if b and None not in b else last[ex]
+        value += q * px
     opens = sum(1 for q in pos.values() if abs(q) >= 1)
     return {"fills": len(fills), "open_positions": opens, "pnl": cash + value}
 
