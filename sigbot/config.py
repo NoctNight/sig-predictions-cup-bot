@@ -211,6 +211,28 @@ class BotConfig:
     cheapfav_headroom: float = 1000.0    # an add that widens the book's |net D| keeps it this far under the partisan cap
     strategy_monitor_enabled: bool = False   # strategy_monitor.py: test each sleeve on its own results every strategy_monitor_sec
     strategy_monitor_sec: float = 900.0      # and pause a losing one's new entries (params/strategy_kill.json; a human re-enables)
+    raise_enabled: bool = False          # cash raise (proposals/cash_raise): sell holdings beyond the arb sets that cost
+    raise_max_cost: float = 0.01         # < this vs mid to exit, only while a higher-edge sleeve posted a cash need this cycle;
+    raise_buffer: float = 200.0          # raise the shortfall plus this,
+    raise_max_total: float = 32000.0     # at most this in any 24 h,
+    raise_max_clips: int = 4             # at most this many clips (one per leg) a cycle,
+    raise_min_clip: float = 50.0         # each able to fetch at least this (no crumbs: a clip pauses the MM on its leg);
+    raise_pause_sec: float = 900.0       # the MM does not quote a leg for this long after a raise clip on it
+    raise_hold_limit: float = 4000.0     # never a leg holding more than this many shares
+    raise_cap_margin: float = 1000.0     # within this of the partisan cap, clips that pull net D toward zero go first
+    raise_exclude_races: list = field(default_factory=lambda: ["Rhode Island Governor"])
+    raise_sets_enabled: bool = False     # tier 2: whole sets / buy-sets, all-or-none, when tier 1 cannot cover the need and
+    raise_set_max_cost: float = 0.045    # high-frequency arb skipped >= raise_set_min_skips entries for cash in 6 h; exit
+    raise_set_min_skips: int = 3         # half-hours (of the last 6 h) with a skip; cost now <= raise_set_max_cost (the
+    raise_set_skip_window: float = 1800.0   # 31 Oct-3 Nov wind-down costs ~3.75-4.75% anyway),
+    raise_set_max_pieces: int = 2        # at most this many set pieces a cycle,
+    raise_set_hold_races: list = field(default_factory=list)   # never races we hold through an early call
+    raise_sets_races: list = field(default_factory=list)   # the RI trim (Sizhe 24 Oct): whole-set clips in these races only
+    raise_ri_trim_sets: float = 4500.0   # total sets the trim may unwind (counted from its own orders: survives a restart)
+    raise_ri_trim_clip: int = 1000       # sets per clip, at most one clip per raise_ri_trim_gap_sec, only at or under the race's
+    raise_ri_trim_gap_sec: float = 1800.0   # trailing 24-h median exit cost ("level 0") and at no realised loss
+    shock_reserve: float = 15000.0       # with shock_enabled: free cash kept for shock mode only (every other sleeve's floor sits
+                                         # on top of it); the cash raise refills it with tier 1 (Sizhe 24 Oct)
     election_per_race_cap: float = 5000.0
     election_total_cap: float = 90000.0
     election_poll_sec: float = 4.0

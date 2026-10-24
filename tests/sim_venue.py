@@ -457,7 +457,8 @@ class Venue:
             results.append({"index": i, "data": {"orderId": o.id, "exchangeId": ex, "open": False, "remainingQuantity": 0, "action": "buy",
                                                  "side": side, "price": round(price, 3), "quantity": q, "quantityTraded": q,
                                                  "totalCost": round(tot, 4), "terminalReasonCode": None}})
-        rec.update(ok=True, cash_after=self.cash, traded=[r["data"]["quantityTraded"] for r in results])
+        rec.update(ok=True, cash_after=self.cash, traded=[r["data"]["quantityTraded"] for r in results],
+                   order_ids=[r["data"]["orderId"] for r in results])
         return {"results": results}
 
     def cancel_all(self, exchange_id=None, market_id=None) -> dict:

@@ -137,5 +137,14 @@
   "cheapfav_cash_floor": 1000.0,
   "cheapfav_net_max": 2000.0,
   "cheapfav_headroom": 1000.0,
-  "strategy_monitor_enabled": true
+  "strategy_monitor_enabled": true,
+  "raise_enabled": true,
+  "raise_max_cost": 0.01,
+  "raise_buffer": 200.0,
+  "raise_max_total": 32000.0,
+  "raise_sets_enabled": false,
+  "raise_sets_races": [
+    "Rhode Island Governor"
+  ],
+  "raise_ri_trim_sets": 4500.0
 }

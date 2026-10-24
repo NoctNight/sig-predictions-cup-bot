@@ -135,9 +135,9 @@ class Store:
     def rows(self, q, a=()):
         if "purpose IN ('direction','tilt')" in q:
             return [{"exchange_id": "1068", "side": "yes", "q": 1203.0}]
-        if "purpose IN ('mm','inside')" in q or "purpose='exit' GROUP BY" in q:
+        if "purpose IN ('mm','inside')" in q or "purpose IN ('exit', 'raise') GROUP BY" in q:
             return []
-        if "FROM orders WHERE purpose='exit'" in q:
+        if "FROM orders WHERE purpose IN ('exit', 'raise')" in q:
             return [{"order_id": 9001}]
         return []
     def record_order(self, *a, **k):
@@ -901,6 +901,480 @@ check("offload unwind_set: a failed re-read sends nothing",
 check("recycle and offload call sites pass the re-read hook",
       _rs6.count("refresh=b.fresh_positions") >= 2 and "cycle_id, refresh=self.fresh_positions)" in _rs6 and _rs6.count("refresh=self.fresh_positions") >= 3)
 
+
+# ---------------------------------------------------------------- 24 Oct: cash raise (proposals/cash_raise.py)
+from sigbot.proposals import cash_raise as CRm  # noqa: E402
+from sigbot.universe import Universe as _Univ  # noqa: E402
+from sigbot.mm import MarketMaker as _MM  # noqa: E402
+import json as _jr  # noqa: E402
+_U = _Univ.from_markets(_jr.load(open(os.path.join(ROOT, "data", "markets.json"))))
+_two = [r for r in sorted(_U.races) if len(_U.races[r].legs) == 2 and set(_U.races[r].legs) == {"D", "R"}]
+_RA, _RB, _RC, _RD, _RE, _RF = _two[:6]
+_L = lambda r, p: _U.races[r].legs[p].exchange_id
+_RI = {p: l.exchange_id for p, l in _U.races["Rhode Island Governor"].legs.items()}
+
+
+class _RVenue:
+    def __init__(self, pos):
+        self.pos, self.orders, self.cancels, self.n, self.tournament_id = dict(pos), [], [], 0, "t"
+
+    def new_key(self, p):
+        self.n += 1
+        return f"{p}-{self.n}"
+
+    def place_order(self, ex, side, action, qty, price, expiration=None, key=None):
+        self.orders.append((ex, side, qty, price, key))
+        self.pos[ex] = self.pos.get(ex, 0.0) + (qty if side == "yes" else -qty)
+        return {"orderId": 1000 + self.n, "quantityTraded": qty}
+
+    def cancel_all(self, exchange_id=None, **k):
+        self.cancels.append(exchange_id)
+        return {}
+
+    def cancel_order(self, order_id):
+        self.cancelled = getattr(self, "cancelled", []) + [order_id]
+        return {}
+
+
+def _rbk(bid, ask, qty=5000):
+    return {"bids": [{"price": bid, "quantity": qty}], "asks": [{"price": ask, "quantity": qty}]}
+
+
+def _rbot(pos, books, needs=None, **cfgkw):
+    tmp = tempfile.mkdtemp()
+    st = _Store(os.path.join(tmp, "r.sqlite"))
+    v = _RVenue(pos)
+    cfg = types.SimpleNamespace(raise_enabled=True, raise_max_cost=0.01, raise_buffer=200.0, raise_max_total=32000.0, raise_max_clips=4, raise_min_clip=0.0,
+                                raise_pause_sec=900.0, raise_hold_limit=4000.0, raise_cap_margin=1000.0, raise_exclude_races=["Rhode Island Governor"],
+                                mm=types.SimpleNamespace(portfolio_max_partisan_notional=5000.0))
+    for k, x in cfgkw.items():
+        setattr(cfg.mm if k == "cap" else cfg, "portfolio_max_partisan_notional" if k == "cap" else k, x)
+    b = types.SimpleNamespace(cfg=cfg, cash_needs=dict(needs or {}), dry_run=False, store=st, universe=_U, cash=1000.0,
+                              arb=types.SimpleNamespace(protected=lambda: set()), catchup_open={}, cheapfav_open={}, trade_lock=threading.Lock(),
+                              fresh_book=lambda ex, age=None: books.get(ex), open_orders_cache={}, open_orders_ts=0.0,
+                              mm=types.SimpleNamespace(raise_pause={}), api=v, positions_snapshot=dict(pos))
+    b.fresh_positions = lambda: dict(v.pos)
+    b.refresh_snapshot = lambda deltas=None: True
+    return b, v
+
+
+_rprices = lambda books: {ex: {"bestBid": bk["bids"][0]["price"], "bestAsk": bk["asks"][0]["price"]} for ex, bk in books.items()}
+# holdings: A D YES 1000 (cost 0.5%), B R NO 800 (cost 0.4%), C D YES 500 with a wide spread (cost 4%)
+_rpos = {_L(_RA, "D"): 1000.0, _L(_RB, "R"): -800.0, _L(_RC, "D"): 500.0}
+_rbooks = {_L(_RA, "D"): _rbk(0.495, 0.50), _L(_RB, "R"): _rbk(0.39, 0.395), _L(_RC, "D"): _rbk(0.48, 0.52),
+           _L(_RA, "R"): _rbk(0.50, 0.505), _L(_RB, "D"): _rbk(0.605, 0.61)}   # A 0.5%, B 0.41%, C 4% (a 1-tick book at 0.5 is 1%: excluded)
+_b, _v = _rbot(_rpos, _rbooks)
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+check("raise: nothing is sold without a sleeve waiting for the cash", _v.orders == [] and _b.store.get_param("raise_log", []) == [])
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (300.0, "floor")})
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+_got = sum(q * (1 - px) for ex, side, q, px, k in _v.orders)
+check("raise: a 300 need raises the shortfall plus the 200 buffer (cheapest first: B's NO at 0.4%), not more",
+      _v.orders and _v.orders[0][0] == _L(_RB, "R") and _v.orders[0][1] == "yes" and 500 - 1 <= _got <= 500 + 0.61 and all(k.startswith("raise") for *_, k in _v.orders),
+      f"{_v.orders} {_got}")
+_rec = _b.store.rows("SELECT purpose, exchange_id FROM orders")
+check("raise: clips are recorded with purpose 'raise' and the MM is paused on the leg before the clip",
+      {r["purpose"] for r in _rec} == {"raise"} and _L(_RB, "R") in _b.mm.raise_pause and _L(_RB, "R") in (_b.store.get_param("raise_pause") or {}))
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (50000.0, "floor")})
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+_sold = {ex for ex, *_ in _v.orders}
+_lim_ok = all((px <= 0.505 + 1e-9 if side == "no" else px <= 0.395 + 1e-9) for ex, side, q, px, k in _v.orders)   # NO at 1 - bid, YES at the ask
+check("raise: only clips costing < 1% of mid, at the touch (C's 4% spread untouched), each clip <= 80% of the touch and the holding",
+      _L(_RC, "D") not in _sold and _sold == {_L(_RA, "D"), _L(_RB, "R")} and _lim_ok
+      and all(q <= min(0.8 * 5000, abs(_rpos[ex])) for ex, side, q, px, k in _v.orders) and _v.pos[_L(_RA, "D")] >= 0 and _v.pos[_L(_RB, "R")] <= 0,
+      f"{_v.orders}")
+# exclusions: a sell-set (common NO), a buy-set (common YES), RI Governor, a churn race, catch-up / cheap-favourite legs, > 4,000 shares
+_xpos = {_L(_RA, "D"): -1000.0, _L(_RA, "R"): -1300.0,       # sell-set 1,000 + 300 NO beyond it on R
+         _L(_RB, "D"): 600.0, _L(_RB, "R"): 600.0,             # buy-set only: nothing beyond it
+         _RI["D"]: 500.0, _L(_RC, "D"): 700.0, _L(_RD, "D"): 400.0, _L(_RE, "D"): 300.0, _L(_RF, "D"): 4500.0}
+_xbooks = {ex: _rbk(0.495, 0.50) for ex in _xpos}
+_b, _v = _rbot(_xpos, _xbooks, {"hf_arb": (50000.0, "floor")}, raise_max_clips=20)
+_b.arb.protected = lambda: {_RC}
+_b.catchup_open = {_L(_RD, "D"): 400.0}
+_b.store.record_order(77, _L(_RE, "D"), None, "yes", "buy", 0.5, 10, "cheapfav")
+R.Bot.raise_cycle(_b, _rprices(_xbooks), False)
+_sold = {ex: q for ex, side, q, px, k in _v.orders}
+check("raise: arb sets, buy-sets, RI Governor, high-frequency arb races, catch-up / cheap-favourite legs and > 4,000-share legs are untouched",
+      _sold == {_L(_RA, "R"): 300} and _v.pos[_L(_RA, "D")] == -1000.0 and _v.pos[_L(_RA, "R")] == -1000.0, f"{_sold}")
+# partisan cap: near the cap the pro-D clip goes first; a clip that would push |net D| past the cap is skipped
+_cpos = {_L(_RA, "D"): 1800.0, _L(_RB, "R"): 300.0}
+_cbooks = {_L(_RA, "D"): _rbk(0.495, 0.50), _L(_RB, "R"): _rbk(0.4975, 0.5025)}
+_nd = lambda p: _risk.exposure(_U, p, _rprices(_cbooks)).net_d_notional
+_c1 = CRm.plan(CRm.eligible({_RA: [_L(_RA, "D"), _L(_RA, "R")], _RB: [_L(_RB, "D"), _L(_RB, "R")]}, _cpos), _cbooks, 50.0, 0.01, _nd, 1000.0, _cpos, 300.0, 1)
+_c2 = CRm.plan(CRm.eligible({_RA: [_L(_RA, "D"), _L(_RA, "R")], _RB: [_L(_RB, "D"), _L(_RB, "R")]}, _cpos), _cbooks, 50.0, 0.01, _nd, 1000.0, _cpos, 50.0, 1)
+_hpos = {_L(_RA, "D"): 1990.0, _L(_RB, "R"): 300.0}           # net D ~ +845: selling B's R YES (cheapest) lifts it past a 900 cap
+_c3 = CRm.plan(CRm.eligible({_RA: [_L(_RA, "D"), _L(_RA, "R")], _RB: [_L(_RB, "D"), _L(_RB, "R")]}, _hpos), _cbooks, 5000.0, 0.01,
+               _nd, 900.0, _hpos, 300.0, 4)
+check("raise: near the partisan cap the pro-D leg is sold first (cheapest first otherwise); no clip takes |net D| past the cap",
+      _c1 and _c1[0]["exchange_id"] == _L(_RA, "D") and _c2 and _c2[0]["exchange_id"] == _L(_RB, "R")
+      and all(abs(c["net_d_after"]) <= 900.0 + 1e-6 for c in _c3) and _nd(_hpos) > 800,
+      f"{[c['exchange_id'] for c in _c1]} {[c['exchange_id'] for c in _c2]} {[(c['exchange_id'], c['qty'], round(c['net_d_after'])) for c in _c3]} nd {_nd(_hpos)}")
+# the MM stays off a leg being sold: resting quotes pulled, none placed
+_mm = _MM.__new__(_MM)
+_mm.load_overrides = lambda: None
+_mm.hours_to_end = lambda: 100.0
+_mm.news_paused = lambda: {}
+_mm.cfg = types.SimpleNamespace(capital_frac=0.5, wave_hot_frac=0.5, order_ttl_sec=60, batch_size=10)
+_mm.starting_cash, _mm.quoted, _mm.hot_until, _mm.wave, _mm.state, _mm.dry_run = 100000.0, ["e1"], {}, False, {}, False
+_mm.raise_pause = {"e1": time.time() + 600}
+_mmapi = _RVenue({})
+_mm.api, _mm.store = _mmapi, types.SimpleNamespace(mark_orders=lambda ids, st: None)
+_mm.build_quotes = lambda *a, **k: (_ for _ in ()).throw(AssertionError("quoted a raise leg"))
+_ms = _MM.quote_cycle(_mm, {"e1": _rbk(0.5, 0.505)}, {}, {}, {"e1": [{"id": 5}]}, {}, 50000.0, 1, 10)
+check("raise: the MM does not quote a leg the cash raise is selling and pulls its resting orders there",
+      _ms.get("raise_paused") == ["e1"] and _mmapi.cancels == ["e1"])
+# restart mid-raise: the pause and the 24-h total come back from the store, and the next clip is sized from positions then
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (300.0, "floor")}, raise_max_total=600.0)
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+_n1 = len(_v.orders)
+_b2 = types.SimpleNamespace(**vars(_b))
+_b2.mm = types.SimpleNamespace(raise_pause={})
+R.Bot.load_raise_pause(_b2)
+_b2.cash_needs = {"hf_arb": (5000.0, "floor")}
+R.Bot.raise_cycle(_b2, _rprices(_rbooks), False)
+_tot = sum(q * (1 - px) for ex, side, q, px, k in _v.orders)
+check("raise: after a restart the MM pause is reloaded and the 24-h cap still counts the earlier clips (600 cap: ~600 raised in all)",
+      _L(_RB, "R") in _b2.mm.raise_pause and len(_v.orders) > _n1 and _tot <= 600 + 1.0, f"{_v.orders} {_tot}")
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (5000.0, "floor")})
+_v.pos[_L(_RB, "R")] = -100.0                                   # a fill since the snapshot: 100 NO left, not 800
+_b.positions_snapshot = dict(_rpos)
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+check("raise: clips are sized from a positions read under the lock, never through zero",
+      all(q <= 100 for ex, side, q, px, k in _v.orders if ex == _L(_RB, "R")) and _v.pos[_L(_RB, "R")] <= 0, f"{_v.orders} {_v.pos}")
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (5000.0, "floor")})
+_b.fresh_positions = lambda: None
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+_b3, _v3 = _rbot(_rpos, _rbooks, {"hf_arb": (5000.0, "floor")}, raise_enabled=False)
+R.Bot.raise_cycle(_b3, _rprices(_rbooks), False)
+check("raise: a failed positions read sends nothing; raise_enabled false sends nothing; it is off by default in code",
+      _v.orders == [] and _v3.orders == [] and BotConfig().raise_enabled is False and BotConfig().raise_max_cost == 0.01)
+# the needs: high-frequency arb blocked by its cash floor, cheap favourites short of cash
+_b, _v, _ch = _hbot({}, _legs("CA", 0.52, 0.525, 2000))
+_b.churn_med = {"CA": -0.01}
+_b.cash, _b.cash_needs = 3500.0, {}
+_b.post_cash_need = lambda s, a, w="": R.Bot.post_cash_need(_b, s, a, w)
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("raise: high-frequency arb posts the shortfall its 3,000 cash floor blocked (it buys 520 with the 500 free; 2,000 x 0.96 - 500 short)",
+      abs(_b.cash_needs.get("hf_arb", (0,))[0] - (2000 * 0.96 - 500.0)) < 1e-6 and _ch.held("CA") == 520, f"{_b.cash_needs} {_ch.held('CA')}")
+
+
+# 24 Oct, tier 2 of the cash raise: whole sets, all-or-none, only when tier 1 cannot cover it and high-frequency arb kept
+# skipping entries for cash, at <= 4.5% exit cost, never a race held through an early call
+def _mlv(self, legs, all_or_none=True, key=None):
+    self.sent_ml = getattr(self, "sent_ml", []) + [(key, [dict(l) for l in legs])]
+    out = []
+    for l in legs:
+        self.pos[l["exchangeId"]] = self.pos.get(l["exchangeId"], 0.0) + (l["quantity"] if l["side"] == "yes" else -l["quantity"])
+        out.append({"data": {"exchangeId": l["exchangeId"], "quantityTraded": l["quantity"], "price": l["price"], "open": False, "orderId": 5000 + len(out)}})
+    return {"results": out}
+
+
+_RVenue.place_multi_leg = _mlv
+
+
+def _sbot(pos, books, needs, skips=3, **cfgkw):
+    b, v = _rbot(pos, books, needs, **cfgkw)
+    for k, x in dict(raise_sets_enabled=True, raise_set_max_cost=0.045, raise_set_min_skips=3, raise_set_max_pieces=2,
+                     raise_set_hold_races=[]).items():
+        if not hasattr(b.cfg, k) or k not in cfgkw:
+            setattr(b.cfg, k, cfgkw.get(k, x))
+    e = ArbEngine.__new__(ArbEngine)
+    e.cfg = ArbConfig(min_set_qty=20)
+    e.u, e.api, e.store, e.dry_run, e.committed, e.cooldown, e.hostile = _U, v, b.store, False, {}, {}, set()
+    b.arb = e
+    now = time.time()
+    b.store.set_param("churn_cash_skips", [[now - 1860 * i, "X%d" % i, 2000, 0, 0.98] for i in range(skips)])   # one per half-hour
+    b.churn_skips_6h = lambda: R.Bot.churn_skips_6h(b)
+    b.churn_skip_windows_6h = lambda w=1800.0: R.Bot.churn_skip_windows_6h(b, w)
+    return b, v
+
+
+_sA = [_L(_RA, "D"), _L(_RA, "R")]
+_sB = [_L(_RB, "D"), _L(_RB, "R")]
+_sC = [_L(_RC, "D"), _L(_RC, "R")]
+_spos = {_sA[0]: -3000.0, _sA[1]: -3000.0,            # sell-set A: asks 0.51 + 0.50 -> 0.99/set, 1.0% to exit
+         _sB[0]: -3000.0, _sB[1]: -3000.0,            # sell-set B: asks 0.53 + 0.53 -> 0.94/set, 6.4%: never
+         _sC[0]: 2000.0, _sC[1]: 2000.0,              # buy-set C: bids 0.49 + 0.49 -> 0.98/set, 2.0%
+         _RI["D"]: -1000.0, _RI["R"]: -1000.0, _RI["I"]: -1000.0}   # RI Governor set: asks 0.30+0.40+0.31 -> 1.99 of 2, 0.5%
+_sbooks = {_sA[0]: _rbk(0.505, 0.51, 1000), _sA[1]: _rbk(0.495, 0.50, 1000), _sB[0]: _rbk(0.525, 0.53), _sB[1]: _rbk(0.525, 0.53),
+           _sC[0]: _rbk(0.49, 0.495, 1000), _sC[1]: _rbk(0.49, 0.495, 1000),
+           _RI["D"]: _rbk(0.295, 0.30, 400), _RI["R"]: _rbk(0.395, 0.40, 400), _RI["I"]: _rbk(0.305, 0.31, 400)}
+_b, _v = _sbot(_spos, _sbooks, {"hf_arb": (2000.0, "floor")})
+R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
+_ml = [(k, {l["exchangeId"]: (l["side"], l["quantity"]) for l in legs}) for k, legs in getattr(_v, "sent_ml", [])]
+_races = [_U.race_of(next(iter(m))).name for k, m in _ml]
+check("raise tier 2: no tier-1 holdings, cash skips in 3 half-hours of the last 6 h: the cheapest sets go first (RI Governor 0.5%, then A 1.0%), each piece "
+      "all legs at once, <= 80% of the thinnest touch (320 / 800 sets), never more than the 2,200 needed; B (6.4%) untouched",
+      _races == ["Rhode Island Governor", _RA] and all(len(set(q for s_, q in m.values())) == 1 for k, m in _ml)
+      and [max(q for s_, q in m.values()) for k, m in _ml] == [320, 800] and _v.pos[_sB[0]] == -3000.0 and _v.pos[_sB[1]] == -3000.0
+      and sum(x for t, x in _b.store.get_param("raise_log")) <= 2200.0 + 1.0, f"{_ml} {_races} {_b.store.get_param('raise_log')}")
+_rr = _b.store.rows("SELECT DISTINCT purpose FROM orders")
+_bs, _vs = _sbot(_spos, _sbooks, {"hf_arb": (100.0, "floor")})
+R.Bot.raise_cycle(_bs, _rprices(_sbooks), False)
+check("raise tier 2: a 300 shortfall (100 + 200 buffer) unwinds one piece of ceil(300 / 1.99) = 151 RI Governor sets, not the touch",
+      [max(l["quantity"] for l in legs) for k, legs in getattr(_vs, "sent_ml", [])] == [151], f"{getattr(_vs, 'sent_ml', [])}")
+check("raise tier 2: set unwinds are tagged 'raise_set' (tier-1 clips 'raise') and leave every leg's set intact beyond the pieces (no leg through zero)",
+      {r["purpose"] for r in _rr} == {"raise_set"} and all(_v.pos[e] <= 0 for e in _sA + list(_RI.values())), f"{[dict(r) for r in _rr]} {_v.pos}")
+_b, _v = _sbot(_spos, _sbooks, {"hf_arb": (2000.0, "floor")}, skips=2)
+R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
+_b2, _v2 = _sbot(_spos, _sbooks, {"hf_arb": (2000.0, "floor")}, raise_sets_enabled=False)
+R.Bot.raise_cycle(_b2, _rprices(_sbooks), False)
+check("raise tier 2: never with skips in < 3 half-hours of the last 6 h, never when raise_sets_enabled is off",
+      not getattr(_v, "sent_ml", []) and not getattr(_v2, "sent_ml", []), f"{getattr(_v, 'sent_ml', [])} {getattr(_v2, 'sent_ml', [])}")
+_tpos = dict(_spos, **{_L(_RD, "D"): 3000.0})                 # tier 1: 3,000 YES at 0.495/0.50 (0.5%) covers a 700 need
+_tbooks = dict(_sbooks, **{_L(_RD, "D"): _rbk(0.495, 0.50, 5000), _L(_RD, "R"): _rbk(0.50, 0.505, 5000)})
+_b, _v = _sbot(_tpos, _tbooks, {"hf_arb": (500.0, "floor")})
+R.Bot.raise_cycle(_b, _rprices(_tbooks), False)
+check("raise tier 2: while tier 1 can cover the shortfall no set is unwound (the holding is sold instead)",
+      not getattr(_v, "sent_ml", []) and _v.orders and _v.orders[0][0] == _L(_RD, "D"), f"{getattr(_v, 'sent_ml', [])} {_v.orders}")
+_b, _v = _sbot(_spos, _sbooks, {"hf_arb": (2000.0, "floor")}, raise_set_hold_races=["Rhode Island Governor"])
+_b.arb.protected = lambda: {_RA}
+R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
+_races = [_U.race_of(l[0]["exchangeId"]).name for k, l in getattr(_v, "sent_ml", [])]
+check("raise tier 2: never a race held through an early call or a high-frequency arb race; a buy-set is unwound by buying NO on every leg",
+      _races == [_RC] and all(l["side"] == "no" for k, legs in _v.sent_ml for l in legs) and _v.pos[_sC[0]] > 0, f"{_races} {getattr(_v, 'sent_ml', [])}")
+# churn's skipped-for-cash entries: logged once per race per 5 min and counted over 6 h
+_ns = types.SimpleNamespace(store=_Store(os.path.join(tempfile.mkdtemp(), "s.sqlite")))
+R.Bot.note_churn_skip(_ns, "CA", 2000, 0, 0.98)
+R.Bot.note_churn_skip(_ns, "CA", 2000, 0, 0.98)
+R.Bot.note_churn_skip(_ns, "CB", 2000, 500, 0.98)
+check("raise: high-frequency arb's cash skips are recorded (once per race per 5 min) and counted over the last 6 h",
+      R.Bot.churn_skips_6h(_ns) == 2 and len(_ns.store.get_param("churn_cash_skips")) == 2)
+check("raise tier 2 config: off by default, 4.5% cost bound, 3 skips, no hold races", BotConfig().raise_sets_enabled is False
+      and BotConfig().raise_set_max_cost == 0.045 and BotConfig().raise_set_min_skips == 3 and BotConfig().raise_set_hold_races == [])
+
+
+# Cash raise review 1 (24 Oct): the reviewer's attacks, which broke the first version
+_BR = _L(_RB, "R")
+_b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _L(_RB, "D"): _rbk(0.605, 0.61)}, {"hf_arb": (5000.0, "floor")})
+_b.open_orders_cache = {_BR: [{"id": 9, "side": "yes", "action": "buy", "priceLimit": 0.385, "quantity": 300, "quantityFilled": 0}]}
+_fb0, _fired = _b.fresh_book, []
+
+
+def _fb_fill(ex, age=None):
+    if ex == _BR and not _fired:
+        _fired.append(1)
+        _v.pos[_BR] += 300.0                      # our MM bid fills right after the raise's first positions read
+    return _fb0(ex, age)
+
+
+_b.fresh_book = _fb_fill
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)
+check("raise review A1: an MM fill after the raise's positions read shrinks the clip to the 500 NO held at send; never through zero",
+      _v.pos[_BR] == 0.0 and [q for ex, side, q, px, k in _v.orders] == [500] and _BR in _v.cancels, f"{_v.orders} {_v.pos} {_v.cancels}")
+_b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _L(_RB, "D"): _rbk(0.605, 0.61)}, {"hf_arb": (5000.0, "floor")})
+_b.open_orders_cache = {_BR: [{"id": 9, "side": "yes", "action": "buy", "priceLimit": 0.385, "quantity": 300, "quantityFilled": 0}]}
+_ca0 = _v.cancel_all
+
+
+def _ca_fill(exchange_id=None, **k):
+    if exchange_id == _BR:
+        _v.pos[_BR] += 300.0                      # the MM bid filled before the cancel landed
+    return _ca0(exchange_id=exchange_id, **k)
+
+
+_v.cancel_all = _ca_fill
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)
+check("raise review A1b: a fill while the MM quotes are being pulled: the clip is sized after the pull", _v.pos[_BR] == 0.0, f"{_v.orders} {_v.pos}")
+_AD, _AR = _L(_RA, "D"), _L(_RA, "R")
+_zst = _Store(os.path.join(tempfile.mkdtemp(), "z.sqlite"))
+_zst.record_order(1, _AR, None, "no", "buy", 0.5, 300, "direction")
+_zst.exec("UPDATE orders SET placed_at=?", (time.time() - 7200,))
+_zst.ingest_fills([{"id": 1, "orderId": 1, "exchangeId": _AR, "side": "no", "price": 0.5, "quantity": 300, "filledAt": "2026-10-24T00:00:00Z"}])
+_b, _v = _rbot({_AD: -1000.0, _AR: -1300.0}, {_AD: _rbk(0.495, 0.50), _AR: _rbk(0.495, 0.50)}, {"hf_arb": (5000.0, "floor")})
+_b.store = _zst
+R.Bot.raise_cycle(_b, _rprices({_AD: _rbk(0.495, 0.50), _AR: _rbk(0.495, 0.50)}), False)
+_zst.ingest_fills([{"id": 2, "orderId": 1000 + _v.n, "exchangeId": _AR, "side": "yes", "price": 0.5, "quantity": 300, "filledAt": "2026-10-24T00:01:00Z"}])
+_zb = types.SimpleNamespace(cfg=types.SimpleNamespace(exit_band=0.01), store=_zst, open_orders_cache={}, dry_run=False, api=_v)
+_n0 = len(_v.orders)
+R.Bot.zero_ev_exits(_zb, dict(_v.pos), [{"exchange_id": _AR, "fair": 0.50, "sig_bid": 0.495, "sig_ask": 0.50, "pm": 0.5, "kalshi": 0.5}])
+check("raise review A2: after the raise sold a directional holding, the zero-EV exit does not close it again (the set stays whole)",
+      len(_v.orders) == _n0 and _v.pos[_AR] == _v.pos[_AD] == -1000.0, f"{_v.orders[_n0:]} {_v.pos}")
+_b, _v = _rbot({_AD: -500.0, _AR: -1000.0}, {_AD: _rbk(0.495, 0.50), _AR: _rbk(0.495, 0.50)}, {"hf_arb": (5000.0, "floor")})
+_b.catchup_open = {_AD: 500.0}                    # catch-up's 500 YES on D next to 1,000 sets: the venue shows R 500 NO beyond the set
+R.Bot.raise_cycle(_b, _rprices({_AD: _rbk(0.495, 0.50), _AR: _rbk(0.495, 0.50)}), False)
+check("raise review A3: a race with a catch-up (or cheap-favourite) leg is left alone entirely, not sold through its other leg",
+      _v.orders == [], f"{_v.orders}")
+_ns = types.SimpleNamespace(store=_Store(os.path.join(tempfile.mkdtemp(), "s.sqlite")))
+for _r in ("X1", "X2", "X3"):
+    R.Bot.note_churn_skip(_ns, _r, 2000, 0, 0.98)
+_w_burst = R.Bot.churn_skip_windows_6h(_ns)
+_ns = types.SimpleNamespace(store=_Store(os.path.join(tempfile.mkdtemp(), "s2.sqlite")))
+_real_time, _base = time.time, (time.time() // 1800) * 1800 + 60
+try:
+    for _k in range(3):                           # one race's opportunity retried for ~10 min
+        time.time = lambda k=_k: _base + 301 * k
+        R.Bot.note_churn_skip(_ns, "X1", 2000, 0, 0.98)
+    time.time = lambda: _base + 700
+    _w_one = R.Bot.churn_skip_windows_6h(_ns)
+    for _k in range(3):                           # skips in three different half-hours
+        time.time = lambda k=_k: _base + 900 + 1800 * k
+        R.Bot.note_churn_skip(_ns, "X2", 2000, 0, 0.98)
+    time.time = lambda: _base + 900 + 3700
+    _w_rep = R.Bot.churn_skip_windows_6h(_ns)
+finally:
+    time.time = _real_time
+check("raise review A4: tier 2's 'repeatedly' counts half-hours with a skip: a 3-race burst is 1, one opportunity over 10 min is 1, "
+      "three separate half-hours are 3", _w_burst == 1 and _w_one == 1 and _w_rep >= 3, f"{_w_burst} {_w_one} {_w_rep}")
+
+
+_b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _L(_RB, "D"): _rbk(0.605, 0.61)}, {"hf_arb": (300.0, "floor")})
+_po0 = _v.place_order
+_v.place_order = lambda ex, side, action, qty, price, expiration=None, key=None: (_v.orders.append((ex, side, qty, price, key)), {"orderId": 1000 + _v.n})[1]
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)       # the first clip rests unfilled
+_v.place_order, _b.cash_needs, _b.open_orders_cache, _b.open_orders_ts = _po0, {"hf_arb": (300.0, "floor")}, {}, 0.0
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)       # next cycle, the open-orders read has not caught up
+check("raise review A7: a clip that does not fill at once is cancelled at once (fill-or-cancel), before any later clip",
+      len(_v.orders) == 2 and getattr(_v, "cancelled", []) == [1001], f"{_v.orders} {_v.cancels} {getattr(_v, 'cancelled', None)}")
+
+
+# Cash raise review 2 (24 Oct): an MM bid the open-orders cache misses, the cap after a failed clip, the gate's spacing
+_BD = _L(_RB, "D")
+for _cache in (True, False):
+    _b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _BD: _rbk(0.605, 0.61)}, {"hf_arb": (5000.0, "floor")})
+    _b.store.record_order(9, _BR, None, "yes", "buy", 0.385, 300, "mm")
+    _b.store.exec("UPDATE orders SET placed_at=? WHERE order_id=9", (time.time() - 300,))
+    _b.cfg.mm.order_ttl_sec = 1800
+    _b.open_orders_ts = time.time() - 5
+    _b.open_orders_cache = {_BR: [{"id": 9, "side": "yes", "action": "buy", "priceLimit": 0.385, "quantity": 300, "quantityFilled": 0}]} if _cache else {}
+    _po0 = _v.place_order
+
+    def _po_n2(ex, side, action, qty, price, expiration=None, key=None, v=_v, po0=_po0):
+        if ex == _BR and _BR not in v.cancels:
+            v.pos[_BR] += 300.0                   # our MM bid, if never cancelled, fills just before the clip lands
+        return po0(ex, side, action, qty, price, expiration, key)
+    _v.place_order = _po_n2
+    R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)
+    check(f"raise review N2 ({'fresh cache' if _cache else 'cache empty'}): an MM bid resting on the leg is pulled before the clip "
+          "(store-backed, not only the cache); the leg never crosses zero", _v.pos[_BR] <= 0 and _BR in _v.cancels, f"{_v.cancels} {_v.pos}")
+_b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _BD: _rbk(0.605, 0.61)}, {"hf_arb": (5000.0, "floor")})
+_b.open_orders_ok = False
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)
+check("raise review N2: no raise in a cycle whose open-orders read failed", _v.orders == [] and _v.cancels == [])
+_npos = {_AD: 1990.0, _BR: 300.0}
+_nbks = {_AD: _rbk(0.495, 0.50), _BR: _rbk(0.4975, 0.5025), _AR: _rbk(0.50, 0.505), _BD: _rbk(0.4975, 0.5025)}
+_nnd = lambda p: _risk.exposure(_U, p, _rprices(_nbks)).net_d_notional
+for _mode in ("ok", "api_error", "rests"):
+    _b, _v = _rbot(dict(_npos), _nbks, {"hf_arb": (5000.0, "floor")}, cap=900.0, raise_cap_margin=300.0)
+    _po0 = _v.place_order
+
+    def _po_n1(ex, side, action, qty, price, expiration=None, key=None, v=_v, po0=_po0, mode=_mode):
+        if ex == _AD and mode == "api_error":
+            raise R.ApiError(429, "RATE", "rate limited")
+        if ex == _AD and mode == "rests":
+            v.orders.append((ex, side, qty, price, key))
+            return {"orderId": 1000 + v.n}
+        return po0(ex, side, action, qty, price, expiration, key)
+    _v.place_order = _po_n1
+    R.Bot.raise_cycle(_b, _rprices(_nbks), False)
+    check(f"raise review N1 (first clip {_mode}): net D never ends past the 900 cap, whatever the earlier clip did",
+          abs(_nnd(_v.pos)) <= 900 + 1e-6 or abs(_nnd(_v.pos)) <= abs(_nnd(_npos)) + 1e-6,
+          f"net D {_nnd(_npos):+.0f} -> {_nnd(_v.pos):+.0f}; {[(o[0], o[2]) for o in _v.orders]}")
+_ns = types.SimpleNamespace(store=_Store(os.path.join(tempfile.mkdtemp(), "w.sqlite")))
+_real_time = time.time
+_base = (_real_time() // 1800) * 1800 + 1800 - 60
+try:
+    for _k in range(8):                           # one race retried every 5 min for 35 min, across two grid boundaries
+        time.time = lambda k=_k: _base + 301 * k
+        R.Bot.note_churn_skip(_ns, "X1", 2000, 0, 0.98)
+    time.time = lambda: _base + 301 * 7 + 1
+    _w35 = R.Bot.churn_skip_windows_6h(_ns)
+finally:
+    time.time = _real_time
+check("raise review N4: one opportunity persisting 35 min counts < 3 (counted skips are >= 30 min apart: 3 needs an hour)", _w35 < 3, str(_w35))
+
+
+# Cash raise review 3 (24 Oct): a clip that rests is in no later cap check: clips are fill-or-cancel
+_CD = _L(_RC, "D")
+_RID = _U.races["Rhode Island Governor"].legs["D"].exchange_id
+_r3b = {_AR: _rbk(0.499, 0.500), _AD: _rbk(0.500, 0.501), _BD: _rbk(0.4985, 0.500), _BR: _rbk(0.500, 0.5015),
+        _CD: _rbk(0.498, 0.500), _L(_RC, "R"): _rbk(0.500, 0.502), _RID: _rbk(0.5, 0.501)}
+_r3nd = lambda p: _risk.exposure(_U, p, _rprices(_r3b)).net_d_notional
+_r3pos = {_AR: 1000.0, _BD: 800.0, _CD: -1400.0, _RID: 1600.0}
+
+
+def _r3_fill_rested(v, rested):
+    for oid, ex, side, q in rested:               # a rested clip fills within its TTL unless it was cancelled
+        if oid not in getattr(v, "cancelled", []) and ex not in v.cancels:
+            v.pos[ex] += q if side == "yes" else -q
+
+
+_b, _v = _rbot(dict(_r3pos), _r3b, {"hf_arb": (50000.0, "floor")}, cap=900.0, raise_cap_margin=300.0)
+_po0, _rested = _v.place_order, []
+
+
+def _po_r3a(ex, side, action, qty, price, expiration=None, key=None):
+    if ex == _AR:
+        _v.orders.append((ex, side, qty, price, key))
+        _rested.append((1000 + _v.n, ex, side, qty))
+        return {"orderId": 1000 + _v.n}            # rests: no quantityTraded
+    if ex == _BD:
+        raise R.ApiError(429, "RATE", "rate limited")
+    return _po0(ex, side, action, qty, price, expiration, key)
+
+
+_v.place_order = _po_r3a
+R.Bot.raise_cycle(_b, _rprices(_r3b), False)
+_r3_fill_rested(_v, _rested)
+check("raise review R3-a: a clip that rests is cancelled at once, so a later clip's cap check cannot be wrong (|net D| <= 900)",
+      abs(_r3nd(_v.pos)) <= 900 + 1e-6, f"net D {_r3nd(_r3pos):+.0f} -> {_r3nd(_v.pos):+.0f} {[(o[0], o[2]) for o in _v.orders]}")
+_b, _v = _rbot(dict(_r3pos), _r3b, {"hf_arb": (300.0, "floor")}, cap=900.0, raise_cap_margin=300.0, raise_min_clip=50.0)
+_po0, _rested = _v.place_order, []
+
+
+def _po_r3b(ex, side, action, qty, price, expiration=None, key=None):
+    if ex == _AR and not _rested:
+        _v.orders.append((ex, side, qty, price, key))
+        _rested.append((1000 + _v.n, ex, side, qty))
+        return {"orderId": 1000 + _v.n}
+    return _po0(ex, side, action, qty, price, expiration, key)
+
+
+_v.place_order = _po_r3b
+R.Bot.raise_cycle(_b, _rprices(_r3b), False)
+_r3b2 = dict(_r3b, **{_AR: _rbk(0.49, 0.51), _BD: _rbk(0.49, 0.51)})
+_b.fresh_book = lambda ex, age=None: _r3b2.get(ex)
+_b.cash_needs = {"hf_arb": (500.0, "floor")}
+R.Bot.raise_cycle(_b, _rprices(_r3b2), False)
+_r3_fill_rested(_v, _rested)
+check("raise review R3-b: a clip resting from the previous cycle cannot fill on top of this cycle's clips (|net D| <= 900)",
+      abs(_r3nd(_v.pos)) <= 900 + 1e-6, f"net D {_r3nd(_r3pos):+.0f} -> {_r3nd(_v.pos):+.0f} {[(o[0], o[2]) for o in _v.orders]}")
+_b, _v = _rbot(dict(_r3pos), _r3b, {"hf_arb": (50000.0, "floor")}, cap=900.0, raise_cap_margin=300.0)
+_v.place_order = lambda ex, side, action, qty, price, expiration=None, key=None: (_v.orders.append((ex, side, qty, price, key)), {"orderId": 1000 + _v.n})[1]
+_v.cancel_order = lambda oid: (_ for _ in ()).throw(R.ApiError(500, "ERR", "cancel failed"))
+R.Bot.raise_cycle(_b, _rprices(_r3b), False)
+check("raise review R3: if a resting clip cannot be cancelled, no further clip is sent that cycle", len(_v.orders) == 1, f"{_v.orders}")
+_cr = CRm.plan({_BR: -5}, {_BR: _rbk(0.39, 0.395)}, 1000.0, 0.01, lambda p: 0.0, 5000.0, {_BR: -5.0}, 1000.0, 4, 50.0)
+check("raise review 3: no crumb clips (a clip trimmed below raise_min_clip is not sent)", _cr == [], f"{_cr}")
+
+
+# Cash raise review 4 (24 Oct): unknown placement status, a remainder the venue closed, the cap charged on what traded
+_b, _v = _rbot(dict(_r3pos), _r3b, {"hf_arb": (50000.0, "floor")}, cap=900.0, raise_cap_margin=300.0)
+_v.place_order = lambda *a, **k: (_ for _ in ()).throw(R.ApiError(502, "ORDER_STATUS_UNKNOWN", "unknown"))
+R.Bot.raise_cycle(_b, _rprices(_r3b), False)
+check("raise review 4: a placement with unknown status pulls that leg and stops the cycle", len(_v.cancels) >= 1 and _v.orders == [], f"{_v.cancels}")
+_b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _L(_RB, "D"): _rbk(0.605, 0.61)}, {"hf_arb": (5000.0, "floor")})
+_v.place_order = lambda ex, side, action, qty, price, expiration=None, key=None: (_v.orders.append((ex, side, qty, price, key)),
+                                                                                    {"orderId": 1000 + _v.n, "quantityTraded": 0, "open": True})[1]
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)
+check("raise review 4: a clip that traded nothing and was cancelled charges nothing to the 24-h cap",
+      getattr(_v, "cancelled", []) and sum(x for t, x in _b.store.get_param("raise_log")) == 0.0, f"{_b.store.get_param('raise_log')}")
+_b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _L(_RB, "D"): _rbk(0.605, 0.61)}, {"hf_arb": (5000.0, "floor")})
+_v.place_order = lambda ex, side, action, qty, price, expiration=None, key=None: (_v.orders.append((ex, side, qty, price, key)),
+                                                                                    {"orderId": 1000 + _v.n, "quantityTraded": 100, "open": False})[1]
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)
+check("raise review 4: a partly filled clip the venue already closed is not cancelled (no 409 stall)", not getattr(_v, "cancelled", []))
+_sp = CRm.set_pieces({_RA: [_AD, _AR]}, {_AD: -500.0, _AR: -500.0}, {_AD: _rbk(0.495, 0.50), _AR: _rbk(0.495, 0.50)}, 10.0, 0.045, (), 2, 50.0)
+check("raise review 4: no tier-2 crumb pieces (trimmed below raise_min_clip)", _sp == [], f"{_sp}")
+
+
+_b, _v = _rbot(dict(_r3pos), _r3b, {"hf_arb": (50000.0, "floor")}, cap=900.0, raise_cap_margin=300.0)
+import urllib.error as _ue  # noqa: E402
+_v.place_order = lambda *a, **k: (_ for _ in ()).throw(_ue.URLError("connection reset"))
+R.Bot.raise_cycle(_b, _rprices(_r3b), False)
+check("raise review 5: a network error on placement (status unknown) pulls the leg, stops the cycle and charges the 24-h cap",
+      len(_v.cancels) >= 1 and sum(x for t, x in (_b.store.get_param("raise_log") or [])) > 0, f"{_v.cancels} {_b.store.get_param('raise_log')}")
+
 # ---------------------------------------------------------------- 24 Oct: cheap safe favourites (proposals/cheap_favourites.py)
 from sigbot.proposals import cheap_favourites as CF  # noqa: E402
 _same = CF.same_terms_exchanges(os.path.join(ROOT, "data", "research_contract_rules", "tc_mapping.json"))
@@ -1206,6 +1680,260 @@ finally:
     R.risk.exposure = _orig_e
 check("cheapfav bot: an entry whose response has no orderId blocks that leg for 1 h (its fill could not be attributed)",
       _n1 == 1 and len(_bad) == 1 and _b.cheapfav_skip.get("r1", 0) > 0, f"{_bad} {_b.cheapfav_skip}")
+
+
+# 24 Oct, the shock reserve (Sizhe: "yes add money for the shock reserve"): 15k kept free for purpose 'shock' only
+_sh = types.SimpleNamespace(cash=20000.0, cfg=types.SimpleNamespace(shock_enabled=True, shock_reserve=15000.0))
+_sh_off = types.SimpleNamespace(cash=20000.0, cfg=types.SimpleNamespace(shock_enabled=False, shock_reserve=15000.0))
+check("shock reserve: every sleeve but shock plans with free cash minus 15k while shock mode is on, all of it otherwise",
+      R.spendable_cash(_sh) == 5000.0 and R.spendable_cash(_sh_off) == 20000.0 and R.shock_reserve(_sh_off) == 0.0
+      and BotConfig().shock_reserve == 15000.0)
+_b, _v, _ch = _hbot({}, _legs("CA", 0.52, 0.525, 2000))
+_b.churn_med, _b.cash, _b.cfg.shock_enabled, _b.cfg.shock_reserve = {"CA": -0.01}, 18500.0, True, 15000.0
+_b.cash_needs = {}
+_b.post_cash_need = lambda sl, a, w="": R.Bot.post_cash_need(_b, sl, a, w)
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("shock reserve: high-frequency arb stops at its 3k floor + 15k (18.5k cash: 500 to spend, 520 sets at 0.96)",
+      _ch.held("CA") == 520 and _b.cash >= 18000.0 - 1, f"held {_ch.held('CA')} cash {_b.cash}")
+_cfs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("shock reserve: cheap favourites, arbs, recycles, offload, catch-up and the MM / tilt / news / direction budgets read the "
+      "spendable cash (only the value log reads raw cash)",
+      "cf.entries(cands, held, deployed, spendable_cash(self)" in _cfs and "b.arb.plan(cand_books, spendable_cash(b))" in _cfs
+      and "fills_count, max(0.0, spendable_cash(self)), cycle_id" in _cfs and "shock_reserve(self) > 0 and spendable_cash(self) < q * px" in _cfs
+      and _cfs.count("spendable_cash(") >= 20)
+# the raise refills the reserve after a shock spent it, tier 1 only, capped at deficit + buffer
+_b, _v = _rbot(_rpos, _rbooks, {})
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = True, 15000.0, 14700.0      # a shock spent cash: 300 under the reserve
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+_got = sum(q * (1 - px) for ex, side, q, px, k in _v.orders)
+check("shock reserve: after a shock spend the raise refills it with no waiting trade, at most the 300 deficit + the 200 buffer",
+      _v.orders and _got <= 500 + 0.61 and _got >= 300, f"{_v.orders} {_got}")
+_b, _v = _rbot(_rpos, _rbooks, {})
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = False, 15000.0, 14700.0
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+check("shock reserve: no raise at all while shock mode is off", _v.orders == [])
+_b, _v = _sbot(_spos, _sbooks, {})
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = True, 15000.0, 10000.0
+R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
+check("shock reserve: tier 2 never unwinds a set for the reserve (sets on offer, no tier-1 holdings, skips present)",
+      not getattr(_v, "sent_ml", []), f"{getattr(_v, 'sent_ml', [])}")
+_b, _v = _rbot({_AD: 1990.0, _BR: 300.0}, {_AD: _rbk(0.495, 0.50), _BR: _rbk(0.4975, 0.5025), _AR: _rbk(0.50, 0.505), _BD: _rbk(0.4975, 0.5025)},
+               {}, cap=900.0, raise_cap_margin=300.0)
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = True, 15000.0, 13000.0
+_pb = {_AD: _rbk(0.495, 0.50), _BR: _rbk(0.4975, 0.5025), _AR: _rbk(0.50, 0.505), _BD: _rbk(0.4975, 0.5025)}
+R.Bot.raise_cycle(_b, _rprices(_pb), False)
+_ndr = lambda p: _risk.exposure(_U, p, _rprices(_pb)).net_d_notional
+check("shock reserve: the partisan cap holds during a reserve raise (cap 900)", abs(_ndr(_v.pos)) <= 900 + 1e-6 or abs(_ndr(_v.pos)) <= abs(_ndr({_AD: 1990.0, _BR: 300.0})),
+      f"net D {_ndr({_AD: 1990.0, _BR: 300.0}):+.0f} -> {_ndr(_v.pos):+.0f}")
+_b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _BD: _rbk(0.605, 0.61)}, {})
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = True, 15000.0, 14000.0
+_b.store.record_order(77, _BR, None, "no", "buy", 0.6, 800, "shock")
+_b.store.exec("UPDATE orders SET placed_at=? WHERE order_id=77", (time.time() - 3600,))
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)
+check("shock reserve: the raise never sells a shock position to refill it", _v.orders == [], f"{_v.orders}")
+
+
+# Shock reserve review 6 (24 Oct): no tier 2 for the reserve by way of another need; refill after the shock, not during it
+_b, _v = _sbot(_spos, _sbooks, {})
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = True, 15000.0, 10000.0
+for _cyc in range(6):                              # the reviewer's experiment: a 2k high-frequency arb need every cycle
+    _b.cash_needs = {"hf_arb": (2000.0, "floor")}
+    R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
+check("shock reserve review B1: while the reserve is short, tier 2 never unwinds sets for another sleeve's need (whose cash would "
+      "refill the reserve first)", not getattr(_v, "sent_ml", []), f"{len(getattr(_v, 'sent_ml', []))} pieces")
+_b, _v = _rbot(_rpos, _rbooks, {})
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = True, 15000.0, 14700.0
+_b.shock_active = lambda: True
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+_n_during = len(_v.orders)
+_b.shock_active = lambda: False
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+check("shock reserve review B2: no refill while a shock is open or entering; it refills once the shock has closed",
+      _n_during == 0 and len(_v.orders) > 0, f"during {_n_during}, after {len(_v.orders)}")
+_b, _v = _rbot({_BR: -800.0}, {_BR: _rbk(0.39, 0.395), _BD: _rbk(0.605, 0.61)}, {"hf_arb": (5000.0, "floor")})
+_b.shock_races = lambda: {_RB}
+R.Bot.raise_cycle(_b, _rprices({_BR: _rbk(0.39, 0.395)}), False)
+check("shock reserve review B2: races shock mode holds or is entering (incl. orders of unknown outcome) are never sold", _v.orders == [])
+_kp = types.SimpleNamespace(cash=20000.0, cfg=types.SimpleNamespace(shock_enabled=True, shock_reserve=15000.0), monitor_logged=set(),
+                            strategy_kill=types.SimpleNamespace(paused=lambda n: "losing" if n == "shock" else None))
+_kk = types.SimpleNamespace(cash=20000.0, cfg=types.SimpleNamespace(shock_enabled=True, shock_reserve=15000.0), shock=types.SimpleNamespace(killed=True))
+check("shock reserve: no reserve while the shock sleeve is paused by the strategy monitor or killed (15k idle for nothing)",
+      R.shock_reserve(_kp) == 0.0 and R.shock_reserve(_kk) == 0.0 and R.shock_reserve(_sh) == 15000.0)
+_b, _v, _ch = _hbot({}, _legs("CA", 0.52, 0.525, 2000))
+_b.churn_med, _b.cash, _b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash_needs = {"CA": -0.01}, 10000.0, True, 15000.0, {}
+_b.post_cash_need = lambda sl, a, w="": R.Bot.post_cash_need(_b, sl, a, w)
+_skips = []
+_b.note_churn_skip = lambda *a: _skips.append(a)
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("shock reserve review B1: high-frequency arb's cash skips are not counted toward tier 2 while the reserve itself is short "
+      "(its need is still posted)", _skips == [] and "hf_arb" in _b.cash_needs and _ch.held("CA") == 0, f"{_skips} {_b.cash_needs}")
+check("shock reserve: catch-up counts its own spend within the cycle; offload unwinds no set while the reserve is short",
+      'self.cash = getattr(self, "cash", 0.0) - q * px' in _cfs and "or spendable_cash(self) < 0):" in _cfs)
+
+
+# Shock reserve review 7 (24 Oct): during a shock, other sleeves' needs do not make the raise sell either
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (1500.0, "floor"), "cheapfav": (800.0, "x")})
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = True, 15000.0, 14700.0
+_b.shock_active = lambda: True
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+check("shock reserve review 7: during a shock (free cash under the reserve) other sleeves' needs raise nothing either", _v.orders == [],
+      f"{_v.orders}")
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (1500.0, "floor")})
+_b.cfg.shock_enabled, _b.cfg.shock_reserve, _b.cash = True, 15000.0, 14700.0
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+_got7 = sum(q * (1 - px) for ex, side, q, px, k in _v.orders)
+check("shock reserve review 7: after a shock, the refill comes first (300 deficit + 200 buffer); the other need waits for a later cycle",
+      _v.orders and _got7 <= 500 + 0.61, f"{_got7}")
+_fake_sm = types.ModuleType("sigbot.proposals.shock_mode")
+_fake_sm.LAST_ENTRY = time.time() - 60
+sys.modules["sigbot.proposals.shock_mode"] = _fake_sm
+try:
+    _after_last = R.shock_reserve(_sh)
+finally:
+    del sys.modules["sigbot.proposals.shock_mode"]
+check("shock reserve review 7: no reserve after shock mode's last entry time", _after_last == 0.0 and R.shock_reserve(_sh) == 15000.0)
+
+
+# 24 Oct, the RI trim (Sizhe): tier 2 for Rhode Island Governor only, clips <= 1,000 sets, one per 30 min, level 0, no loss
+_RIL = [_U.races["Rhode Island Governor"].legs[p_].exchange_id for p_ in ("D", "R", "I")]
+
+
+def _tbot(pos, asks=(0.30, 0.40, 0.31), median_asks=(0.30, 0.40, 0.31), basis=1.95, deployed=0.0, cash=1000.0, depth=2000, **cfgkw):
+    books = {e: _rbk(round(a - 0.005, 3), a, depth) for e, a in zip(_RIL, asks)}
+    books.update({_sA[0]: _rbk(0.505, 0.51, depth), _sA[1]: _rbk(0.495, 0.50, depth)})
+    b, v = _rbot(pos, books, {}, **({"cap": cfgkw.pop("cap")} if "cap" in cfgkw else {}))
+    conf = dict(raise_sets_races=["Rhode Island Governor"], raise_ri_trim_sets=4500.0, raise_ri_trim_clip=1000, raise_ri_trim_gap_sec=1800.0)
+    conf.update(cfgkw)
+    for k, x in conf.items():
+        setattr(b.cfg, k, x)
+    e = ArbEngine.__new__(ArbEngine)
+    e.cfg = ArbConfig(min_set_qty=20)
+    e.u, e.api, e.store, e.dry_run, e.committed, e.cooldown, e.hostile = _U, v, b.store, False, {}, {}, set()
+    b.arb, b.cash = e, cash
+    b.cheapfav = types.SimpleNamespace(budget=15000.0)
+    b.cheapfav_refresh = lambda: (None, None, None, None, deployed)
+    b.cost_basis = {x: basis / 3.0 * abs(pos.get(x, 0.0)) for x in _RIL}      # per set: `basis` across the three NO legs
+    b.fresh_positions = lambda: (b.cost_basis.update({x: basis / 3.0 * abs(v.pos.get(x, 0.0)) for x in _RIL}), dict(v.pos))[1]   # as positions_map
+    b.ri_trimmed = lambda: R.Bot.ri_trimmed(b)
+    b.unwind_deltas = lambda u: R.Bot.unwind_deltas(b, u)
+    b.store.exec("CREATE TABLE IF NOT EXISTS venue_quotes (ts REAL, venue TEXT, race TEXT, party TEXT, instrument TEXT, bid REAL, ask REAL, "
+                 "mid REAL, bid_sz REAL, ask_sz REAL, depth_usd REAL, latency_ms REAL)")
+    t0 = time.time()
+    for k in range(150):                                                       # 25 h of 10-min heartbeats
+        for party, a in zip(("D", "R", "I"), median_asks):
+            b.store.exec("INSERT INTO venue_quotes(ts, venue, race, party, ask) VALUES(?,?,?,?,?)", (t0 - 90000 + 600 * k, "sig", "Rhode Island Governor", party, a))
+    return b, v
+
+
+_tpos = {**{x: -3000.0 for x in _RIL}, _sA[0]: -2000.0, _sA[1]: -2000.0}
+_b, _v = _tbot(dict(_tpos))
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+_ml = [(k, {l["exchangeId"]: l["quantity"] for l in legs}) for k, legs in getattr(_v, "sent_ml", [])]
+check("RI trim: only Rhode Island Governor is unwound (all 3 legs at once), at most 1,000 sets a clip, tagged 'ri_trim'",
+      len(_ml) == 1 and set(_ml[0][1]) == set(_RIL) and set(_ml[0][1].values()) == {1000} and _v.pos[_sA[0]] == -2000.0
+      and {r["purpose"] for r in _b.store.rows("SELECT DISTINCT purpose FROM orders")} == {"ri_trim"}, f"{_ml}")
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+_n1 = len(getattr(_v, "sent_ml", []))
+_rt, _t1 = time.time, time.time()
+try:
+    time.time = lambda: _t1 + 1801
+    R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+finally:
+    time.time = _rt
+check("RI trim: at most one clip per 30 min (none at once, the next after 30 min)", _n1 == 1 and len(_v.sent_ml) == 2, f"{_n1} {len(_v.sent_ml)}")
+_b, _v = _tbot(dict(_tpos), asks=(0.305, 0.405, 0.31))
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim: no clip while the exit cost is above the race's trailing 24-h median (level 0)", not getattr(_v, "sent_ml", []))
+_b, _v = _tbot(dict(_tpos), basis=2.0)
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim: no clip at a realised loss (proceeds 1.99/set under a 2.00 cost basis)", not getattr(_v, "sent_ml", []))
+_b, _v = _tbot(dict(_tpos))
+_b.store.set_param("ri_trim_log", [[time.time() - 7200, "Rhode Island Governor", 4200, 1.99]])
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+_q42 = [l[0]["quantity"] for k, l in getattr(_v, "sent_ml", [])]
+_b, _v = _tbot(dict(_tpos))
+_b.store.set_param("ri_trim_log", [[time.time() - 7200, "Rhode Island Governor", 4500, 1.99]])
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim: stops at 4,500 sets in all (300 left -> a 300-set clip; at 4,500 nothing)", _q42 == [300] and not getattr(_v, "sent_ml", []), f"{_q42}")
+_b, _v = _tbot(dict(_tpos))
+for _oid, _x in enumerate(_RIL):                                               # a restart that lost the log: the orders still count
+    _b.store.record_order(7000 + _oid, _x, None, "yes", "buy", 0.3, 4500, "ri_trim", status="filled")
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim: after a restart (log lost) the trim's own orders keep the 4,500 cap", R.Bot.ri_trimmed(_b) == 4500.0 and not getattr(_v, "sent_ml", []))
+_b, _v = _tbot(dict(_tpos), cash=17000.0)
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim: nothing while free cash covers cheap favourites' remaining budget (+ the shock reserve)", not getattr(_v, "sent_ml", []))
+_b, _v = _tbot(dict(_tpos), cash=14500.0)
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim: only as many sets as the need takes (500 short at 1.99/set -> 252 sets)",
+      [l[0]["quantity"] for k, l in getattr(_v, "sent_ml", [])] == [252], f"{[l[0]['quantity'] for k, l in getattr(_v, 'sent_ml', [])]}")
+_bpos = dict(_tpos, **{_L(_RD, "D"): 3500.0})                                   # 3,500 D YES elsewhere: net D past a 1,000 cap
+_b, _v = _tbot(_bpos, cap=1000.0)
+_b.fresh_book = (lambda f: (lambda ex, age=None: f(ex, age) or _rbk(0.495, 0.50, 5000)))(_b.fresh_book)
+R.Bot.ri_trim_cycle(_b, {**_rprices({}), _L(_RD, "D"): {"bestBid": 0.495, "bestAsk": 0.50}}, False)
+check("RI trim: no clip while net D would stay past the partisan cap after it", not getattr(_v, "sent_ml", []))
+_b, _v = _tbot(dict(_tpos), raise_sets_races=[])
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim: off without raise_sets_races; tier 2 stays off for every race (raise_sets_enabled false by default)",
+      not getattr(_v, "sent_ml", []) and BotConfig().raise_sets_races == [] and BotConfig().raise_sets_enabled is False
+      and BotConfig().raise_ri_trim_sets == 4500.0)
+
+
+# RI trim review 9: unknown outcome charged, the 24-h cap, cheap favourites unable to spend, a cooldown after a rejection
+_b, _v = _tbot(dict(_tpos))
+def _ml_fill_then_err(legs, all_or_none=True, key=None):
+    _mlv(_v, legs, all_or_none, key)                # it filled ...
+    raise R.ApiError(502, "ORDER_STATUS_UNKNOWN", "unknown")   # ... but the response was lost (all retries)
+_v.place_multi_leg = _ml_fill_then_err
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim review 9: a basket whose outcome is unknown but filled is still charged to the 4,500 cap (and the gap starts)",
+      R.Bot.ri_trimmed(_b) == 1000.0 and _b.store.get_param("ri_trim_log"), f"{R.Bot.ri_trimmed(_b)}")
+_b, _v = _tbot(dict(_tpos))
+_v.place_multi_leg = lambda legs, all_or_none=True, key=None: (_ for _ in ()).throw(R.ApiError(400, "VALIDATION_ERROR", "AllOrNoneNotFilled"))
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+_n_try = 1
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim review 9: a rejected basket charges nothing and is not retried for 10 min",
+      R.Bot.ri_trimmed(_b) == 0.0 and getattr(_b, "ri_trim_fail_ts", 0) > 0 and not _b.store.get_param("ri_trim_log"))
+_b, _v = _tbot(dict(_tpos), raise_max_total=500.0)
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim review 9: the 24-h raise cap binds the trim (500 left -> 252 sets, not 1,000)",
+      [l[0]["quantity"] for k, l in getattr(_v, "sent_ml", [])] == [252], f"{[l[0]['quantity'] for k, l in getattr(_v, 'sent_ml', [])]}")
+_b, _v = _tbot(dict(_tpos))
+_b.cheapfav.last_entry = time.time() - 60
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim review 9: no trim once cheap favourites can no longer enter (past its last entry)", not getattr(_v, "sent_ml", []))
+
+
+# RI trim review 10: a basket never sent charges nothing; a lost response plus a failed re-read charges the clip
+_b, _v = _tbot(dict(_tpos))
+_fp0 = _b.fresh_positions
+_calls = []
+def _fp_fail_second():
+    _calls.append(1)
+    if len(_calls) == 2:                           # the pre-send re-read inside unwind_set fails: nothing is sent
+        return None
+    return _fp0()
+_b.fresh_positions = _fp_fail_second
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim review 10: a basket that was never sent (its pre-send read failed) charges nothing to the cap",
+      not getattr(_v, "sent_ml", []) and R.Bot.ri_trimmed(_b) == 0.0, f"{R.Bot.ri_trimmed(_b)}")
+_b, _v = _tbot(dict(_tpos))
+_fp0 = _b.fresh_positions
+_st = {"sent": False}
+def _ml_fill_net_err(legs, all_or_none=True, key=None):
+    _mlv(_v, legs, all_or_none, key)
+    _st["sent"] = True
+    raise OSError("connection reset")
+_v.place_multi_leg = _ml_fill_net_err
+def _fp_down_after_send():
+    if _st["sent"]:
+        raise OSError("still down")
+    return _fp0()
+_b.fresh_positions = _fp_down_after_send
+R.Bot.ri_trim_cycle(_b, _rprices({}), False)
+check("RI trim review 10: a lost response and a failed re-read charge the full clip to the trim cap and the 24-h raise cap",
+      R.Bot.ri_trimmed(_b) == 1000.0 and sum(x for t, x in (_b.store.get_param("raise_log") or [])) > 1900, f"{R.Bot.ri_trimmed(_b)}")
 
 # ---------------------------------------------------------------- 24 Oct: MM last look when the feed book is stale (sim 'day' cycle 1500)
 from sigbot.mm import MarketMaker as _MMk  # noqa: E402

@@ -452,7 +452,7 @@ class ArbEngine:
 
     def unwind_set(self, rname: str, books: dict, qty: int, why: str = "offload", new_ret: Optional[float] = None,
                    min_gain: float = 0.0, allow_protected: bool = False, min_qty: Optional[int] = None,
-                   refresh=None) -> Optional[dict]:
+                   refresh=None, purpose: str = "arb") -> Optional[dict]:
         """Unwind `qty` held sets of `rname` now, all legs or none, at limits from walking the asks. With new_ret, only if
         the trade being funded beats the REAL exit cost (walked asks, not a snapshot estimate) by min_gain. A protected
         race (high-frequency arb lots) is unwound only by that sleeve itself (allow_protected). refresh: see resize_to_fresh."""
@@ -476,6 +476,8 @@ class ArbEngine:
         log.info("UNWIND (%s) %s: %d sets at proceeds %.4f/set, gives up %.2f%%", why, rname, qty, uq["proceeds"], 100 * uq["forgone_ret"])
         if self.dry_run:
             return {"race": rname, "qty": qty, "dry": True}
+        self.last_unwind_attempt = time.time()           # the basket is about to be sent (the RI trim charges
+                                                         # an unconfirmed basket only if it was)
         try:
             resp = self.api.place_multi_leg(legs, all_or_none=True, key=self.api.new_key("unw"))
         except ApiError as e:
@@ -486,9 +488,57 @@ class ArbEngine:
         self.committed[rname] = max(0.0, self.committed.get(rname, 0.0) - qty * uq["proceeds"])
         for r in resp.get("results", []):      # record the legs so their fills are attributed (they landed as purpose None)
             d = r.get("data") or {}
-            self.store.record_order(d.get("orderId"), d.get("exchangeId"), None, "yes", "buy", d.get("price"), qty, "arb",
+            self.store.record_order(d.get("orderId"), d.get("exchangeId"), None, "yes", "buy", d.get("price"), qty, purpose,
                                     status="filled" if not d.get("open") else "open", response=d)
         return {"race": rname, "qty": qty, "proceeds": uq["proceeds"]}
+
+    def unwind_buy_set(self, rname: str, books: dict, qty: int, why: str = "raise", refresh=None, purpose: str = "raise_set") -> Optional[dict]:
+        """Unwind `qty` held buy-sets (YES on every leg) now, all legs or none: buy NO on every leg at 1 - the walked bids.
+        refresh: re-sized to the common YES held right before sending (nothing if the read fails). Never a protected race."""
+        if rname in self.protected():
+            return None
+        race = self.u.races[rname]
+        if refresh is not None:
+            fresh = refresh()
+            if fresh is None:
+                log.warning("buy-set unwind %s skipped: positions re-read failed", rname)
+                return None
+            qs = [fresh.get(e, 0.0) for e in race.exchange_ids]
+            qty = min(int(qty), int(min(qs)) if qs and all(q > 0 for q in qs) else 0)
+        if qty < 1:
+            return None
+        limits, got = {}, 0.0
+        for e in race.exchange_ids:
+            need, worst = qty, None
+            for lvl in (books.get(e) or {}).get("bids") or []:
+                take = min(need, int(lvl["quantity"]))
+                if take <= 0:
+                    continue
+                got += take * lvl["price"]; need -= take; worst = lvl["price"]
+                if need <= 0:
+                    break
+            if need > 0 or worst is None:
+                return None
+            limits[e] = round_tick(1 - worst)
+        proceeds = got / qty                                  # per set: the YES bids received, against a payout of 1
+        legs = [{"exchangeId": e, "side": "no", "action": "buy", "quantity": qty, "price": lim, "tournamentId": self.api.tournament_id}
+                for e, lim in limits.items()]
+        log.info("UNWIND BUY-SET (%s) %s: %d sets at proceeds %.4f/set", why, rname, qty, proceeds)
+        if self.dry_run:
+            return {"race": rname, "qty": qty, "dry": True}
+        try:
+            resp = self.api.place_multi_leg(legs, all_or_none=True, key=self.api.new_key("unb"))
+        except ApiError as e:
+            self.store.record_arb(rname, "unwind_buy_set", legs, qty, proceeds - 1.0, proceeds, False, {"error": e.code, "why": why})
+            log.info("buy-set unwind %s not filled: %s", rname, e.code)
+            return None
+        self.store.record_arb(rname, "unwind_buy_set", legs, qty, proceeds - 1.0, proceeds, True, resp)
+        self.committed[rname] = max(0.0, self.committed.get(rname, 0.0) - qty * proceeds)
+        for r in resp.get("results", []):
+            d = r.get("data") or {}
+            self.store.record_order(d.get("orderId"), d.get("exchangeId"), None, "no", "buy", d.get("price"), qty, purpose,
+                                    status="filled" if not d.get("open") else "open", response=d)
+        return {"race": rname, "qty": qty, "proceeds": proceeds}
 
     def free_unwinds(self, held_books: dict[str, dict[str, dict]], positions: dict[str, float], cycle_id=None,
                      refresh=None) -> list[dict]:

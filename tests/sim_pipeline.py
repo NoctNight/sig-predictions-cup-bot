@@ -4,6 +4,7 @@
     python3 tests/sim_pipeline.py calm sweep6     # only these scenarios
     python3 tests/sim_pipeline.py --list          # scenario names
     python3 tests/sim_pipeline.py --churn         # high-frequency arb (churn_enabled) on in every scenario's sandbox, incl. day
+    python3 tests/sim_pipeline.py --raise         # the cash raise, both tiers, on in every scenario's sandbox, incl. day
     python3 tests/sim_pipeline.py -v              # also print per-scenario activity counts
     python3 tests/sim_pipeline.py --patch=fix.py  # exec fix.py (with `mods` = the sandbox sigbot modules) before running:
                                                   # try a candidate fix on the sandbox copy without touching sigbot/
@@ -1223,6 +1224,295 @@ class ChurnStaleFill(ChurnBase):
             sim.chk.violation("churn_no_exit", "no exit after the gap reverted")
 
 
+class CashRaise(ChurnBase):
+    name, cycles, seed, n_races = "cash_raise", 80, 42, 12
+    # high-frequency arb as the only cash user (cheap favourites have their own scenario, cash_raise_cheapfav)
+    cfg = {"churn_enabled": True, "churn_capital": 12000.0, "churn_kill": -600.0, "raise_enabled": True, "cheapfav_enabled": False}
+    doc = ("cash raise: 12 races' gaps +6 ticks at cycle 20 with 9k cash, so high-frequency arb is blocked by its 3k floor; "
+           "MM leftovers on 6 other races (one a 4,500-share leg), an arb set and a buy-set: the raise sells only the "
+           "shortfall + buffer, only < 1% of mid, never a set or the big leg, never through zero, the MM stays off the "
+           "legs, and the arb then enters with the cash; nothing is sold before the need or once it is met")
+
+    def bot_setup(self, sim):
+        super().bot_setup(sim)
+        self.others = [r for r in two_leg_mid_races(sim, 0.3, 0.7, exclude=("Rhode Island Governor",)) if r not in self.races][:9]
+        self.big_leg = sim.legs(self.others[5])[1]
+        sim.seed_holding(self.big_leg, "yes", 4500, "mm")
+        self.set_race, self.buyset_race = self.others[6], self.others[7]
+        sim.seed_set(self.set_race, 800)
+        for ex in sim.legs(self.buyset_race):
+            sim.seed_holding(ex, "yes", 500, "arb")
+        self.protected_legs = set(sim.legs(self.set_race)) | set(sim.legs(self.buyset_race)) | {self.big_leg}
+        seed_cost = 0.0                # the cycle-19 leftovers below, priced as seed_holding prices them
+        for k, r in enumerate(self.others[:5]):
+            ex = sim.legs(r)[k % 2]
+            seed_cost += 900 * ((1 - SV.P(sim.v.bid_t[ex])) if k == 1 else SV.P(sim.v.ask_t[ex]))
+        sim.v.cash = 9000.0 + seed_cost  # ~9k after them: the 3k floor binds once 12 gaps open
+        sim.start_value = sim.v.value()
+        self.per_cycle = []
+
+    def before_cycle(self, sim, i):
+        if i == 19:                    # MM / tilt leftovers the moment before the need (the MM unwinds them over time)
+            for k, r in enumerate(self.others[:5]):
+                sim.seed_holding(sim.legs(r)[k % 2], "no" if k == 1 else "yes", 900, "mm")
+        if i == 20:
+            for r in self.races:
+                set_race_bids_sum(sim, r, self.base[r] + 0.03)
+
+    def after_cycle(self, sim, i):
+        super().after_cycle(sim, i)
+        needs = dict(sim.bot.cash_needs or {})
+        clips = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "raise" and c.get("step") == f"cycle {i}"]
+        got = sum(c["qty"] * (1 - c["price"]) for c in clips)
+        self.per_cycle.append((i, sum(a for a, _ in needs.values()), got, len(clips)))
+        if clips and not needs:
+            sim.chk.violation("raise_without_need", f"cycle {i}: {len(clips)} raise clips with no posted need")
+        if clips and got > sum(a for a, _ in needs.values()) + sim.cfg.raise_buffer + 1.0:
+            sim.chk.violation("raise_over_need", f"cycle {i}: raised {got:.0f} for needs {needs} + buffer {sim.cfg.raise_buffer:.0f}")
+        for c in clips:
+            mid, px, ex = c["mid"], c["price"], c["ex"]
+            cost = (mid - (1 - px)) / mid if c["side"] == "no" else (px - mid) / (1 - mid)
+            if cost >= sim.cfg.raise_max_cost - 1e-9:
+                sim.chk.violation("raise_over_cost", f"{c['key']} {ex} {c['side']} x{c['qty']} @{px}: {100 * cost:.2f}% of mid {mid:.4f}")
+            if ex in self.protected_legs or sim.chk.sim.bot.churn.held(sim.race_of(ex)) > 0:   # (raise runs after churn's entries)
+                sim.chk.violation("raise_sold_excluded", f"{c['key']} {ex}: a set, a > 4,000-share leg or a race high-frequency arb holds")
+            b, a = c["pos_before"], c.get("pos_after", c["pos_before"])
+            if b == 0 or (b > 0 > a) or (b < 0 < a):
+                sim.chk.violation("raise_crossed_zero", f"{c['key']} {ex}: {b:+d} -> {a:+d}")
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        clips = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "raise"]
+        pause_from, idx = {}, {id(c): i for i, c in enumerate(sim.v.calls)}
+        for c in clips:
+            pause_from.setdefault(c["ex"], (idx[id(c)], c["t"]))
+        # after a leg's first clip (call order: the sim clock does not move inside a step) and within the pause
+        mm_on_raised = [c for i, c in enumerate(sim.v.calls) if c["kind"] == "order" and c["prefix"] == "bat" and c["ex"] in pause_from
+                        and i > pause_from[c["ex"]][0] and c["t"] < pause_from[c["ex"]][1] + sim.cfg.raise_pause_sec]
+        # MM quotes resting on a leg when its clip is sent must have been pulled first (no self-match, no buy-back)
+        unpulled = []
+        for c in clips:
+            i = idx[id(c)]
+            prior = [j for j, x in enumerate(sim.v.calls[:i]) if x["kind"] == "order" and x["prefix"] == "bat" and x["ex"] == c["ex"]
+                     and x.get("step") == c.get("step")]
+            if prior and not any(x["kind"] == "cancel_all" and x.get("ex") == c["ex"] for x in sim.v.calls[prior[-1]:i]):
+                unpulled.append(c["key"])
+        if unpulled:
+            sim.chk.violation("raise_mm_not_pulled", f"clips sent while this cycle's MM quotes still rested on the leg: {unpulled[:3]}")
+        ent_after = [c for c in self.calls(sim, ("arb",), main=True) if clips and c["t"] >= clips[0]["t"]]
+        raised = sum(c["qty"] * (1 - c["price"]) for c in clips)
+        self.summary.update(raise_clips=len(clips), raised=round(raised), legs_sold=sorted(pause_from),
+                            needs_cycles=sum(1 for _, n, _, _ in self.per_cycle if n > 0), entries_after_raise=len(ent_after))
+        if not clips:
+            sim.chk.violation("raise_none", "high-frequency arb was blocked by its floor but nothing was raised")
+        if mm_on_raised:
+            sim.chk.violation("raise_mm_quoted", f"{len(mm_on_raised)} MM orders on a leg during its raise pause, first {mm_on_raised[0]['key']} {mm_on_raised[0]['ex']}")
+        if clips and not ent_after:
+            sim.chk.violation("raise_unused", "the raised cash never funded an entry")
+        before = [c for c in clips if c["t"] < T0 + 20 * self.pass_dt]
+        if before:
+            sim.chk.violation("raise_before_need", f"{len(before)} clips before any sleeve was short")
+        sold = {c["ex"] for c in clips}
+        hit = sold & self.protected_legs
+        if hit:
+            sim.chk.violation("raise_touched_set", f"an arb set, buy-set or > 4,000-share leg was sold: {sorted(hit)}")
+
+
+class CashRaiseSets(ChurnBase):
+    name, cycles, seed, n_races = "cash_raise_sets", 200, 43, 12
+    cfg = {"churn_enabled": True, "churn_capital": 12000.0, "churn_kill": -600.0, "raise_enabled": True, "raise_sets_enabled": True,
+           "cheapfav_enabled": False}
+    doc = ("cash raise tier 2: 12 gaps +6 ticks at cycle 20 with ~9k cash and no tier-1 leftovers; held: a cheap sell-set, an "
+           "expensive one (6%+ to exit), a buy-set and a cheap set in a race held through an early call: sets are unwound "
+           "(all-or-none, pieces <= 80% of the touch, never more than the need) only once high-frequency arb has skipped "
+           "entries for cash in >= 3 half-hours (not on the first burst), never the expensive set or the held race")
+
+    def bot_setup(self, sim):
+        super().bot_setup(sim)
+        others = [r for r in two_leg_mid_races(sim, 0.3, 0.7, exclude=("Rhode Island Governor",)) if r not in self.races][:4]
+        self.cheap, self.dear, self.buyset, self.held_race = others
+        set_race_bids_sum(sim, self.dear, 1.06)            # asks ~1.07: unwinding fetches ~0.93/set, 7% under its payout
+        for r in (self.cheap, self.dear, self.held_race):
+            sim.seed_set(r, 1500)
+        for ex in sim.legs(self.buyset):
+            sim.seed_holding(ex, "yes", 1500, "arb")
+        sim.cfg.raise_set_hold_races = [self.held_race]
+        sim.v.cash = 9000.0 + 0.0
+        sim.start_value = sim.v.value()
+        self.per_cycle, self.skips_at = [], {}
+
+    def before_cycle(self, sim, i):
+        if i == 20:
+            for r in self.races:
+                set_race_bids_sum(sim, r, self.base[r] + 0.03)
+
+    def set_calls(self, sim, step=None):
+        # the raise's baskets only: the bot records each leg with purpose 'raise_set'. Other set unwinds share the key
+        # prefix, e.g. high-frequency arb's own loss exit of a lot from the copied params/churn_state.json (24 Oct precheck)
+        own = {self.cheap, self.dear, self.buyset, self.held_race}
+        mine = {int(r["order_id"]) for r in sim.bot.store.rows("SELECT order_id FROM orders WHERE purpose='raise_set' AND order_id IS NOT NULL")}
+        return [c for c in sim.v.calls if c["kind"] == "multileg" and c.get("ok") and c["prefix"] in ("unw", "unb") and c["legs"]
+                and any(int(x) in mine for x in c.get("order_ids") or [])
+                and sim.race_of(str(c["legs"][0]["exchangeId"])) in own and (step is None or c.get("step") == step)]
+
+    def after_cycle(self, sim, i):
+        super().after_cycle(sim, i)
+        needs = dict(sim.bot.cash_needs or {})
+        skips = sim.bot.churn_skip_windows_6h(sim.cfg.raise_set_skip_window)
+        pieces = self.set_calls(sim, f"cycle {i}")
+        clips = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "raise" and c.get("step") == f"cycle {i}"]
+        got = sum(c["cash_after"] - c["cash_before"] for c in pieces) + sum(c["qty"] * (1 - c["price"]) for c in clips)
+        self.per_cycle.append((i, round(sum(a for a, _ in needs.values())), skips, len(pieces), round(got)))
+        if pieces and skips < sim.cfg.raise_set_min_skips:
+            sim.chk.violation("raise_set_early", f"cycle {i}: set unwound with cash skips in only {skips} half-hours of the last 6 h")
+        if pieces and not needs:
+            sim.chk.violation("raise_without_need", f"cycle {i}: set unwound with no posted need")
+        if got > sum(a for a, _ in needs.values()) + sim.cfg.raise_buffer + 2.0:
+            sim.chk.violation("raise_over_need", f"cycle {i}: raised {got:.0f} for needs {needs}")
+        for c in pieces:
+            r = sim.race_of(str(c["legs"][0]["exchangeId"]))
+            if r in (self.dear, self.held_race):
+                sim.chk.violation("raise_set_excluded", f"{c['key']} {r}: the expensive set or a race held through the call")
+            if c["prefix"] == "unb":
+                pos = sim.v.signed_positions()
+                if any(pos.get(e, 0.0) < 0 for e in sim.legs(r)):
+                    sim.chk.violation("raise_buyset_crossed", f"{c['key']} {r}: a buy-set leg went short")
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        pieces = self.set_calls(sim)
+        self.summary.update(set_pieces=len(pieces), set_races=sorted({sim.race_of(str(c["legs"][0]["exchangeId"])) for c in pieces}),
+                            raised_sets=round(sum(c["cash_after"] - c["cash_before"] for c in pieces)),
+                            first_set_cycle=next((x for x in self.per_cycle if x[3]), None), skips_end=sim.bot.churn_skips_6h(),
+                            skip_windows_end=sim.bot.churn_skip_windows_6h(sim.cfg.raise_set_skip_window))
+        first = next((x for x in self.per_cycle if x[1]), None)
+        if first and self.summary["first_set_cycle"] and self.summary["first_set_cycle"][0] <= first[0]:
+            sim.chk.violation("raise_set_on_burst", "a set was unwound in the first cycle of the need")
+        if not pieces:
+            sim.chk.violation("raise_set_none", "tier 1 was empty and the arb kept skipping for cash, but no set was unwound")
+        if not self.calls(sim, ("arb",), main=True):
+            sim.chk.violation("raise_unused", "no high-frequency arb entry at all")
+
+
+class CashRaiseCheapfav(CheapFav):
+    name, cycles, seed = "cash_raise_cheapfav", 240, 44
+    cfg = {"cheapfav_enabled": True, "cheapfav_budget": 6000.0, "cheapfav_leg_cap": 1500.0, "raise_enabled": True, "raise_sets_enabled": False}
+    doc = ("cash raise for cheap favourites (the launch use): favourites 2-5c cheap but cash ~500 above the sleeve's 1k floor, "
+           "MM leftovers of 2,000 shares on 4 other legs: the raise sells (< 1% of mid, never through zero) only in cycles "
+           "where cheap favourites posted a need, never more than need + buffer, and the sleeve then buys with the cash")
+
+    def bot_setup(self, sim):
+        self.left = []
+        for r in two_leg_mid_races(sim, 0.3, 0.7, exclude=("Rhode Island Governor",))[:4]:
+            ex = sim.legs(r)[0]
+            sim.seed_holding(ex, "yes", 2000, "mm")
+            self.left.append(ex)
+        sim.v.cash = 1500.0
+        sim.start_value = sim.v.value()
+        self.per_cycle = []
+
+    def after_cycle(self, sim, i):
+        needs = dict(sim.bot.cash_needs or {})
+        clips = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "raise" and c.get("step") == f"cycle {i}"]
+        got = sum(c["qty"] * (1 - c["price"]) for c in clips)
+        self.per_cycle.append((i, round(sum(a for a, _ in needs.values())), len(clips), round(got)))
+        if clips and "cheapfav" not in needs:
+            sim.chk.violation("raise_without_need", f"cycle {i}: {len(clips)} raise clips without a cheap-favourites need ({needs})")
+        if got > sum(a for a, _ in needs.values()) + sim.cfg.raise_buffer + 1.0:
+            sim.chk.violation("raise_over_need", f"cycle {i}: raised {got:.0f} for {needs}")
+        for c in clips:
+            mid, px = c["mid"], c["price"]
+            cost = (mid - (1 - px)) / mid if c["side"] == "no" else (px - mid) / (1 - mid)
+            if cost >= sim.cfg.raise_max_cost - 1e-9:
+                sim.chk.violation("raise_over_cost", f"{c['key']} {c['ex']}: {100 * cost:.2f}% of mid")
+            b, a = c["pos_before"], c.get("pos_after", c["pos_before"])
+            if b == 0 or (b > 0 > a) or (b < 0 < a):
+                sim.chk.violation("raise_crossed_zero", f"{c['key']} {c['ex']}: {b:+d} -> {a:+d}")
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        clips = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "raise"]
+        cf_after = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "cf" and clips and c["t"] > clips[0]["t"]]
+        self.summary.update(raise_clips=len(clips), raised=round(sum(c["qty"] * (1 - c["price"]) for c in clips)),
+                            need_cycles=sum(1 for x in self.per_cycle if x[1]), cf_entries_after_raise=len(cf_after))
+        if not clips:
+            sim.chk.violation("raise_none", "cheap favourites were short of cash but nothing was raised")
+        elif not cf_after:
+            sim.chk.violation("raise_unused", "no cheap-favourite entry after the raise")
+
+
+class ShockReserve(CheapFav):
+    name, cycles, seed = "shock_reserve", 240, 45
+    cfg = {"cheapfav_enabled": True, "cheapfav_budget": 6000.0, "cheapfav_leg_cap": 1500.0, "raise_enabled": True,
+           "raise_sets_enabled": False, "shock_enabled": True, "shock_reserve": 15000.0}
+    doc = ("shock reserve (shock mode stubbed on): cheap favourites trade on 30k cash; at cycle 120 a shock buys enough to leave "
+           "~12k free, under the 15k reserve: the raise refills it from MM leftovers (tier 1, < 1%, never the shock position, "
+           "never more than deficit + buffer per cycle), and no cheap-favourite entry takes cash under its 1k floor + 15k")
+
+    def bot_setup(self, sim):
+        self.left = []
+        sim.v.cash = 30000.0
+        sim.start_value = sim.v.value()
+        self.per_cycle, self.t_shock, self.shock_ex = [], None, set()
+
+    def before_cycle(self, sim, i):
+        super().before_cycle(sim, i)
+        races = two_leg_mid_races(sim, 0.3, 0.7, exclude=("Rhode Island Governor",))
+        if i == 119:                   # MM leftovers just before the shock (the MM unwinds them over time)
+            for k, r in enumerate(races[:4]):
+                ex = sim.universe.races[r].legs["D" if k % 2 else "R"].exchange_id
+                sim.seed_holding(ex, "yes", 1500, "mm")
+                self.left.append(ex)
+        if i == 120:                   # the shock buys D YES in one race and R YES in another (partisan-neutral, as the
+            spend = max(0.0, sim.v.cash - 12000.0)     # checker does not know shock mode is exempt from the cap)
+            for r, party in ((races[8], "D"), (races[9], "R")):
+                ex = sim.universe.races[r].legs[party].exchange_id
+                q = int(spend / 2 / SV.P(sim.v.ask_t[ex]))
+                sim.seed_holding(ex, "yes", q, "shock")   # recorded as a shock order: the reserve's only legitimate spender
+                self.shock_ex.add(ex)
+            self.t_shock = sim.v.now
+
+    def after_cycle(self, sim, i):
+        needs = dict(sim.bot.cash_needs or {})
+        clips = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "raise" and c.get("step") == f"cycle {i}"]
+        got = sum(c["qty"] * (1 - c["price"]) for c in clips)
+        self.per_cycle.append((i, {k: round(a) for k, (a, _) in needs.items()}, len(clips), round(got), round(sim.v.cash)))
+        if clips and not needs:
+            sim.chk.violation("raise_without_need", f"cycle {i}: {len(clips)} clips without a need or a reserve deficit")
+        if clips and self.t_shock is None and "cheapfav" not in needs:
+            sim.chk.violation("raise_before_shock", f"cycle {i}: raised before any shock spend without a cheap-favourites need")
+        if got > sum(a for a, _ in needs.values()) + sim.cfg.raise_buffer + 1.0:
+            sim.chk.violation("raise_over_need", f"cycle {i}: raised {got:.0f} for {needs}")
+        for c in clips:
+            if c["ex"] in self.shock_ex:
+                sim.chk.violation("raise_sold_shock", f"{c['key']}: sold the shock position")
+            mid, px = c["mid"], c["price"]
+            cost = (mid - (1 - px)) / mid if c["side"] == "no" else (px - mid) / (1 - mid)
+            if cost >= sim.cfg.raise_max_cost - 1e-9:
+                sim.chk.violation("raise_over_cost", f"{c['key']}: {100 * cost:.2f}% of mid")
+            b, a = c["pos_before"], c.get("pos_after", c["pos_before"])
+            if b == 0 or (b > 0 > a) or (b < 0 < a):
+                sim.chk.violation("raise_crossed_zero", f"{c['key']} {c['ex']}: {b:+d} -> {a:+d}")
+        for c in [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "cf" and c.get("step") == f"cycle {i}"]:
+            if c["cash_before"] - c["qty"] * c["price"] < 1000.0 + 15000.0 - 1.0:
+                sim.chk.violation("reserve_spent_by_cheapfav", f"{c['key']}: cash {c['cash_before']:.0f} -> "
+                                  f"{c['cash_before'] - c['qty'] * c['price']:.0f}, under the 1k floor + 15k reserve")
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        clips = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "raise"]
+        after = [c for c in clips if self.t_shock is not None and c["t"] >= self.t_shock]
+        cash_end = sim.v.cash
+        self.summary.update(raise_clips=len(clips), after_shock=len(after), raised_after=round(sum(c["qty"] * (1 - c["price"]) for c in after)),
+                            cash_at_end=round(cash_end), reserve_cycles=sum(1 for x in self.per_cycle if "shock_reserve" in x[1]))
+        if self.t_shock is None:
+            sim.chk.violation("shock_not_simulated", "no shock spend")
+        elif not after:
+            sim.chk.violation("reserve_not_refilled", "free cash fell under the reserve but nothing was raised")
+        elif cash_end < 15000.0 - 1.0:
+            sim.chk.violation("reserve_still_short", f"free cash {cash_end:.0f} still under the 15k reserve at the end")
+
+
 class _HookLock:
     """The trade lock, but whoever waits for it runs the moment it is released: models the main thread's churn cycle
     taking the lock right after the scanner's unwind released it (real thread order, which the sequential sim hides)."""
@@ -1768,7 +2058,7 @@ class Day(Scenario):
 
 
 SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
-             ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
+             ChurnMany, ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, ShockReserve, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
              Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, Day]
 
 
@@ -1788,6 +2078,9 @@ def main(argv):
     verbose = "-v" in argv
     if "--churn" in argv:
         FORCE_CFG["churn_enabled"] = True
+    if "--raise" in argv:
+        FORCE_CFG["raise_enabled"] = True
+        FORCE_CFG["raise_sets_enabled"] = True
     names = [a for a in argv if not a.startswith("-")]
     if "--list" in argv:
         for s in SCENARIOS:

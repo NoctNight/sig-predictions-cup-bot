@@ -414,8 +414,22 @@ class MarketMaker:
         writes = 0
         ttl = (datetime.now(timezone.utc) + timedelta(seconds=self.cfg.order_ttl_sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
         paused = self.news_paused()
+        raising = {ex: t for ex, t in (getattr(self, "raise_pause", None) or {}).items() if t > now_ts}
         start = (cycle_id or 0) % max(1, len(self.quoted))          # rotate so the same markets are not always starved by the budget
         for ex in self.quoted[start:] + self.quoted[:start]:
+            if ex in raising:
+                # the cash raise is selling this leg: no quotes here (they would buy it back); pull any still resting
+                oo = open_orders.get(ex, [])
+                if oo and writes < write_budget and not self.dry_run:
+                    try:
+                        self.api.cancel_all(exchange_id=ex)
+                        pulled = [o["id"] for o in oo]
+                        self.store.mark_orders(pulled, "cancelled")
+                    except ApiError as e:
+                        log.warning("raise pause cancel-all %s failed: %s", ex, e)
+                    writes += 1
+                summary.setdefault("raise_paused", []).append(ex)
+                continue
             if ex in paused:
                 # news sweeper took liquidity on this race: pull our quotes and stay out until the pause ends, then come back hot
                 oo = open_orders.get(ex, [])

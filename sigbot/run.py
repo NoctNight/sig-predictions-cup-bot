@@ -26,6 +26,7 @@ import os
 import signal
 import threading
 import statistics
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -49,6 +50,7 @@ from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
 from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
 from .proposals import cheap_favourites as CF
+from .proposals import cash_raise as CR
 from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround, big_holding,
                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
 from .proposals import election_night as EN
@@ -122,6 +124,26 @@ from .universe import Universe
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 log = logging.getLogger("sigbot")
+
+
+def shock_reserve(bot) -> float:
+    """Cash kept free for shock mode (Sizhe 24 Oct: "yes add money for the shock reserve"): cfg.shock_reserve while
+    shock_enabled, else 0. Only purpose 'shock' spends it (the shock sleeve reads bot.cash itself)."""
+    cfg = getattr(bot, "cfg", None)
+    if not getattr(cfg, "shock_enabled", False) or getattr(getattr(bot, "shock", None), "killed", False):
+        return 0.0
+    sm = sys.modules.get("sigbot.proposals.shock_mode")          # (loaded by shock mode's wiring when it deploys)
+    if sm is not None and time.time() > float(getattr(sm, "LAST_ENTRY", float("inf"))):
+        return 0.0                                     # no more shock entries: the reserve is free (review 7)
+    if getattr(bot, "strategy_kill", None) is not None and strategy_paused(bot, "shock"):
+        return 0.0                                     # the sleeve is stopped: nothing to keep the cash for
+    return float(getattr(cfg, "shock_reserve", 0.0) or 0.0)
+
+
+def spendable_cash(bot) -> float:
+    """The cash every sleeve but shock mode may plan with: free cash minus the shock reserve, so each sleeve's own floor
+    sits on top of it (cheap favourites 1k + reserve, high-frequency arb 3k + reserve, arbs' cash_reserve + reserve)."""
+    return float(getattr(bot, "cash", 0.0) or 0.0) - shock_reserve(bot)
 
 
 def strategy_paused(bot, name: str) -> bool:
@@ -251,7 +273,7 @@ class ArbScanner(threading.Thread):
         min_cost = 1.0
         cands = [r for r in cands if b.arb.race_budget_left(r.name, sell_ret(r)) >= b.cfg.arb.min_set_qty * min_cost
                  and apparent(r) >= min(b.cfg.arb.min_edge_sell, b.cfg.arb.min_edge_buy)]
-        if b.arb.budget_left(b.cash) < b.cfg.arb.min_set_qty * min_cost and not b.cfg.arb.recycle_enabled:
+        if b.arb.budget_left(spendable_cash(b)) < b.cfg.arb.min_set_qty * min_cost and not b.cfg.arb.recycle_enabled:
             cands = []
         cands.sort(key=apparent, reverse=True)
         # hft_strategies.md: 17-18 of 33 failed baskets priced a leg off our OWN resting tilt/MM bid (the venue will not
@@ -285,7 +307,7 @@ class ArbScanner(threading.Thread):
                 self.best_unfunded = {"race": best.race, "kind": best.kind, "ret": best.ret, "cost": best.cost, "qty": best.qty, "ts": time.time()}
             if not b.cfg.arb.new_sets:
                 return      # cash mode: the best set is remembered for recycle_pass; free cash never buys a new one
-            plan = b.arb.plan(cand_books, b.cash)
+            plan = b.arb.plan(cand_books, spendable_cash(b))
             if not plan:
                 return
             log.info("scanner arb plan: %s", [(c.race, c.kind, c.qty, round(c.edge, 4), round(100 * c.ret, 2)) for c in plan])
@@ -332,7 +354,7 @@ class ArbScanner(threading.Thread):
                 b.mm.force_cancel = True
                 try:
                     summ = b.mm.quote_cycle({ex: fb}, b.mm_positions(b.positions_snapshot), b.pressures(), {ex: b.open_orders_cache.get(ex, [])},
-                                            b.fills_count_cache, b.cash, b.last_cycle_id, 2)
+                                            b.fills_count_cache, max(0.0, spendable_cash(b)), b.last_cycle_id, 2)
                 finally:
                     b.mm.force_cancel = False
             b.book_cache[ex] = (fb, bb, ba, fb.get("latestPrice"))
@@ -356,7 +378,7 @@ class ArbScanner(threading.Thread):
         if (not best or best.get("failed") or time.time() - best.get("ts", 0) > 10 or not b.cfg.arb.recycle_enabled
                 or not b.arb.committed or not b.feed_ok() or time.time() < b.killed_until or strategy_paused(b, "recycle")):
             return
-        if b.cfg.arb.new_sets and b.arb.budget_left(b.cash) >= best["cost"] * max(b.cfg.arb.min_set_qty, 1):
+        if b.cfg.arb.new_sets and b.arb.budget_left(spendable_cash(b)) >= best["cost"] * max(b.cfg.arb.min_set_qty, 1):
             return                                  # not capital-blocked: the normal scanner path takes it (in cash mode
                                                     # free cash never buys sets, so a better set is reached only by recycling)
         tgt = best["race"]
@@ -379,7 +401,7 @@ class ArbScanner(threading.Thread):
         if not held_books:
             return
         with b.trade_lock:
-            rec = b.arb.recycle(dict(best, fresh_books=target), held_books, b.positions_snapshot, b.cash, None, refresh=b.fresh_positions)
+            rec = b.arb.recycle(dict(best, fresh_books=target), held_books, b.positions_snapshot, spendable_cash(b), None, refresh=b.fresh_positions)
             if rec and not rec.get("dry"):
                 b.refresh_snapshot(b.unwind_deltas([rec]))
         if not rec:
@@ -395,7 +417,7 @@ class ArbScanner(threading.Thread):
             b.cash = float(b.scan_api.account().get("balance") or b.cash)
             fresh = {ex: b.get_book(ex, 50, b.scan_api, max_age=3.0) for ex in b.universe.races[tgt].exchange_ids}
             with b.trade_lock:
-                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=(b.arb.recycle_credit if cash_mode else freed), recycle=True)
+                plan = [c for c in b.arb.plan({tgt: fresh}, spendable_cash(b), extra_budget=(b.arb.recycle_credit if cash_mode else freed), recycle=True)
                         if c.race == tgt]
                 if plan:
                     res = b.arb.execute(plan, None)
@@ -419,7 +441,7 @@ class ArbScanner(threading.Thread):
         try:
             fresh = {ex: b.get_book(ex, 50, b.scan_api, max_age=3.0) for ex in b.universe.races[tgt].exchange_ids}
             with b.trade_lock:
-                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=b.arb.recycle_credit, recycle=True) if c.race == tgt]
+                plan = [c for c in b.arb.plan({tgt: fresh}, spendable_cash(b), extra_budget=b.arb.recycle_credit, recycle=True) if c.race == tgt]
                 if not plan:
                     b.arb.cooldown[tgt] = time.time() + 60
                     return
@@ -593,6 +615,8 @@ class Bot:
                 log.warning("cheapfav ledger at start-up: %s", e)
         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
+        self.cash_needs: dict = {}             # sleeve -> (cash short this cycle, why): what the cash raise may sell for
+        self.load_raise_pause()
         self.tilt = TiltHarvester(self.api, self.store, cfg.tilt, self.universe, cfg.starting_cash, dry_run)
         self.direction = ExplainedDirection(self.api, self.store, None, self.universe)
         self.news = NewsSweeper(self.api, self.store, cfg.news, self.universe, cfg.starting_cash, dry_run) if cfg.news.enabled else None
@@ -735,12 +759,15 @@ class Bot:
             key = (r["exchange_id"], r["side"])
             held[key] = held.get(key, 0.0) + r["q"]
             strict.add(key)
-        for r in self.store.rows("SELECT exchange_id, side, SUM(ABS(quantity)) q FROM fills WHERE purpose='exit' GROUP BY 1,2"):
+        # (the cash raise's tier-1 clips close these holdings too: netted here, or the next exit closes them again and eats
+        # into an arb set; review 24 Oct)
+        for r in self.store.rows("SELECT exchange_id, side, SUM(ABS(quantity)) q FROM fills WHERE purpose IN ('exit', 'raise') GROUP BY 1,2"):
             opp = "no" if r["side"] == "yes" else "yes"      # an exit buying YES closed held NO, and vice versa
             held[(r["exchange_id"], opp)] = held.get((r["exchange_id"], opp), 0.0) - r["q"]
         # exit orders still resting (60-s TTL vs a 30-s cycle) already cover part of the holding: never send a second one
         # on top (review 22 Oct: two positions were closed past zero and flipped)
-        exit_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose='exit' AND order_id IS NOT NULL")}
+        # (the cash raise's clips close holdings the same way: count them too)
+        exit_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose IN ('exit', 'raise') AND order_id IS NOT NULL")}
         resting_exit: dict = {}
         for ex_o, lst in (getattr(self, "open_orders_cache", None) or {}).items():
             for o in lst:
@@ -872,6 +899,414 @@ class Bot:
                     out[str(d["exchangeId"])] = out.get(str(d["exchangeId"]), 0.0) + float(d.get("quantityTraded") or 0)
         return out
 
+    def load_raise_pause(self):
+        """Legs the cash raise is selling: the MM stays off them until the pause ends, across a restart (store param)."""
+        try:
+            self.mm.raise_pause = {str(e): float(t) for e, t in (self.store.get_param("raise_pause", {}) or {}).items() if float(t) > time.time()}
+        except Exception as e:
+            self.mm.raise_pause = {}
+            log.warning("raise pause unreadable: %s", e)
+
+    def post_cash_need(self, sleeve: str, amount: float, why: str = ""):
+        """A sleeve with more edge than the cheapest holdings is blocked by cash right now (cleared every cycle): the cash
+        raise may sell up to this much for it, never more."""
+        if amount > 0.5:
+            needs = getattr(self, "cash_needs", None)
+            if needs is None:
+                needs = self.cash_needs = {}
+            needs[sleeve] = (float(amount), why)
+
+    def note_churn_skip(self, race: str, wanted: int, allowed: int, cost: float):
+        """High-frequency arb skipped (or cut) a qualifying entry for cash: logged for the brief's unmet-demand line and
+        counted for tier 2 of the cash raise. One record per race per 5 min (the sleeve retries every cycle)."""
+        now = time.time()
+        skips = [s for s in (self.store.get_param("churn_cash_skips", []) or []) if float(s[0]) > now - 6 * 3600]
+        if any(s[1] == race and now - float(s[0]) < 300 for s in skips):
+            return
+        skips.append([now, race, int(wanted), int(allowed), float(cost)])
+        self.store.set_param("churn_cash_skips", skips)
+        log.info("CHURN %s for cash: %s wanted x%d at %.4f/set, cash allowed x%d (%.0f unmet); %d in the last 6 h",
+                 "skipped" if allowed == 0 else "cut", race, wanted, cost, allowed, (wanted - allowed) * cost,
+                 sum(1 for s in skips if float(s[0]) > now - 6 * 3600))
+
+    def churn_skips_6h(self) -> int:
+        """Entries high-frequency arb skipped (or cut) for cash in the last 6 h (one per race per 5 min): for the brief."""
+        now = time.time()
+        return sum(1 for s in (self.store.get_param("churn_cash_skips", []) or []) if float(s[0]) > now - 6 * 3600)
+
+    def churn_skip_windows_6h(self, window: float = 1800.0) -> int:
+        """Cash skips in the last 6 h counted at least `window` apart: the tier-2 gate. A burst of races blocked in one
+        cycle, or one opportunity retried for 10 min, counts once (review 24 Oct: 3 races in one cycle met a count of 3),
+        and 3 needs demand spread over >= 2 windows (an hour), not a fixed grid's edges (3 in 35 min, review 2)."""
+        now = time.time()
+        n, last = 0, None
+        for t in sorted(float(s[0]) for s in (self.store.get_param("churn_cash_skips", []) or []) if float(s[0]) > now - 6 * 3600):
+            if last is None or t - last >= window:
+                n, last = n + 1, t
+        return n
+
+    def raise_cycle(self, prices: dict, killed: bool):
+        """Cash raise (proposals/cash_raise.py): when a higher-edge sleeve posted a cash need this cycle, raise the shortfall
+        plus raise_buffer (at most raise_max_total a day). Tier 1: holdings beyond the arb sets that cost < raise_max_cost
+        to exit, cheapest first, at the touch; the MM stops quoting a leg being sold; net D stays inside the cap. Tier 2
+        (raise_sets_enabled): whole sets, all-or-none, only when tier 1 cannot cover it, high-frequency arb skipped
+        >= raise_set_min_skips entries for cash in 6 h and the exit costs <= raise_set_max_cost."""
+        cfg = self.cfg
+        reserve = shock_reserve(self)
+        shock_on = bool(getattr(self, "shock_active", lambda: False)())   # a shock holds or is entering positions
+        if reserve > 0 and spendable_cash(self) < -0.5 and not shock_on:
+            # (review 6: refilled during a shock, the raise sold into the very move shock mode trades, and the shock's own
+            # exit brought the cash back an hour later: selling just to hold cash; the reserve refills once it closes)
+            # the one need without a waiting trade: keep free cash >= the shock reserve (refills after a shock spends it); on
+            # the board like the others, so the logs and the brief see it
+            Bot.post_cash_need(self, "shock_reserve", -spendable_cash(self), f"free cash {self.cash:.0f} under the {reserve:.0f} shock reserve")
+        needs = dict(getattr(self, "cash_needs", None) or {})
+        if reserve > 0 and spendable_cash(self) < 0:
+            # free cash is under the reserve: whatever is raised lands under it first, so the sleeves asking could not spend
+            # it; only the reserve's own refill counts (none during a shock: review 7, sales into the shock move otherwise)
+            needs = {k: v for k, v in needs.items() if k == "shock_reserve"}
+        if not getattr(cfg, "raise_enabled", False) or self.dry_run or self.store is None or killed or not needs:
+            return
+        if getattr(self, "open_orders_ok", True) is False:
+            # an MM bid we cannot see could fill between the re-read and a clip (a leg through zero): no raise this cycle
+            log.warning("RAISE: skipped this cycle: the open-orders read failed")
+            return
+        now = time.time()
+        need = sum(a for a, _ in needs.values())
+        why = ", ".join(f"{k} {a:.0f} ({w})" for k, (a, w) in sorted(needs.items()))
+        hist = [(float(t), float(x)) for t, x in (self.store.get_param("raise_log", []) or []) if float(t) > now - 86400]
+        left = cfg.raise_max_total - sum(x for _, x in hist)
+        target = min(need + cfg.raise_buffer, left)
+        if target <= 0.5:
+            log.info("RAISE: %s short %.0f, but %.0f already raised in 24 h (cap %.0f)", sorted(needs), need, cfg.raise_max_total - left, cfg.raise_max_total)
+            return
+        race_legs = {r.name: list(r.exchange_ids) for r in self.universe.races.values()}
+        prot = set(self.arb.protected())
+        busy = set(getattr(self, "catchup_open", None) or {}) | set(getattr(self, "cheapfav_open", None) or {})
+        busy |= {str(r["exchange_id"]) for r in self.store.rows(          # other sleeves' orders: leave their legs alone
+            "SELECT DISTINCT exchange_id FROM orders WHERE placed_at > ? AND purpose NOT IN ('mm', 'raise', 'raise_set', 'arb')", (now - 600,))}
+        busy |= {str(r["exchange_id"]) for r in self.store.rows(          # shock positions are shock mode's to close
+            "SELECT DISTINCT exchange_id FROM orders WHERE placed_at > ? AND purpose IN ('shock', 'shock_exit')", (now - 86400,))}
+        for rn in (getattr(self, "shock_races", lambda: set())() or ()):   # incl. entries of unknown outcome (no orders row)
+            r_ = self.universe.races.get(rn)
+            busy |= set(r_.exchange_ids) if r_ is not None else set()
+        # whole races: a catch-up / cheap-favourite position netted into a set leg shows on the race's OTHER leg (review 24 Oct:
+        # catch-up's 500 YES on D next to 1,000 sets read as 500 NO on R, which tier 1 then sold)
+        busy_races = {self.universe.race_of(e).name for e in busy if self.universe.race_of(e) is not None}
+        excl_races = set(cfg.raise_exclude_races or []) | prot | busy_races
+        sent = 0.0
+        with self.trade_lock:
+            # a clip of ours that may still rest anywhere: pulled before positions are read (review 3: a rested clip filling
+            # later is in no cap check, net D -1 -> +1199 past a 900 cap)
+            for r in self.store.rows("SELECT DISTINCT exchange_id FROM orders WHERE purpose='raise' AND status='open' AND placed_at > ?", (now - 120,)):
+                ids = [x["order_id"] for x in self.store.rows("SELECT order_id FROM orders WHERE exchange_id=? AND purpose='raise' AND status='open' "
+                                                              "AND placed_at > ?", (r["exchange_id"], now - 120))]
+                try:
+                    self.api.cancel_all(exchange_id=r["exchange_id"])
+                    self.store.mark_orders(ids, "cancelled")
+                except ApiError as e:
+                    log.warning("RAISE: could not pull an earlier clip on %s (%s): no raise this cycle", r["exchange_id"], e)
+                    return
+            pos = self.fresh_positions()               # sized from the venue now, under the lock (never through zero)
+            if pos is None:
+                return
+            elig = CR.eligible(race_legs, pos, excl_races, busy, cfg.raise_hold_limit)
+            own = own_levels(self)
+            books = {}
+
+            def book(ex):
+                if ex not in books:
+                    bk = self.fresh_book(ex, 10.0)
+                    books[ex] = own.net(ex, bk) if bk else None   # our own resting quotes are not liquidity we can sell into
+                return books[ex]
+            for ex in elig:
+                book(ex)
+            net_d = lambda p: risk.exposure(self.universe, p, prices).net_d_notional
+            clips = CR.plan(elig, books, target, cfg.raise_max_cost, net_d, cfg.mm.portfolio_max_partisan_notional, pos,
+                            cfg.raise_cap_margin, cfg.raise_max_clips, getattr(cfg, "raise_min_clip", 0.0))
+            # tier 2 only when tier 1 cannot cover the shortfall over the coming cycles, and high-frequency arb's unmet demand
+            # has repeated (not a one-off)
+            pieces, t1 = [], CR.tier1_available(elig, books, cfg.raise_max_cost)
+            skips = self.churn_skip_windows_6h(getattr(cfg, "raise_set_skip_window", 1800.0)) if getattr(cfg, "raise_sets_enabled", False) else 0
+            # (never for the shock reserve: tier 2 sizes from the other sleeves' needs only)
+            t2_target = min(sum(a for k, (a, _) in needs.items() if k != "shock_reserve") + cfg.raise_buffer, target) \
+                if any(k != "shock_reserve" for k in needs) and spendable_cash(self) >= 0 else 0.0
+            # (review 6: with the reserve short, tier 2's cash refilled the reserve first, so the other need never cleared and
+            # sets were sold at up to 4.5% for the reserve; tier 2 waits until tier 1 has refilled it)
+            if getattr(cfg, "raise_sets_enabled", False) and t2_target > 0 and t1 < t2_target and skips >= cfg.raise_set_min_skips:
+                s_excl = prot | set(cfg.raise_set_hold_races or []) | busy_races
+                for r, exs in race_legs.items():
+                    if r not in s_excl and len(exs) >= 2:
+                        qs = [pos.get(e, 0.0) for e in exs]
+                        if all(q < 0 for q in qs) or all(q > 0 for q in qs):
+                            for e in exs:
+                                book(e)
+                # only the part tier 1 can never cover: its cheaper holdings are used first, over the coming cycles
+                pieces = CR.set_pieces(race_legs, pos, books, t2_target - t1, cfg.raise_set_max_cost,
+                                       s_excl, cfg.raise_set_max_pieces, getattr(cfg, "raise_min_clip", 0.0))
+                if not pieces:
+                    log.info("RAISE tier 2: %.0f still short after tier 1 (%.0f available); no set exits at <= %.1f%%", target - t1, t1,
+                             100 * cfg.raise_set_max_cost)
+            if not clips and not pieces:
+                log.info("RAISE: %s short %.0f; no clip under %.1f%% of mid (%d eligible legs)%s", sorted(needs), need,
+                         100 * cfg.raise_max_cost, len(elig), "" if not getattr(cfg, "raise_sets_enabled", False)
+                         else f"; tier 2: cash skips in {skips} half-hours of the last 6 h (need {cfg.raise_set_min_skips}), tier 1 has {t1:.0f}")
+                return
+            pause = {e: t for e, t in (getattr(self.mm, "raise_pause", None) or {}).items() if t > now}
+            for c in clips:                            # every leg of the race: the other leg's MM trades the same exposure
+                for e in race_legs.get(self.universe.race_of(c["exchange_id"]).name, [c["exchange_id"]]):
+                    pause[e] = now + cfg.raise_pause_sec
+            for p in pieces:
+                for e in race_legs[p["race"]]:
+                    pause[e] = now + cfg.raise_pause_sec
+            self.mm.raise_pause = pause                # before the clip: the MM must not buy the leg back
+            self.store.set_param("raise_pause", pause)
+
+            def pull(ex):
+                # our resting orders on the leg (MM quotes, an earlier clip's remainder): pulled first, so nothing of ours
+                # can fill there between the positions re-read below and the clip (no self-match, no buy-back)
+                ids = [oid for oid, o in own.orders.items() if o[0] == ex]
+                ids += [r["order_id"] for r in self.store.rows(   # an earlier clip, or an MM quote, the cache may not show
+                    "SELECT order_id FROM orders WHERE exchange_id=? AND status='open' AND purpose IN ('raise', 'mm') AND placed_at > ?",
+                    (ex, now - max(120.0, float(getattr(cfg.mm, "order_ttl_sec", 1800)))))]
+                if ids:
+                    self.api.cancel_all(exchange_id=ex)
+                    self.store.mark_orders(ids, "cancelled")
+            ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            for c in clips:
+                ex = c["exchange_id"]
+                try:
+                    for e in race_legs.get(self.universe.race_of(ex).name, [ex]):
+                        pull(e)
+                    # re-read after the pull, right before the send, and clip to what the leg holds now beyond any set, same
+                    # sign (review 24 Oct: an MM bid filling between the cycle's read and the clip took a leg -800 -> +300)
+                    now_pos = self.fresh_positions()
+                    if now_pos is None:
+                        log.warning("RAISE: positions re-read failed; remaining clips skipped")
+                        break
+                    q_now = CR.eligible(race_legs, now_pos, excl_races, busy, cfg.raise_hold_limit).get(ex, 0)
+                    q = min(int(c["qty"]), abs(q_now)) if q_now * c["sign"] > 0 else 0
+                    if q < 1 or q * c["pps"] < getattr(cfg, "raise_min_clip", 0.0):
+                        log.info("RAISE clip %s skipped: %s now holds %+d beyond its sets (clip of %d)", ex, ex, q_now, q)
+                        continue
+                    # the plan assumed every earlier clip filled; re-check the cap on the positions now (review 24 Oct: an
+                    # earlier clip that errored or rested let a later one take net D from +840 to +990 past a 900 cap)
+                    d_now = net_d(now_pos)
+                    p2 = dict(now_pos)
+                    p2[ex] = p2.get(ex, 0.0) - c["sign"] * q
+                    d2 = net_d(p2)
+                    cap = cfg.mm.portfolio_max_partisan_notional
+                    if abs(d2) > cap + 1e-6 and abs(d2) >= abs(d_now) - 1e-6:
+                        log.info("RAISE clip %s skipped: net D %+.0f -> %+.0f would breach the %.0f cap", ex, d_now, d2, cap)
+                        continue
+                    c = dict(c, qty=q, proceeds=q * c["pps"], net_d_after=d2)
+                    try:
+                        resp = self.api.place_order(ex, c["side"], "buy", q, float(c["price"]), expiration=ttl, key=self.api.new_key("raise"))
+                    except OSError as e:                     # URLError / timeout / connection reset after the client's retries:
+                        raise ApiError(0, "NETWORK", str(e))  # placement status unknown (review 5)
+                    self.store.record_order(resp.get("orderId"), ex, None, c["side"], "buy", float(c["price"]), q, "raise", response=resp)
+                    traded = resp.get("quantityTraded", resp.get("filledQuantity"))
+                    sent += (min(q, float(traded)) if traded is not None else q) * c["pps"]   # cash: what traded, if known
+                    hist.append((now, c["proceeds"]))                                # the 24-h cap: what was sent (safe side)
+                    self.store.set_param("raise_log", hist)
+                    if (traded is None or float(traded) < q - 1e-9) and resp.get("open") is not False:
+                        # fill-or-cancel: a rested remainder is in no later cap check (review 3); if it cannot be cancelled,
+                        # or its fill is unknown, send nothing more this cycle (a remainder the venue already closed: nothing rests)
+                        oid = resp.get("orderId")
+                        try:
+                            if oid is None:
+                                raise ApiError(0, "NO_ORDER_ID", "no orderId in the response")
+                            self.api.cancel_order(oid)
+                            self.store.mark_orders([oid], "cancelled")
+                            log.info("RAISE clip %s: %s of %d traded; the rest cancelled", ex, "?" if traded is None else int(float(traded)), q)
+                        except ApiError as e:
+                            log.warning("RAISE clip %s: remainder not cancelled (%s): no more clips this cycle", ex, e)
+                            break
+                        if traded is None:
+                            break
+                        hist[-1] = (now, float(traded) * c["pps"])   # cancelled: the 24-h cap is charged what traded (review 4)
+                    self.store.set_param("raise_log", hist)        # at once: an exception later must not drop it from the cap
+                    log.info("RAISE clip %s: sell %s x%d @%.3f (buy %s), proceeds %.0f, cost %.2f (%.2f%% vs mid %.4f), net D after %+.0f; for %s",
+                             ex, c["holding"], c["qty"], c["pps"], c["side"], c["proceeds"], c["cost"], 100 * c["cost_frac"], c["mid"],
+                             c["net_d_after"], why)
+                except ApiError as e:
+                    if e.status is None or e.status >= 500 or e.status == 0 or e.code == "REQUEST_IN_FLIGHT":
+                        # the order may have been placed (status unknown) and is not in the store, so no later pull finds it:
+                        # pull the leg and stop (review 4)
+                        log.warning("raise clip %s: %s (status unknown): leg pulled, no more clips this cycle", ex, e)
+                        hist.append((now, c["proceeds"]))   # it may have filled: charged to the 24-h cap (safe side)
+                        self.store.set_param("raise_log", hist)
+                        try:
+                            self.api.cancel_all(exchange_id=ex)
+                        except ApiError as e2:
+                            log.warning("raise clip %s: pull after an unknown placement failed: %s", ex, e2)
+                        break
+                    log.warning("raise clip %s: %s", ex, e)
+            for p in pieces:
+                try:
+                    for e in race_legs[p["race"]]:
+                        pull(e)
+                    bk = {e: books[e] for e in race_legs[p["race"]]}
+                    if p["kind"] == "sell_set":
+                        res = self.arb.unwind_set(p["race"], bk, p["qty"], why="raise tier 2", min_qty=1, refresh=self.fresh_positions, purpose="raise_set")
+                    else:
+                        res = self.arb.unwind_buy_set(p["race"], bk, p["qty"], why="raise tier 2", refresh=self.fresh_positions, purpose="raise_set")
+                    if res and not res.get("dry"):
+                        got = res["qty"] * res["proceeds"]
+                        sent += got
+                        hist.append((now, got))
+                        self.store.set_param("raise_log", hist)
+                        log.info("RAISE set %s (%s): unwound %d of %d sets at %.4f/set (payout %.0f), proceeds %.0f, cost %.2f%%; %d cash "
+                                 "skip half-hours by high-frequency arb in 6 h; for %s", p["race"], p["kind"], res["qty"], p["held"], res["proceeds"],
+                                 p["payout"], got, 100 * (p["payout"] - res["proceeds"]) / res["proceeds"], skips, why)
+                except ApiError as e:
+                    log.warning("raise set %s: %s", p["race"], e)
+            self.store.set_param("raise_log", hist)
+            self.refresh_snapshot()
+        if sent:
+            self.cash += sent
+            log.info("RAISE: %.0f raised for a %.0f shortfall (+%.0f buffer); %.0f left of the 24-h cap", sent, need, cfg.raise_buffer, left - sent)
+
+    def ri_trimmed(self) -> float:
+        """Sets the RI trim has unwound so far: its own log, cross-checked against its 'ri_trim' orders (per leg; a set is
+        one order on every leg), whichever is larger, so the cap survives a restart and a lost param."""
+        logged = sum(float(x[2]) for x in (self.store.get_param("ri_trim_log", []) or []))
+        rows = self.store.rows("SELECT exchange_id, SUM(quantity) q FROM orders WHERE purpose='ri_trim' AND status != 'cancelled' GROUP BY 1")
+        per_leg = [float(r["q"] or 0.0) for r in rows]
+        return max(logged, max(per_leg) if per_leg else 0.0)
+
+    def ri_trim_cycle(self, prices: dict, killed: bool):
+        """The RI trim (Sizhe 24 Oct: "more trades to be made with higher edge but ... locked up by lack of capital"): tier 2
+        for raise_sets_races only (Rhode Island Governor). While free cash is short of what cheap favourites' remaining
+        budget plus the shock reserve can use, unwind whole sets (every leg, all-or-none) in clips of <= raise_ri_trim_clip,
+        at most one per raise_ri_trim_gap_sec, only when the clip's walked exit cost is at or under the race's trailing
+        24-h median (level 0, research_notes/ladder_exits.md) and its proceeds cover the sets' cost basis (no realised
+        loss), net D inside the cap, until raise_ri_trim_sets have been unwound or the need is met."""
+        cfg = self.cfg
+        races = list(getattr(cfg, "raise_sets_races", None) or [])
+        cf = getattr(self, "cheapfav", None)
+        if (not getattr(cfg, "raise_enabled", False) or not races or cf is None or self.dry_run or self.store is None or killed
+                or getattr(self, "open_orders_ok", True) is False or bool(getattr(self, "shock_active", lambda: False)())):
+            return
+        now = time.time()
+        if strategy_paused(self, "cheapfav") or now > float(getattr(cf, "last_entry", float("inf"))):
+            return                                     # cheap favourites cannot spend the cash: nothing to trim for (review 9)
+        if now - float(getattr(self, "ri_trim_fail_ts", 0.0)) < 600.0:
+            return                                     # a basket was just rejected: no pause / pull / retry every cycle
+        try:
+            deployed = float(self.cheapfav_refresh()[4])
+        except Exception as e:
+            log.warning("RI trim: cheap-favourites ledger unreadable (%s): no trim", e)
+            return
+        need = max(0.0, float(cf.budget) - deployed) + shock_reserve(self) - float(self.cash)
+        if need <= 0.5:
+            return
+        cap = float(getattr(cfg, "raise_ri_trim_sets", 0.0) or 0.0)
+        trimmed = self.ri_trimmed()
+        tlog = [list(x) for x in (self.store.get_param("ri_trim_log", []) or [])]
+        if trimmed >= cap - 0.5:
+            return
+        if tlog and now - max(float(x[0]) for x in tlog) < float(getattr(cfg, "raise_ri_trim_gap_sec", 1800.0)):
+            return
+        hist = [(float(t), float(x)) for t, x in (self.store.get_param("raise_log", []) or []) if float(t) > now - 86400]
+        left = cfg.raise_max_total - sum(x for _, x in hist)
+        if left <= 0.5:
+            return
+        need = min(need, left)                         # the 24-h raise cap binds the trim too (review 9: one clip over it)
+        for rname in races:
+            race = self.universe.races.get(rname)
+            if race is None or len(race.exchange_ids) < 2 or rname in self.arb.protected():
+                continue
+            exs = list(race.exchange_ids)
+            payout = float(len(exs) - 1)
+            rows = self.store.rows("SELECT race, party, ts, ask FROM venue_quotes WHERE venue='sig' AND race=? AND ts > ? AND ask IS NOT NULL",
+                                   (rname, now - 86400 - 3600))
+            med = CR.exit_cost_median([(r["race"], r["party"], r["ts"], r["ask"]) for r in rows], rname, len(exs), now)
+            if med is None:
+                log.info("RI trim %s: less than 12 h of quotes for the level-0 median: no clip", rname)
+                continue
+            with self.trade_lock:
+                pos = self.fresh_positions()
+                if pos is None:
+                    return
+                held = self.arb.held_sets(race, pos)
+                own = own_levels(self)
+                books = {e: (own.net(e, self.fresh_book(e, 10.0)) if self.fresh_book(e, 10.0) else None) for e in exs}
+                if held < 1 or any(b is None or not b.get("asks") for b in books.values()):
+                    continue
+                touch_pps = len(exs) - sum(b["asks"][0]["price"] for b in books.values())
+                q = CR.trim_qty(held, need, touch_pps, trimmed, cap, int(getattr(cfg, "raise_ri_trim_clip", 1000)))
+                uq = self.arb.unwind_quote(race, books, q) if q >= 1 else None
+                if not uq:
+                    continue
+                cost_now = payout - uq["proceeds"]                     # per set, walked
+                basis = sum(float(self.cost_basis.get(e, 0.0)) / abs(pos[e]) for e in exs if pos.get(e))
+                d0 = risk.exposure(self.universe, pos, prices).net_d_notional
+                p2 = {**pos, **{e: pos.get(e, 0.0) + q for e in exs}}
+                d2 = risk.exposure(self.universe, p2, prices).net_d_notional
+                capd = cfg.mm.portfolio_max_partisan_notional
+                if cost_now > med + 1e-9:
+                    log.info("RI trim %s: exit cost %.4f/set above the 24-h median %.4f (level 0): waiting", rname, cost_now, med)
+                    continue
+                if uq["proceeds"] < basis - 1e-9:
+                    log.info("RI trim %s: proceeds %.4f/set under the cost basis %.4f: no realised loss, waiting", rname, uq["proceeds"], basis)
+                    continue
+                if abs(d2) > capd + 1e-6 and abs(d2) >= abs(d0) - 1e-6:
+                    log.info("RI trim %s: net D %+.0f -> %+.0f would breach the cap: waiting", rname, d0, d2)
+                    continue
+                pause = {e: t for e, t in (getattr(self.mm, "raise_pause", None) or {}).items() if t > now}
+                for e in exs:
+                    pause[e] = now + cfg.raise_pause_sec
+                self.mm.raise_pause = pause
+                self.store.set_param("raise_pause", pause)
+                for e in exs:                                          # our own quotes on the legs: pulled first
+                    ids = [oid for oid, o in own.orders.items() if o[0] == e]
+                    if ids:
+                        try:
+                            self.api.cancel_all(exchange_id=e)
+                            self.store.mark_orders(ids, "cancelled")
+                        except ApiError as e2:
+                            log.warning("RI trim %s: could not pull our orders on %s (%s): no clip", rname, e, e2)
+                            return
+                t_send = time.time()
+                try:
+                    res = self.arb.unwind_set(rname, books, q, why="RI trim", min_qty=1, refresh=self.fresh_positions, purpose="ri_trim")
+                except OSError as e:                   # network error after the client's retries: outcome unknown
+                    log.warning("RI trim %s: basket outcome unknown (%s)", rname, e)
+                    res = None
+                sent = float(getattr(self.arb, "last_unwind_attempt", 0.0) or 0.0) >= t_send
+                if res and res.get("dry"):
+                    return
+                if not res:
+                    # rejected, or outcome unknown (502 after retries / network error: no order rows): charge whatever the
+                    # venue shows gone, so neither the 4,500 cap nor the 30-min gap can be skipped (review 9)
+                    self.ri_trim_fail_ts = now
+                    if not sent:
+                        return                         # never sent (its pre-send re-read failed): nothing to charge (review 10)
+                    try:
+                        after = self.fresh_positions()
+                    except OSError:                    # the network is likely still down: assume it filled (review 10)
+                        after = None
+                    gone = q if after is None else max(0, held - self.arb.held_sets(race, after))
+                    if gone > 0:
+                        tlog.append([now, rname, int(gone), float(uq["proceeds"])])
+                        self.store.set_param("ri_trim_log", tlog)
+                        hist.append((now, gone * float(uq["proceeds"])))   # and the 24-h raise cap (review 10)
+                        self.store.set_param("raise_log", hist)
+                        log.warning("RI trim %s: basket not confirmed but %d sets are gone: charged to the cap", rname, gone)
+                    return
+                got = res["qty"] * res["proceeds"]
+                tlog.append([now, rname, int(res["qty"]), float(res["proceeds"])])
+                self.store.set_param("ri_trim_log", tlog)
+                hist.append((now, got))
+                self.store.set_param("raise_log", hist)
+                self.refresh_snapshot(self.unwind_deltas([res]))
+            self.cash += got
+            log.info("RI trim %s: unwound %d of %d sets at %.4f/set (exit cost %.4f vs 24-h median %.4f, basis %.4f), proceeds %.0f; "
+                     "%d of %.0f trimmed; cash short %.0f of cheap favourites' budget + shock reserve", rname, res["qty"], held,
+                     res["proceeds"], cost_now, med, basis, got, trimmed + res["qty"], cap, need)
+            return                                                     # one clip per cycle
+
     def churn_no_buy(self, rname: str) -> bool:
         """Races recycling may not buy into while high-frequency arb runs: those it holds sets in, its exclusions (Rhode
         Island Governor) and races where we already hold more than churn_skip_holding shares on a leg (Fable 24 Oct: the
@@ -890,8 +1325,10 @@ class Bot:
         try:
             for o in self.api.open_orders():
                 out.setdefault(str(o["exchangeId"]), []).append(o)
+            self.open_orders_ok = True
         except ApiError as e:
             log.warning("open orders: %s", e)
+            self.open_orders_ok = False          # the cash raise must not trust an empty cache (review 24 Oct)
         return out
 
     def ingest_fills(self) -> dict[str, int]:
@@ -1259,6 +1696,7 @@ class Bot:
                 if got:
                     log.info("CHURN sell-all %s: %d of %d sets outside the ledger sold at %.4f/set", rname, got[0], n, got[1])
         # ---- entries
+        short = 0.0                                    # cost of entries cash (its floor) blocked this cycle: a cash need
         if not killed and not ch.killed and now <= CHURN_LAST_ENTRY and not sell_all and not strategy_paused(self, "hf_arb"):
             own = own_levels(self)
             for race in self.universe.races.values():
@@ -1280,7 +1718,12 @@ class Bot:
                 if not chunks:
                     continue
                 best = max(chunks, key=lambda c: c.ret)
-                q = ch.entry_qty(best, self.cash, min_qty)
+                q = ch.entry_qty(best, spendable_cash(self), min_qty)
+                q_free = ch.entry_qty(best, 1e12, min_qty)     # the same entry with unlimited cash (pot and race caps only)
+                if q_free > q:
+                    short += (q_free - q) * best.cost
+                    if q_free - q >= min_qty and hasattr(self, "note_churn_skip") and spendable_cash(self) >= 0:
+                        self.note_churn_skip(race.name, q_free, q, best.cost)   # unmet demand: the brief and the raise's tier 2
                 if not q:
                     continue
                 ch.last_entry[race.name] = now                 # one attempt per race per 5 min, filled or not
@@ -1306,6 +1749,9 @@ class Bot:
                     log.info("CHURN enter %s x%d%s at cost %.4f/set (edge %.4f, overround %+.3f vs 24-h median %+.3f)", race.name, new,
                              "" if new == q else f" of {q} ({got} traded: partial fill or netted against YES held on a leg)", best.cost,
                              best.edge, mid_overround(fb, race.exchange_ids), med)
+        if short > 0:
+            need = min(short, max(0.0, ch.capital - ch.used())) - max(0.0, spendable_cash(self) - ch.cash_floor)
+            self.post_cash_need("hf_arb", need, f"entries blocked by the {ch.cash_floor:.0f} cash floor")
         if changed:
             try:
                 tmp = self.churn_state_path + ".tmp"
@@ -1451,9 +1897,12 @@ class Bot:
                     if not cs.can_enter(n_open, risk.adds(self.universe, ex, side), expo.net_d_notional, q * px,
                                         cap=self.cfg.mm.portfolio_max_partisan_notional):
                         continue
+                    if shock_reserve(self) > 0 and spendable_cash(self) < q * px:
+                        continue                               # the shock reserve is not catch-up's to spend
                     try:
                         resp = self.api.place_order(ex, side, "buy", q, px, expiration=ttl, key=self.api.new_key("cu"))
                         self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, q, "catchup", response=resp)
+                        self.cash = getattr(self, "cash", 0.0) - q * px   # the next entry this cycle sees it (shock reserve)
                     except ApiError as e:
                         log.warning("catchup entry %s: %s", ex, e)
                         continue
@@ -1609,9 +2058,16 @@ class Bot:
             if left >= 1 and d in ("D", "R"):
                 n = left * float(o["price"])
                 pend_d, pend_r = (pend_d + n, pend_r) if d == "D" else (pend_d, pend_r + n)
-        orders = cf.entries(cands, held, deployed, self.cash, now, touch, positions, expo.net_d_notional,
+        orders = cf.entries(cands, held, deployed, spendable_cash(self), now, touch, positions, expo.net_d_notional,
                             cap=self.cfg.mm.portfolio_max_partisan_notional, pend=(pend_d, pend_r), own=cf_pend,
                             blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()))   # the bot's block this cycle
+        if getattr(self.cfg, "raise_enabled", False):  # what it would buy with unlimited cash: the shortfall is a cash need
+            free = cf.entries(cands, held, deployed, 1e12, now, touch, positions, expo.net_d_notional,
+                              cap=self.cfg.mm.portfolio_max_partisan_notional, pend=(pend_d, pend_r), own=cf_pend,
+                              blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()))
+            want = sum(o["notional"] for o in free)
+            if want > sum(o["notional"] for o in orders) + 1:
+                self.post_cash_need("cheapfav", want - max(0.0, spendable_cash(self) - cf.cash_floor), f"{len(free)} entries want {want:.0f}")
         for o in orders:
             try:
                 resp = self.api.place_order(o["exchange_id"], o["side"], "buy", o["qty"], o["price"], expiration=ttl, key=self.api.new_key("cf"))
@@ -1766,8 +2222,9 @@ class Bot:
                 okey = (opp.get("kind"), opp.get("exchange_id"))
                 funded = getattr(self, "_offload_funded", {})
                 self._offload_funded = funded
-                room = getattr(self.tilt, "free_last", 0.0) if opp.get("kind") == "tilt" else self.cash * 0.9
-                if self.cash >= self.cfg.arb.cash_reserve or room >= opp["capital"] or time.time() - funded.get(okey, 0) < 1800:
+                room = getattr(self.tilt, "free_last", 0.0) if opp.get("kind") == "tilt" else spendable_cash(self) * 0.9
+                if (spendable_cash(self) >= self.cfg.arb.cash_reserve or room >= opp["capital"] or time.time() - funded.get(okey, 0) < 1800
+                        or spendable_cash(self) < 0):          # the shock reserve short: tier 1 refills it, never set unwinds
                     continue
                 rname = u.get("race")
                 if rname in self.arb.protected():
@@ -1933,6 +2390,7 @@ class Bot:
     # --------------------------------------------------------------- cycle
     def cycle(self):
         t0 = time.time()
+        self.cash_needs = {}                     # sleeves post this cycle's cash shortfalls; the cash raise reads them
         # Read cash and positions together under the trade lock: an arb basket executed by the scanner thread between
         # the two reads (or between them and the health check) made the account look ~1,100 lower for one cycle and
         # tripped the drawdown kill switch on 22 Oct 15:39. cycle_cash is the cash that matches pos_value.
@@ -1974,7 +2432,7 @@ class Bot:
                     cand_books[race.name] = {ex: self.get_book(ex, 50) for ex in race.exchange_ids}
                 except ApiError as e:
                     log.warning("book %s: %s", race.name, e)
-            plan = self.arb.plan(cand_books, self.cash)
+            plan = self.arb.plan(cand_books, spendable_cash(self))
             arb_summary["planned"] = len(plan)
             if plan:
                 log.info("arb plan: %s", [(c.race, c.kind, c.qty, round(c.edge, 4), round(100 * c.ret, 2)) for c in plan])
@@ -2006,7 +2464,7 @@ class Bot:
                     except ApiError as e:
                         log.warning("recycle book %s: %s", rname, e)
                 with self.trade_lock:
-                    rec = self.arb.recycle(best, held_books, self.positions_snapshot, self.cash, cycle_id, refresh=self.fresh_positions)
+                    rec = self.arb.recycle(best, held_books, self.positions_snapshot, spendable_cash(self), cycle_id, refresh=self.fresh_positions)
                     if rec and not rec.get("dry"):
                         self.refresh_snapshot(self.unwind_deltas([rec]))
                 if rec and not rec.get("dry"):
@@ -2020,7 +2478,7 @@ class Bot:
                         tgt = best["race"]
                         fresh = {ex: self.get_book(ex, 50) for ex in self.universe.races[tgt].exchange_ids}
                         with self.trade_lock:
-                            plan = [c for c in self.arb.plan({tgt: fresh}, self.cash, extra_budget=rec.get("qty", 0) * rec.get("proceeds", 0.0),
+                            plan = [c for c in self.arb.plan({tgt: fresh}, spendable_cash(self), extra_budget=rec.get("qty", 0) * rec.get("proceeds", 0.0),
                                                              recycle=True) if c.race == tgt]
                             if plan:
                                 res = self.arb.execute(plan, cycle_id)
@@ -2126,7 +2584,7 @@ class Bot:
                 except ApiError as e:
                     log.warning("book %s: %s", ex, e)
             write_budget = max(4, self.cfg.mm_write_budget - 4)   # leave room for the tilt sleeve
-            mm_summary = self.mm.quote_cycle(books, self.mm_positions(positions), self.pressures(), open_orders, fills_count, self.cash, cycle_id, write_budget)
+            mm_summary = self.mm.quote_cycle(books, self.mm_positions(positions), self.pressures(), open_orders, fills_count, max(0.0, spendable_cash(self)), cycle_id, write_budget)
 
         # ---- inside-spread quoting where the DMM's spread is 3+ ticks (exploit 2.2), outside the MM's own markets
         inside_summary = {}
@@ -2139,21 +2597,21 @@ class Bot:
         # ---- tilt harvest (tails only, disjoint from the MM band)
         tilt_summary = {}
         if self.cfg.tilt.enabled and not killed:
-            tilt_summary = self.tilt.cycle(prices, positions, open_orders, set(self.mm.quoted), self.cash, cycle_id,
+            tilt_summary = self.tilt.cycle(prices, positions, open_orders, set(self.mm.quoted), max(0.0, spendable_cash(self)), cycle_id,
                                            max(2, self.cfg.mm_write_budget - (mm_summary.get("writes", 0) if mm_summary else 0)))
 
         # ---- news sweeper (feeds polled every news.poll_sec; taker orders only when --live)
         news_summary = {}
         if self.news is not None:
             try:
-                news_summary = self.news.cycle(prices, self.cash, cycle_id)
+                news_summary = self.news.cycle(prices, max(0.0, spendable_cash(self)), cycle_id)
             except Exception as e:                 # the sweeper must never kill the loop
                 log.exception("news cycle failed: %s", e)
 
         # ---- directional sleeve: explained legs only, small size (orders only if direction.allow_live)
         dir_summary = {}
         if not killed:
-            dir_summary = self.direction.cycle(prices, positions, self.cash, write_budget=2, dry_run=self.dry_run)
+            dir_summary = self.direction.cycle(prices, positions, max(0.0, spendable_cash(self)), write_budget=2, dry_run=self.dry_run)
             if dir_summary.get("traded"):
                 log.info("DIRECTION traded %d skipped %d blocked=%s", dir_summary.get("traded", 0), dir_summary.get("skipped", 0),
                          dir_summary.get("blocked"))
@@ -2227,6 +2685,19 @@ class Bot:
                         self.refresh_snapshot(self.unwind_deltas(fu))
                 if fu:
                     log.info("free unwinds: %s", fu)
+
+        # ---- cash raise: sell cheap-to-exit holdings only for a higher-edge sleeve short of cash this cycle; after the
+        # zero-EV exits, whose orders mark their legs busy (sim cash_raise: an exit sized from the cycle-start positions
+        # sold a leg the raise had just sold, -900)
+        if getattr(self.cfg, "raise_enabled", False):
+            try:
+                self.raise_cycle(prices, killed)
+            except Exception as e:                   # the routine must never kill the loop
+                log.exception("raise cycle failed: %s", e)
+            try:
+                self.ri_trim_cycle(prices, killed)
+            except Exception as e:                   # the routine must never kill the loop
+                log.exception("RI trim failed: %s", e)
 
         # ---- analytics refresh
         if time.time() - self.last_analytics > self.cfg.analytics_every_sec:
