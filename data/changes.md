@@ -382,3 +382,11 @@
   pot and per-race caps in a blowout, and buy/unwind ping-pong with the recycler (27x in one race); the 24-h replay
   fails with it on and passes with it off. To fix and re-test before any relaunch. NOTE: tests/test_guards.py still
   expects churn_enabled=true in the live config; update that check with the fix.
+
+- 2026-10-24 10:58 BST: High-frequency arb back ON at 4k pot / -200 stop (churn_enabled true), on 5228f0c + 34d0d44:
+  recycler pump closed (churn races protected), positions snapshot refreshed under the trade lock, sell-all covers every
+  set in traded races, 6-tick loss exit, partial fills booked as traded, and every churn exit / free unwind re-sized to a
+  positions read taken under the lock right before sending (no leg crosses zero). Tests: 144 guard checks; full sim
+  --churn 28 scenarios 0 violations incl. day; Fable review 3 SAFE TO DEPLOY; botctl precheck passed; 10-min watch passed
+  (settlement 103,713 -> 103,764). First entries: Tennessee Governor 2,050 sets, MT-01 2,000. Rollback: set
+  churn_enabled false and `botctl.sh deploy`. Follow-up in progress: same re-read for recycle()/unwind_set().
