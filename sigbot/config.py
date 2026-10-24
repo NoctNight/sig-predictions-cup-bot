@@ -209,6 +209,8 @@ class BotConfig:
     cheapfav_cash_floor: float = 1000.0  # never spend cash below this
     cheapfav_net_max: float = 2000.0     # the sleeve's own net D cost stays within +-this whatever the book
     cheapfav_headroom: float = 1000.0    # an add that widens the book's |net D| keeps it this far under the partisan cap
+    strategy_monitor_enabled: bool = False   # strategy_monitor.py: test each sleeve on its own results every strategy_monitor_sec
+    strategy_monitor_sec: float = 900.0      # and pause a losing one's new entries (params/strategy_kill.json; a human re-enables)
     election_per_race_cap: float = 5000.0
     election_total_cap: float = 90000.0
     election_poll_sec: float = 4.0

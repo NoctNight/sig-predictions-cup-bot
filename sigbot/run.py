@@ -53,6 +53,7 @@ from .proposals.dev_churn import (DevChurn, overround_series, medians_from_serie
                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
 from .proposals import election_night as EN
 from .proposals.own_book import OwnLevels
+from . import strategy_monitor as SMON
 
 
 def cheapfav_races_of(bot) -> set:
@@ -118,6 +119,23 @@ from .universe import Universe
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 log = logging.getLogger("sigbot")
+
+
+def strategy_paused(bot, name: str) -> bool:
+    """True when params/strategy_kill.json pauses this sleeve's NEW entries (strategy monitor or by hand); each pause is
+    logged once. A bot without the kill file (test stubs) is never paused."""
+    kf = getattr(bot, "strategy_kill", None)
+    if kf is None:
+        return False
+    why = kf.paused(name)
+    logged = bot.monitor_logged
+    if why is None:
+        logged.discard(name)
+        return False
+    if name not in logged:
+        logged.add(name)
+        log.warning("STRATEGY MONITOR: %s paused: %s", name, why)
+    return True
 
 
 def own_levels(b) -> OwnLevels:
@@ -289,7 +307,8 @@ class ArbScanner(threading.Thread):
         since we last quoted it, from its feed book, at most mm_fast_requotes_per_min times a minute (2 writes each)."""
         b = self.bot
         n_max = b.cfg.mm_fast_requotes_per_min
-        if n_max <= 0 or not b.cfg.mm.enabled or not b.feed_ok() or not b.mm.quoted or time.time() < b.killed_until:
+        if (n_max <= 0 or not b.cfg.mm.enabled or not b.feed_ok() or not b.mm.quoted or time.time() < b.killed_until
+                or strategy_paused(b, "mm")):
             return
         now = time.time()
         self.fast_log = [t for t in self.fast_log if now - t < 60]
@@ -331,7 +350,7 @@ class ArbScanner(threading.Thread):
         b = self.bot
         best = self.best_unfunded
         if (not best or best.get("failed") or time.time() - best.get("ts", 0) > 10 or not b.cfg.arb.recycle_enabled
-                or not b.arb.committed or not b.feed_ok() or time.time() < b.killed_until):
+                or not b.arb.committed or not b.feed_ok() or time.time() < b.killed_until or strategy_paused(b, "recycle")):
             return
         if b.cfg.arb.new_sets and b.arb.budget_left(b.cash) >= best["cost"] * max(b.cfg.arb.min_set_qty, 1):
             return                                  # not capital-blocked: the normal scanner path takes it (in cash mode
@@ -536,6 +555,11 @@ class Bot:
                 self.churn.load(json.load(open(self.churn_state_path)))
             except Exception as e:                   # missing/corrupt: start empty; held sets stay under the normal rules
                 log.warning("churn state unreadable (%s): starting empty", e)
+        # strategy monitor (strategy_monitor.py): a sleeve found losing (or paused by hand) in params/strategy_kill.json takes
+        # no NEW entries until a human deletes its entry; exits continue; the global kill switch and hard limits are separate
+        self.strategy_kill = SMON.KillFile(os.path.join(HERE, "params", SMON.KILL_FILE))
+        self.monitor_ts = 0.0
+        self.monitor_logged: set = set()
         self.move_detector = MoveDetector()
         self.volatile_paper = VolatileMoves()
         self.inside_posted: dict = {}            # ex -> time of our last inside post (re-post before the venue TTL expires)
@@ -999,6 +1023,58 @@ class Bot:
             log.info("INSIDE posted %d orders on %d markets (%d writes)", summary["orders"], summary["markets"], summary["writes"])
         return summary
 
+    def monitor_cycle(self):
+        """Every strategy_monitor_sec: test each sleeve on its own results; new kills go to params/strategy_kill.json.
+        Read-only on the store; never touches killed_until (the global kill switch) or any hard limit."""
+        now = time.time()
+        if (not getattr(self.cfg, "strategy_monitor_enabled", False) or self.store is None
+                or now - self.monitor_ts < getattr(self.cfg, "strategy_monitor_sec", 900.0)):
+            return
+        self.monitor_ts = now
+        res = SMON.evaluate(self.store, now, params_dir=os.path.join(HERE, "params"),
+                            log_path=os.path.join(HERE, self.cfg.log_path), write=not self.dry_run)
+        log.info("STRATEGY MONITOR: %s", "; ".join("%s %s n=%d mean=%s evidence=%s" % (k, v["verdict"], v["n"], v["mean"], v["stat"])
+                                                   for k, v in res.items()))
+        for k, v in res.items():
+            if v["verdict"] == "warn":
+                log.warning("STRATEGY MONITOR: %s warn: %s", k, v["reason"])
+            if v.get("new_kill"):
+                strategy_paused(self, k)              # logs "STRATEGY MONITOR: <name> paused: <reason>"
+
+    def cancel_mm_quotes(self, open_orders: dict, budget: int):
+        """MM paused by the monitor: pull its resting quotes (they would rest up to 30 min). Only orders recorded as purpose
+        'mm'; a market with nothing else of ours resting gets one cancel-all, otherwise order by order. A non-MM order placed
+        on that market since the open-orders read (hedge, exit) is not in the snapshot: then order by order too."""
+        mm_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose='mm' AND status='open'")}
+        since = getattr(self, "open_orders_ts", 0.0) - 60.0   # the stamp is taken after a read that can be slow
+        writes = 0
+        for ex, lst in (open_orders or {}).items():
+            mine = [o for o in lst if str(o.get("id")) in mm_ids]
+            if not mine:
+                continue
+            if writes >= budget:
+                break
+            done = []                                # mark only what was really cancelled: the rest is retried next cycle
+            try:
+                newer = self.store.one("SELECT 1 FROM orders WHERE exchange_id=? AND purpose!='mm' AND placed_at>=? LIMIT 1",
+                                       (str(ex), since))
+                if len(mine) == len(lst) and newer is None:
+                    self.api.cancel_all(exchange_id=ex)
+                    writes += 1
+                    done = mine
+                else:
+                    for o in mine:
+                        if writes >= budget:
+                            break
+                        self.api.cancel_order(o["id"])
+                        writes += 1
+                        done.append(o)
+            except ApiError as e:
+                log.warning("monitor MM cancel %s: %s", ex, e)
+            if done:
+                self.store.mark_orders([o["id"] for o in done], "cancelled")
+        return writes
+
     def churn_cycle(self, positions: dict, killed: bool, cycle_id=None):
         """Deviation churn (proposals/dev_churn.py), "high-frequency arb": exits first (+2 ticks/set, 24 h; the stop or a
         6-tick loss per set sells at the touch), reconciled against the sets actually held (sets another path closed are
@@ -1178,7 +1254,7 @@ class Bot:
                 if got:
                     log.info("CHURN sell-all %s: %d of %d sets outside the ledger sold at %.4f/set", rname, got[0], n, got[1])
         # ---- entries
-        if not killed and not ch.killed and now <= CHURN_LAST_ENTRY and not sell_all:
+        if not killed and not ch.killed and now <= CHURN_LAST_ENTRY and not sell_all and not strategy_paused(self, "hf_arb"):
             own = own_levels(self)
             for race in self.universe.races.values():
                 if not ch.eligible(race, now) or race.name in self.arb.hostile or self.arb.cooldown.get(race.name, 0) > now:
@@ -1333,7 +1409,7 @@ class Bot:
             if ex not in open_pos and ex not in resting and now - cs.ctx[ex].get("ts", now) > 300:
                 cs.ctx.pop(ex)                      # flat and settled: forget the entry context
                 changed = True
-        if not killed and not cs.killed and dir_summary.get("polled"):
+        if not killed and not cs.killed and dir_summary.get("polled") and not strategy_paused(self, "catchup"):
             sigs = cs.signals(rows, now)
             if sigs:
                 expo = risk.exposure(self.universe, positions, prices)
@@ -1464,7 +1540,7 @@ class Bot:
                 log.info("CHEAPFAV exit %s %s x%d @%.3f (%s)", ex, side, n, px, why)
             except ApiError as e:
                 log.warning("cheapfav exit %s: %s", ex, e)
-        if killed or not dir_summary.get("polled") or now > cf.last_entry or not positions:
+        if killed or not dir_summary.get("polled") or now > cf.last_entry or not positions or strategy_paused(self, "cheapfav"):
             return                                   # no positions (read failed): every holding guard would be blind
         race_legs = {r.name: list(r.exchange_ids) for r in self.universe.races.values()}
         ch = getattr(self, "churn", None)               # races the high-frequency arb holds sets in: its ledger books what
@@ -1895,7 +1971,7 @@ class Bot:
             arb_summary = dict(self.scanner.stats)
             # capital recycling: unwind a held set to fund a better one the scanner could not afford
             best = (self.scanner.best_unfunded if not self.feed_ok() and self.cfg.arb.new_sets and time.time() >= self.killed_until
-                    else None)   # the scanner recycles itself when the feed is up; cash mode and kill pauses: no backstop
+                    and not strategy_paused(self, "recycle") else None)   # the scanner recycles itself when the feed is up; cash mode and kill pauses: no backstop
             if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.arb.committed and not best.get("failed"):
                 try:
                     best = dict(best, fresh_books={ex: self.get_book(ex, 50) for ex in self.universe.races[best["race"]].exchange_ids})
@@ -1995,7 +2071,14 @@ class Bot:
         gate_ready = self.mm_gate_ready(killed)
         if not gate_ready and not killed:
             log.info("MM waits for the first outside-fair poll before quoting (xv gate)")
-        if self.cfg.mm.enabled and not killed and gate_ready:
+        mm_paused = strategy_paused(self, "mm")
+        if mm_paused and not self.dry_run and any(open_orders.values()):
+            try:
+                n = self.cancel_mm_quotes(open_orders, max(4, self.cfg.mm_write_budget - 4))
+                mm_summary["monitor_cancels"] = mm_summary["writes"] = n     # the tilt budget below counts these writes
+            except Exception as e:                   # a network error must not skip the exits later in this cycle
+                log.exception("monitor MM cancel: %s", e)
+        if self.cfg.mm.enabled and not killed and gate_ready and not mm_paused:
             if (cycle_id % 30) == 1:
                 self.pick_markets(prices)
             books = {}
@@ -2080,6 +2163,11 @@ class Bot:
                 self.cheapfav_cycle(dir_summary, positions, prices, killed)
             except Exception as e:                   # the sleeve must never kill the loop
                 log.exception("cheapfav cycle failed: %s", e)
+        # ---- strategy monitor (every 15 min): pause a sleeve whose own results show it is losing (strategy_monitor.py)
+        try:
+            self.monitor_cycle()
+        except Exception as e:                       # the monitor must never kill the loop
+            log.exception("strategy monitor failed: %s", e)
 
         # ---- volatile moves: pause the MM's retrace side after a 5+ tick move (verified), paper-log the move trades
         if self.feed_ok():

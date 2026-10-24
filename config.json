@@ -136,5 +136,6 @@
   "cheapfav_order_notional": 500.0,
   "cheapfav_cash_floor": 1000.0,
   "cheapfav_net_max": 2000.0,
-  "cheapfav_headroom": 1000.0
+  "cheapfav_headroom": 1000.0,
+  "strategy_monitor_enabled": true
 }
