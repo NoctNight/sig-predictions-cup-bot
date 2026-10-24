@@ -390,3 +390,14 @@
   --churn 28 scenarios 0 violations incl. day; Fable review 3 SAFE TO DEPLOY; botctl precheck passed; 10-min watch passed
   (settlement 103,713 -> 103,764). First entries: Tennessee Governor 2,050 sets, MT-01 2,000. Rollback: set
   churn_enabled false and `botctl.sh deploy`. Follow-up in progress: same re-read for recycle()/unwind_set().
+
+- 2026-10-24 13:26 BST: recycle and offload unwinds re-sized to a positions re-read before sending (e9eef45; Opus review 4
+  SAFE TO DEPLOY; guards 148; sim --churn 29/29). The first deploy try failed precheck only because the disk was full.
+  10-min watch passed. Rollback: git revert e9eef45 + botctl deploy.
+- 2026-10-24 14:04 BST: Cheap favourites ON at 15k budget (161c8ab): fast-count favourites SIG prices >= 2c under the
+  outside fair, held through the call, own net D within +/-2,000, honours the bot's partisan block with 1,000 headroom,
+  skips catch-up races, cash floor 1,000. The first attempt was stopped by precheck (partisan cap / catch-up under the
+  live config); fixed and re-reviewed (Opus SAFE TO DEPLOY), precheck sim 29/29 and day 0 violations with it on. First
+  6 min: 22 fills, 6,188 shares, ~5.7k cost (RI Sen D, CO Sen D, MA Sen D, WY/WV/OK Sen R, TN Sen R via D NO, CT Gov D);
+  cash 8.1k -> 2.4k. 10-min watch passed (settlement 103,847 -> 103,828, the spread paid). Rollback: cheapfav_enabled
+  false + botctl deploy (positions are kept; its exits keep running only while enabled).
