@@ -458,26 +458,42 @@ class ArbEngine:
                                     status="filled" if not d.get("open") else "open", response=d)
         return {"race": rname, "qty": qty, "proceeds": uq["proceeds"]}
 
-    def free_unwinds(self, held_books: dict[str, dict[str, dict]], positions: dict[str, float], cycle_id=None) -> list[dict]:
+    def free_unwinds(self, held_books: dict[str, dict[str, dict]], positions: dict[str, float], cycle_id=None,
+                     refresh=None) -> list[dict]:
         """Unwind held arb sets whenever the legs' asks sum low enough that unwinding returns at least the settlement
-        payout (n - 1 per set): the locked profit is taken now at no cost and the capital is freed. Atomic, all legs."""
+        payout (n - 1 per set): the locked profit is taken now at no cost and the capital is freed. Atomic, all legs.
+        refresh: called (under the caller's trade lock) once, before the first unwind is sent, for the positions now (None
+        = the read failed: send nothing); the unwind is re-sized to them so a fill since `positions` cannot take a leg
+        through zero (Fable 24 Oct)."""
         out = []
         real_sets = {r["race"] for r in self.store.rows("SELECT DISTINCT race FROM arb_trades WHERE ok=1 AND kind IN ('sell_set','buy_set')")}
+        fresh_done = refresh is None
         for rname, books in held_books.items():
             if rname not in real_sets:
                 continue
             race = self.u.races[rname]
-            qs = [positions.get(l.exchange_id, 0.0) for l in race.legs.values()]
-            if not qs or not all(q < 0 for q in qs):
-                continue
-            held = int(min(-q for q in qs))
-            q, uq = held, None
-            while q >= self.cfg.min_set_qty:
-                uq = self.unwind_quote(race, books, q)
-                if uq and uq["forgone_edge"] <= 1e-9:
+            uq = None
+            for _ in range(2):
+                qs = [positions.get(l.exchange_id, 0.0) for l in race.legs.values()]
+                if not qs or not all(q < 0 for q in qs):
+                    uq = None
                     break
-                q = q // 2
-                uq = None
+                held = int(min(-q for q in qs))
+                q, uq = held, None
+                while q >= self.cfg.min_set_qty:
+                    uq = self.unwind_quote(race, books, q)
+                    if uq and uq["forgone_edge"] <= 1e-9:
+                        break
+                    q = q // 2
+                    uq = None
+                if not uq or fresh_done:
+                    break
+                fresh_done = True
+                fresh = refresh()
+                if fresh is None:
+                    log.warning("free unwinds skipped: positions re-read failed")
+                    return out
+                positions = fresh                # size again from the positions now
             if not uq:
                 continue
             legs = [{"exchangeId": e, "side": "yes", "action": "buy", "quantity": q, "price": lim, "tournamentId": self.api.tournament_id}

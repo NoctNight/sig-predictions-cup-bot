@@ -432,7 +432,7 @@ class ArbScanner(threading.Thread):
             return
         b.last_free_unwind = time.time()
         with b.trade_lock:
-            fu = b.arb.free_unwinds(held, b.positions_snapshot, None)
+            fu = b.arb.free_unwinds(held, b.positions_snapshot, None, refresh=b.fresh_positions)
             if fu:
                 b.refresh_snapshot(b.unwind_deltas(fu))      # in the lock: churn re-checks its sets against it under the lock
         if fu:
@@ -722,12 +722,18 @@ class Bot:
         return done
 
     # ------------------------------------------------------------- helpers
-    def positions_map(self) -> tuple[dict[str, float], float, int]:
+    def positions_map(self, strict: bool = False) -> tuple[dict[str, float], float, int]:
+        """Venue positions. A failed read returns {} (and positions_ok False), or raises with strict=True: an exit must
+        never take an unread account for an empty one."""
         try:
             p = self.api.positions(self.slug)
         except ApiError as e:
             log.warning("positions: %s", e)
+            self.positions_ok = False
+            if strict:
+                raise
             return {}, 0.0, 0
+        self.positions_ok = True
         m = {str(x["exchangeId"]): float(x["quantity"]) for x in p.get("positions", []) if not x.get("settled")}
         self.cost_basis = {str(x["exchangeId"]): float(x.get("costBasis") or 0.0) for x in p.get("positions", []) if not x.get("settled")}
         # arb capital already locked, per race, derived from positions (survives restarts): NO legs' cost basis
@@ -763,15 +769,24 @@ class Bot:
         """Re-read positions into the shared snapshot. Call it INSIDE the trade lock, right after a basket or an unwind:
         high-frequency arb's exits trust the snapshot under the lock, and a refresh after the lock let another thread sell a
         free unwind's sets a second time (sim churn_interleave, 24 Oct). If the read fails, `deltas` ({exchange: signed
-        change}) are applied to the old snapshot instead, so it never keeps sets that are gone."""
+        change}) are applied to the old snapshot instead, so it never keeps sets that are gone. Returns True only after a
+        successful read."""
         try:
-            self.positions_snapshot = self.positions_map()[0]
+            self.positions_snapshot = self.positions_map(strict=True)[0]
+            return True
         except ApiError as e:
             snap = dict(self.positions_snapshot or {})
             for ex, d in (deltas or {}).items():
                 snap[ex] = snap.get(ex, 0.0) + d
             self.positions_snapshot = snap
             log.warning("positions refresh: %s; snapshot adjusted locally", e)
+            return False
+
+    def fresh_positions(self) -> Optional[dict]:
+        """Inside the trade lock, right before an exit is sent: the venue's positions now (and the shared snapshot set to
+        them), or None if the read failed. Fable 24 Oct: an MM fill between the cycle's read and churn's exit made the exit
+        buy YES through zero (-1,700 -> +300) when it was sized from the older snapshot."""
+        return self.positions_snapshot if self.refresh_snapshot() else None
 
     def unwind_deltas(self, unwinds) -> dict:
         """Snapshot change of unwinds [{race, qty}]: every leg's NO short shrinks by qty (NO legs are negative)."""
@@ -962,6 +977,9 @@ class Bot:
         ch = self.churn
         if ch is None or self.dry_run or self.store is None:
             return
+        if getattr(self, "positions_ok", True) is False:
+            log.warning("CHURN: skipped this cycle: the positions read failed (an empty account must not reconcile the ledger away)")
+            return
         now = time.time()
         changed = False
         if now - self.churn_med_ts > 900:            # 24-h medians from this venue's own quotes, refreshed every 15 min
@@ -1054,6 +1072,11 @@ class Bot:
             """Unwind up to q sets now: re-checked under the lock against the sets actually held, halving when the asks
             are too thin for all of it. Returns (sets sold, proceeds per set) or None."""
             with self.trade_lock:
+                # clamp to what the venue holds NOW: a fill on our MM quotes since the cycle's read may have shrunk a leg's
+                # NO; the common NO quantity never takes a leg through zero
+                if self.fresh_positions() is None:
+                    log.warning("CHURN %s: exit (%s) skipped: positions re-read failed; retried next cycle", race.name, why)
+                    return None
                 reconcile(race, books)
                 q = min(q, venue_sets(race))
                 q, uq = quote_down(race, books, q, floor)
@@ -1890,7 +1913,7 @@ class Bot:
                 with self.trade_lock:
                     # the latest snapshot, not the cycle-start positions: a scanner recycle, free unwind or churn exit
                     # earlier in this cycle may already have closed these sets (sim 'churn', 23 Oct: double unwind)
-                    fu = self.arb.free_unwinds(held_books, self.positions_snapshot, cycle_id)
+                    fu = self.arb.free_unwinds(held_books, self.positions_snapshot, cycle_id, refresh=self.fresh_positions)
                     if fu:
                         self.refresh_snapshot(self.unwind_deltas(fu))
                 if fu:

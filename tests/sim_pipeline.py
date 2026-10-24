@@ -35,7 +35,7 @@ Invariants checked after every step (violation kinds in brackets):
   in [0.005, 0.995], an expiry in the future when it arrives (all-or-none baskets excepted) [bad_quantity, bad_price,
   no_expiry, expired_on_arrival]; passive (batch) orders never execute on arrival [passive_order_crossed]; the MM never
   posts or gets filled on a side its own outside-fair gate blocks [mm_posted_on_gated_side, mm_filled_on_gated_side];
-  arb never sends a basket while our own order is a leg's best bid [arb_vs_own_order]; rates per object over sliding
+  an unwind leg never ends long YES [unwind_crossed_zero]; arb never sends a basket while our own order is a leg's best bid [arb_vs_own_order]; rates per object over sliding
   windows (RATE_LIMITS: requotes, exits, offload exits, lag entries, directional orders, rejected baskets, inside)
   [rate_*]; no race bought and unwound alternately [arb_ping_pong]; calm scenario: marked P&L + spread paid >= -25
   [calm_pnl]. Kill-switch firings and deploy-watcher thresholds are printed as notes, not violations.
@@ -589,6 +589,9 @@ class Checker:
             if m["prefix"] in ("unw", "fre") and m["before"] >= 0:
                 self.violation("unwind_without_set", f"{m['key']} {m['ex']} ({self.sim.race_of(m['ex'])}) unwind leg bought YES x{m['qty']} @{m['price']} "
                                f"with no NO held: position {m['before']:+d} -> {m['after']:+d}", trace=self._order_trace(m["ex"]))
+            elif m["prefix"] in ("unw", "fre") and m["after"] > 0:      # Fable 24 Oct: -1,700 -> +300 passed the check above
+                self.violation("unwind_crossed_zero", f"{m['key']} {m['ex']} ({self.sim.race_of(m['ex'])}) unwind leg bought YES x{m['qty']} @{m['price']} "
+                               f"through zero: position {m['before']:+d} -> {m['after']:+d}", trace=self._order_trace(m["ex"]))
             # directional holding per leg (cost), net of exits
             if pur in ("direction", "exit"):
                 h = self.dir_hold.setdefault(m["ex"], [0.0, 0.0])
@@ -1104,6 +1107,42 @@ class ChurnFreeFirst(ChurnBase):
             sim.chk.violation("churn_exit_unbooked", f"realised {sim.bot.churn.realised:+.1f}: the free unwind at the payout was not booked")
 
 
+class ChurnStaleFill(ChurnBase):
+    name, cycles, seed, n_races = "churn_stale_fill", 40, 41, 1
+    cfg = {"churn_enabled": True}            # the live config's pot / stop (4k / -200)
+    doc = "Fable review 2: entry at +6 ticks (cycle 20); at cycle 30 the gap reverts and, after that cycle's positions read, a taker hits our MM bid on leg 1 for 300 YES before churn's exit: the exit sells only the sets held then, no leg crosses zero"
+    fill = 300
+
+    def bot_setup(self, sim):
+        super().bot_setup(sim)
+        b = sim.bot
+        real = b.churn_cycle
+        self.hit = False
+
+        def wrapped(positions, killed, cycle_id=None):
+            if sim.cycle_i == 30 and not self.hit:
+                self.hit = True                   # the sim applies taker flow only between steps; this lands inside the cycle
+                sim.seed_holding(sim.legs(self.races[0])[0], "yes", self.fill, "mm")
+            return real(positions, killed, cycle_id)
+        b.churn_cycle = wrapped
+
+    def before_cycle(self, sim, i):
+        r = self.races[0]
+        if i == 20:
+            set_race_bids_sum(sim, r, self.base[r] + 0.03)
+        if i == 30:
+            set_race_bids_sum(sim, r, self.base[r])
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        pos = sim.v.signed_positions()
+        self.summary.update(hit=self.hit, pos_end={e: pos.get(e, 0.0) for e in sim.legs(self.races[0])}, ledger=sim.bot.churn.lots)
+        if not self.hit:
+            sim.chk.violation("stale_fill_not_exercised", "the mid-cycle fill was never injected")
+        if not self.summary["exits"]:
+            sim.chk.violation("churn_no_exit", "no exit after the gap reverted")
+
+
 class _HookLock:
     """The trade lock, but whoever waits for it runs the moment it is released: models the main thread's churn cycle
     taking the lock right after the scanner's unwind released it (real thread order, which the sequential sim hides)."""
@@ -1572,7 +1611,7 @@ class Day(Scenario):
                         "killed": ch.killed, "vol_paused": ch.vol_paused}
 
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnBlowout,
+SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
              ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
              Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
 

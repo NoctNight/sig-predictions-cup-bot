@@ -526,7 +526,7 @@ check("churn: live config: on or off (off since 24 Oct 01:00 until the Fable fix
 
 _rs6 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 check("unwinds: the main-loop free unwind reads the latest snapshot under the lock, not the cycle-start positions (sim churn double unwind)",
-      "fu = self.arb.free_unwinds(held_books, self.positions_snapshot, cycle_id)" in _rs6 and "free_unwinds(held_books, positions, cycle_id)" not in _rs6)
+      "fu = self.arb.free_unwinds(held_books, self.positions_snapshot, cycle_id, refresh=self.fresh_positions)" in _rs6 and "free_unwinds(held_books, positions, cycle_id)" not in _rs6)
 
 # 23 Oct: churn pauses on rising gap volatility (Sizhe), and stops entering 1 Nov 00:00 UTC
 def _ser(n_races, base_sd, rec_sd):
@@ -650,8 +650,9 @@ def _hbot(pos, books, lots=(), races=(), kill=-600.0):
                               cfg=types.SimpleNamespace(arb=e.cfg, churn_skip_holding=4000.0), churn_state_path=os.path.join(tmp, "churn_state.json"),
                               open_orders_cache={}, open_orders_ts=0.0)
     e.protected = lambda: {l["race"] for l in ch.lots}
-    b.positions_map = lambda: (dict(v.pos), 0.0, len(v.pos))
+    b.positions_map = lambda strict=False: (dict(v.pos), 0.0, len(v.pos))
     b.refresh_snapshot = lambda deltas=None: R.Bot.refresh_snapshot(b, deltas)
+    b.fresh_positions = lambda: R.Bot.fresh_positions(b)
     return b, v, ch
 
 
@@ -726,20 +727,21 @@ def _spybot(**kw):
                                scan_api=types.SimpleNamespace(account=lambda: {"balance": 1.0}), **kw)
     fb.refresh_snapshot = lambda d=None: R.Bot.refresh_snapshot(fb, d)
     fb.unwind_deltas = lambda u: R.Bot.unwind_deltas(fb, u)
-    fb.positions_map = lambda: (seen.append(lk.held), ({"CA1": 0.0, "CA2": 0.0}, 0.0, 0))[1]
+    fb.positions_map = lambda strict=False: (seen.append(lk.held), ({"CA1": 0.0, "CA2": 0.0}, 0.0, 0))[1]
+    fb.fresh_positions = lambda: R.Bot.fresh_positions(fb)
     sc = R.ArbScanner.__new__(R.ArbScanner)
     sc.bot, sc.stats, sc.best_unfunded = fb, {}, None
     return sc, fb, seen
 
 
-_sc, _fb, _seen = _spybot(arb=types.SimpleNamespace(committed={"CA": 1.0}, free_unwinds=lambda h, p, c: [{"race": "CA", "qty": 100, "proceeds": 1.0}]),
+_sc, _fb, _seen = _spybot(arb=types.SimpleNamespace(committed={"CA": 1.0}, free_unwinds=lambda h, p, c, refresh=None: [{"race": "CA", "qty": 100, "proceeds": 1.0}]),
                           cfg=types.SimpleNamespace(free_unwind_scan_sec=0.0))
 _sc.free_unwind_pass()
 check("hf arb: the scanner's free unwind refreshes the shared snapshot inside the trade lock (sim churn_interleave: sets sold twice)",
       _seen == [True] and _fb.positions_snapshot == {"CA1": 0.0, "CA2": 0.0}, str(_seen))
 
 
-def _raise():
+def _raise(strict=False):
     raise _ApiErr(503, "DOWN", "down")
 
 
@@ -829,6 +831,40 @@ check("hf arb: an entry that nets 14 NO against YES the MM held on a leg books t
       _ch.held("CA") == 1986 and abs(_b.cash - (50000.0 - 2000 * 0.96)) < 1e-6, f"held {_ch.held('CA')} cash {_b.cash}")
 _st = DC.DevChurn(); _st.load(_ch.to_json())
 check("hf arb: traded races, loss gaps and booked unwind ids survive a restart", _st.races == {"CA"} and _st.seen_unwind == _ch.seen_unwind)
+
+
+# Fable review 2 (24 Oct): every exit is clamped to what the venue holds when it is sent (re-read under the trade lock)
+_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.48, 0.49), lots=[("CA", 2000, 0.97, _t - 100)])
+_v.pos["CA1"] = -1700.0              # an MM bid fill for 300 YES on leg 1 after the cycle's positions read (snapshot still -2,000)
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: an MM fill after the cycle's read shrinks the exit to the 1,700 sets held now; no leg goes through zero",
+      _sold(_v) == [1700] and _v.pos["CA1"] == 0.0 and _v.pos["CA2"] == -300.0 and _ch.held("CA") == 0, f"sold {_sold(_v)} pos {_v.pos}")
+_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.48, 0.49), lots=[("CA", 2000, 0.97, _t - 100)])
+_b.positions_map = _raise
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: if the re-read before an exit fails, nothing is sent (retried next cycle)", _sold(_v) == [] and _ch.held("CA") == 2000, str(_sold(_v)))
+_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.48, 0.49), lots=[("CA", 2000, 0.97, _t - 100)])
+_b.positions_snapshot, _b.positions_ok = {}, False
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: after a failed positions read (empty snapshot) the ledger is not reconciled away", _ch.held("CA") == 2000 and _ch.realised == 0.0)
+_b, _v, _ch = _hbot({"CA1": -1700.0, "CA2": -2000.0}, _legs("CA", 0.47, 0.48))
+_b.store.record_arb("CA", "sell_set", [], 2000, 0.02, 0.98, True, {})
+_fu = _b.arb.free_unwinds({"CA": _legs("CA", 0.47, 0.48)}, {"CA1": -2000.0, "CA2": -2000.0}, None, refresh=lambda: dict(_v.pos))
+check("hf arb: a free unwind is re-sized to the positions read right before it is sent (1,700, not the stale 2,000)",
+      [u["qty"] for u in _fu] == [1700] and _v.pos["CA1"] == 0.0, f"{_fu} {_v.pos}")
+_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.47, 0.48))
+_b.store.record_arb("CA", "sell_set", [], 2000, 0.02, 0.98, True, {})
+check("hf arb: a free unwind whose re-read fails sends nothing",
+      _b.arb.free_unwinds({"CA": _legs("CA", 0.47, 0.48)}, {"CA1": -2000.0, "CA2": -2000.0}, None, refresh=lambda: None) == [] and _v.sent == [])
+_p0 = R.Bot.positions_map
+_pm = types.SimpleNamespace(api=types.SimpleNamespace(positions=lambda slug: _raise()), slug="s")
+try:
+    _strict_raises = False
+    R.Bot.positions_map(_pm, strict=True)
+except _ApiErr:
+    _strict_raises = True
+check("positions: a failed read raises in strict mode (exits) and flags positions_ok; the lenient read still returns {}",
+      _strict_raises and _pm.positions_ok is False and R.Bot.positions_map(_pm)[0] == {})
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)
