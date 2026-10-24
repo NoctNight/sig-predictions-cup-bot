@@ -209,6 +209,18 @@ class BotConfig:
     cheapfav_cash_floor: float = 1000.0  # never spend cash below this
     cheapfav_net_max: float = 2000.0     # the sleeve's own net D cost stays within +-this whatever the book
     cheapfav_headroom: float = 1000.0    # an add that widens the book's |net D| keeps it this far under the partisan cap
+    wind_down_enabled: bool = False      # 31 Oct-3 Nov wind-down (proposals/wind_down, backlog 000): late-call sets, legs and MM
+    wind_down_clip_sets: int = 1000      # inventory to cash by 18:00 ET 3 Nov; does nothing before 31 Oct 00:00 ET but the report.
+    wind_down_gap_sec: float = 1800.0    # sets per clip, and at least this long between two clips in a race (or on a leg)
+    wind_down_max_walk_ticks: float = 1.0    # a clip shrinks (halving) while walking the book costs more than this per set
+    wind_down_min_clip: int = 100
+    wind_down_leg_clip: int = 2000       # shares per single-leg clip (also <= 80% of the touch), fill-or-cancel
+    wind_down_min_leg: int = 10
+    wind_down_max_cost_per_hour: float = 200.0   # exit cost (vs payout / fair) per hour: the kill switch trips at 400 an hour
+    wind_down_clips_per_cycle: int = 1
+    wind_down_fallback_buffer_sec: float = 7200.0   # a race drops the timing gate when only clips x gap + this is left
+    wind_down_force_late: list = field(default_factory=lambda: ["Rhode Island Governor"])   # sold even if called early
+    wind_down_sell_at_call: bool = False  # backlog 000c: selling early-call sets at their call stays report-only until Sizhe approves
     strategy_monitor_enabled: bool = False   # strategy_monitor.py: test each sleeve on its own results every strategy_monitor_sec
     strategy_monitor_sec: float = 900.0      # and pause a losing one's new entries (params/strategy_kill.json; a human re-enables)
     raise_enabled: bool = False          # cash raise (proposals/cash_raise): sell holdings beyond the arb sets that cost

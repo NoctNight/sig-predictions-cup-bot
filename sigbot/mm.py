@@ -223,7 +223,10 @@ class MarketMaker:
         # 2. reservation price: shift against race-level inventory (notional at risk / max)
         inv = self.race_inventory(ex, positions)
         inv_notional = inv * (mid if inv > 0 else (1 - mid))
-        inv_frac = max(-1.0, min(1.0, inv_notional / self.cfg.max_inventory_notional))
+        # the wind-down shrinks the cap from 1 Nov through inv_cap_override (the shared config, which the shadow tuner's replays
+        # read, stays as set)
+        cap = getattr(self, "inv_cap_override", None) or self.cfg.max_inventory_notional
+        inv_frac = max(-1.0, min(1.0, inv_notional / cap))
         # log-odds AS term: shift grows with sigma^2 * T; sigma is the hourly YES-price sigma, T hours (capped)
         sigma = self.vol.get(ex, 0.01)
         T = min(24.0, self.hours_to_end())

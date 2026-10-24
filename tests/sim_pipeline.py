@@ -597,6 +597,13 @@ class Checker:
             elif m["prefix"] in ("unw", "fre") and m["after"] > 0:      # Fable 24 Oct: -1,700 -> +300 passed the check above
                 self.violation("unwind_crossed_zero", f"{m['key']} {m['ex']} ({self.sim.race_of(m['ex'])}) unwind leg bought YES x{m['qty']} @{m['price']} "
                                f"through zero: position {m['before']:+d} -> {m['after']:+d}", trace=self._order_trace(m["ex"]))
+            # a YES-set unwind (wind-down) buys NO on every leg of a HELD buy-set: each leg must close YES, never go short
+            if m["prefix"] == "unb" and m["before"] <= 0:
+                self.violation("unwind_without_set", f"{m['key']} {m['ex']} ({self.sim.race_of(m['ex'])}) YES-set unwind leg bought NO x{m['qty']} "
+                               f"with no YES held: position {m['before']:+d} -> {m['after']:+d}", trace=self._order_trace(m["ex"]))
+            elif m["prefix"] == "unb" and m["after"] < 0:
+                self.violation("unwind_crossed_zero", f"{m['key']} {m['ex']} ({self.sim.race_of(m['ex'])}) YES-set unwind leg bought NO x{m['qty']} "
+                               f"through zero: position {m['before']:+d} -> {m['after']:+d}", trace=self._order_trace(m["ex"]))
             # directional holding per leg (cost), net of exits
             if pur in ("direction", "exit"):
                 h = self.dir_hold.setdefault(m["ex"], [0.0, 0.0])
@@ -2057,9 +2064,144 @@ class Day(Scenario):
                         "killed": ch.killed, "vol_paused": ch.vol_paused}
 
 
+# ---------------------------------------------------------------- wind-down (backlog 000), 30 Oct - 3 Nov on a fake clock
+class WindDown(Scenario):
+    name, cycles, seed = "wind_down", 175, 41
+    cfg = {"wind_down_enabled": True}
+    doc = ("wind-down on the live config: the clock jumps through 30 Oct 23:00, 31 Oct 22:00, 2 Nov 01:00, 3 Nov 11:30 and 15:00-18:40 ET "
+           "(3 extra min a cycle); late-call NO sets (Oregon Governor at 2 ticks, Rhode Island Governor 3-leg at 2.8%) and a YES set "
+           "(California Governor) are sold by the wind-down itself (not free unwinds) in clips <= 1,000, >= 30 min apart per race, nothing before 31 Oct 00:00 ET, all by 18:00 ET 3 Nov; an early-call set is "
+           "held; a directional leg is sold; a punt leg is never touched; nothing is sold from 18:00 ET; no MM quote is sent once the MM is "
+           "flat (its stop_quoting_at, 07:00 ET 3 Nov live)")
+    WINDOWS = [(0, (2026, 10, 30, 23, 0)), (12, (2026, 10, 31, 22, 0)), (45, (2026, 11, 2, 1, 0)), (80, (2026, 11, 3, 11, 30)),
+               (105, (2026, 11, 3, 15, 0))]
+
+    def venue_setup(self, sim):
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        CLOCK.t = WD.et_ts(*self.WINDOWS[0][1])
+
+    def bot_setup(self, sim):
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        v, u = sim.v, sim.universe
+        self.late_sell = ["Oregon Governor", "Rhode Island Governor"]
+        self.late_buy = ["California Governor"]
+        early = []
+        for name, r in sorted(u.races.items()):
+            if len(r.legs) != 2 or name in self.late_sell + self.late_buy:
+                continue
+            fav = max(v.mid(e) for e in r.exchange_ids)
+            if WD.call_class(name, fav)[0] == "early" and fav <= 0.93:
+                early.append(name)
+        self.early = early[0]
+        mids = [x for x in two_leg_mid_races(sim, 0.35, 0.65, exclude=tuple(self.late_sell + self.late_buy + [self.early]))]
+        self.dir_race, self.punt_race = mids[0], mids[1]
+        self.dir_ex = sim.legs(self.dir_race)[0]
+        self.punt_ex = sim.legs(self.punt_race)[0]
+        self.sizes = {"Oregon Governor": 2500, "Rhode Island Governor": 2200, "California Governor": 1800, self.early: 3000}
+        # real exit costs, not free unwinds: Oregon's asks sum to 1.01 (2 ticks), Rhode Island's 3 legs to 1.055 (2.8% of proceeds)
+        set_race_bids_sum(sim, "Oregon Governor", 1.0)
+        set_race_bids_sum(sim, "Rhode Island Governor", 1.04)
+        for race in self.late_sell + [self.early]:
+            sim.seed_set(race, self.sizes[race])
+        for race in self.late_buy:
+            legs = []
+            for ex in sim.legs(race):
+                px = SV.P(v.ask_t[ex])
+                sim.seed_holding(ex, "yes", self.sizes[race], "arb", px)
+                legs.append({"exchangeId": ex, "side": "yes", "action": "buy", "quantity": self.sizes[race], "price": px})
+            sim.bot.store.record_arb(race, "buy_set", legs, self.sizes[race], 1 - sum(l["price"] for l in legs), sum(l["price"] for l in legs), True, {"seed": True})
+        sim.seed_holding(self.dir_ex, "yes", 600, "direction")
+        sim.seed_holding(self.punt_ex, "yes", 800, "punt")          # a punt leg: never sold, its orders never cancelled
+        self.preload(sim)
+        self.mm_after_flat = []
+
+    def preload(self, sim):
+        """25 h of 'sig' heartbeats with each race's exit cost 2 ticks above today's: today's touch is cheap vs its medians."""
+        v, rows = sim.v, []
+        for race in self.late_sell + self.late_buy + [self.early]:
+            legs = list(sim.universe.races[race].legs.items())
+            for k in range(150):
+                t = v.now - 25 * 3600 + 600 * k
+                for i, (party, l) in enumerate(legs):
+                    bt, at = v.bid_t[l.exchange_id], v.ask_t[l.exchange_id]
+                    if i == 0:
+                        bt, at = bt - 2, at + 2
+                    b, a = SV.P(bt), SV.P(at)
+                    rows.append((t, "sig", race, party, l.exchange_id, b, a, (b + a) / 2, None, None, None, None))
+        sim.bot.store.conn.executemany(VQ_INS, rows)
+        sim.bot.store.conn.commit()
+        sim.bot.wd_med_ts = 0.0
+
+    def before_cycle(self, sim, i):
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        for at, ymdhm in self.WINDOWS[1:]:
+            if i == at:
+                CLOCK.t = max(CLOCK.t, WD.et_ts(*ymdhm))
+                self.preload(sim)
+
+    def after_cycle(self, sim, i):
+        CLOCK.advance(180.0)
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        end = sim.bot.wd_mm_end
+        if CLOCK.t > end + 120:
+            self.mm_after_flat.extend(c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "bat" and c["t"] > end + 120
+                                      and c not in self.mm_after_flat)
+
+    def final_checks(self, sim):
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        b, v = sim.bot, sim.v
+        sold = list(b.wind_down.sold)
+        pos = v.signed_positions()
+        if not sold:
+            sim.chk.violation("wind_down_none", "the wind-down sold nothing")
+        early = [s for s in sold if s[0] < WD.START]
+        if early:
+            sim.chk.violation("wind_down_before_start", f"{len(early)} sales before 31 Oct 00:00 ET: {early[:3]}")
+        late = [s for s in sold if s[0] >= WD.DEADLINE]
+        if late:
+            sim.chk.violation("wind_down_after_deadline", f"{len(late)} sales at or after 18:00 ET 3 Nov: {late[:3]}")
+        wd_calls = [c for c in v.calls if c.get("prefix") in ("unw", "unb", "wdx") and c["t"] >= WD.DEADLINE]
+        if wd_calls:
+            sim.chk.violation("wind_down_after_deadline", f"{len(wd_calls)} unwind/exit orders at or after 18:00 ET 3 Nov, first {wd_calls[0].get('key')}")
+        if pos.get(self.punt_ex, 0.0) != 800 or any(self.punt_ex in s[1] for s in sold):
+            sim.chk.violation("wind_down_sold_punt", f"punt leg {self.punt_ex}: {pos.get(self.punt_ex)} held (seeded 800)")
+        by_race = collections.defaultdict(list)
+        for t, what, q, px, cost in sold:
+            if q > 1000:
+                sim.chk.violation("wind_down_clip_size", f"{what}: {q} in one clip (> 1,000)")
+            if what.startswith(("sell_set", "buy_set")):
+                by_race[what.split(" ", 1)[1]].append(t)
+        for race, ts in by_race.items():
+            ts.sort()
+            if any(b_ - a_ < 1800 - 1 for a_, b_ in zip(ts, ts[1:])):
+                sim.chk.violation("wind_down_spacing", f"{race}: clips less than 30 min apart: {[WD.et_str(x) for x in ts]}")
+        for race in self.late_sell + self.late_buy:
+            if race not in by_race:
+                sim.chk.violation("wind_down_not_its_sale", f"{race}: the wind-down never sold a clip (another path took the sets?)")
+        for race in self.late_sell:
+            n = venue_sets(sim, race)
+            if n:
+                sim.chk.violation("wind_down_left", f"{race}: {n} late-call NO sets still held after 18:00 ET 3 Nov")
+        for race in self.late_buy:
+            qs = [pos.get(e, 0.0) for e in sim.legs(race)]
+            if all(q > 0 for q in qs):
+                sim.chk.violation("wind_down_left", f"{race}: {int(min(qs))} late-call YES sets still held after 18:00 ET 3 Nov")
+        if venue_sets(sim, self.early) < self.sizes[self.early] and self.early not in b.wind_down_exempt()[0]:
+            sim.chk.violation("wind_down_sold_early_call", f"{self.early}: an early-call set was sold ({venue_sets(sim, self.early)} left)")
+        if any(self.early in s[1] for s in sold):
+            sim.chk.violation("wind_down_sold_early_call", f"{self.early}: the wind-down sold an early-call set")
+        if pos.get(self.dir_ex, 0.0) > 0:
+            sim.chk.violation("wind_down_left", f"directional leg {self.dir_ex}: {pos.get(self.dir_ex)} YES still held")
+        if self.mm_after_flat:
+            sim.chk.violation("wind_down_mm_after_flat", f"{len(self.mm_after_flat)} MM batch orders after 12:00 ET 3 Nov, first {self.mm_after_flat[0]['key']}")
+        self.summary = {"sales": len(sold), "first": WD.et_str(sold[0][0]) if sold else None, "last": WD.et_str(sold[-1][0]) if sold else None,
+                        "cost": round(sum(s[4] for s in sold), 1), "early_race": self.early, "dir_leg": self.dir_ex,
+                        "by_race": {r: len(t) for r, t in by_race.items()}}
+
+
 SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
              ChurnMany, ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, ShockReserve, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
-             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, Day]
+             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Day]
 
 
 # ======================================================================================== main
@@ -2081,6 +2223,8 @@ def main(argv):
     if "--raise" in argv:
         FORCE_CFG["raise_enabled"] = True
         FORCE_CFG["raise_sets_enabled"] = True
+    if "--wind" in argv:                     # the wind-down on in every scenario's sandbox (it acts only from 31 Oct)
+        FORCE_CFG["wind_down_enabled"] = True
     names = [a for a in argv if not a.startswith("-")]
     if "--list" in argv:
         for s in SCENARIOS:

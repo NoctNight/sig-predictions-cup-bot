@@ -1974,5 +1974,404 @@ _rs7 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 check("mm_touch: the snapshot fallback is the REST snapshot stamped at read time; feed books written to book_cache clear its REST stamp",
       'getattr(self, "rest_snapshot", None)' in _rs7 and _rs7.count("book_ts.pop(ex, None)") >= 2)
 
+# ---------------------------------------------------------------- wind-down (backlog 000), under a fake clock
+from sigbot.proposals import wind_down as WD  # noqa: E402
+
+
+class _WVenue(_Venue):
+    """_Venue plus single orders (filling `leg_fill` shares, None = all; the rest stays open), cancels (cancel_fail raises)."""
+    def __init__(self, pos):
+        super().__init__(pos)
+        self.orders, self.cancels, self.cancel_alls, self.leg_fill, self.cancel_fail = [], [], [], None, False
+
+    def place_order(self, ex, side, act, q, px, expiration=None, key=None):
+        f = q if self.leg_fill is None else min(self.leg_fill, q)
+        self.pos[ex] = self.pos.get(ex, 0.0) + (f if side == "yes" else -f)
+        self.n += 1
+        self.orders.append((key, ex, side, q, px))
+        return {"orderId": self.n, "open": f < q, "quantityTraded": f, "remainingQuantity": q - f}
+
+    def cancel_order(self, oid):
+        if self.cancel_fail:
+            raise _ApiErr(503, "DOWN", "down")
+        self.cancels.append(oid)
+        return {}
+
+    def cancel_all(self, exchange_id=None, **k):
+        self.cancel_alls.append(exchange_id)
+        return {}
+
+
+def _wrace(name, parties, exs):
+    return Race(name, {p: Leg(p, e, e, name) for p, e in zip(parties, exs)})
+
+
+_WR = {r.name: r for r in (_wrace("Hawaii Governor", "DR", ["H1", "H2"]), _wrace("Rhode Island Governor", "DRI", ["RD", "RR", "RI"]),
+                            _wrace("Florida Governor", "DR", ["F1", "F2"]), _wrace("Ohio Senate", "DR", ["O1", "O2"]),
+                            _wrace("Texas Senate", "DR", ["T1", "T2"]), _wrace("Kansas Senate", "DR", ["K1", "K2"]))}
+
+
+def _wdbot(pos, books, fairs=None, med=None, now=None, cfg_over=None, churn_lots=(), cheapfav=()):
+    tmp = tempfile.mkdtemp()
+    st = _Store(os.path.join(tmp, "t.sqlite"))
+    v = _WVenue(pos)
+    bx = {l.exchange_id: (r.name, p) for r in _WR.values() for p, l in r.legs.items()}
+    u = types.SimpleNamespace(races=_WR, by_exchange=bx, all_exchanges=lambda: list(bx))
+    e = ArbEngine.__new__(ArbEngine)
+    e.cfg = ArbConfig(min_set_qty=20)
+    e.u, e.api, e.store, e.dry_run, e.starting_cash = u, v, st, False, 100000.0
+    e.committed, e.cooldown, e.hostile, e.recycle_credit = {}, {}, set(), 0.0
+    ch = DC.DevChurn()
+    for race, qty in churn_lots:
+        ch.add_lot(race, qty, 0.98, 0.0)
+    e.protected = lambda: {l["race"] for l in ch.lots} | set(cheapfav)
+    cfg = BotConfig()
+    cfg.wind_down_enabled = True
+    for k_, v_ in (cfg_over or {}).items():
+        setattr(cfg, k_, v_)
+    b = R.Bot.__new__(R.Bot)
+    b.cfg, b.dry_run, b.store, b.api, b.arb, b.universe = cfg, False, st, v, e, u
+    b.wind_down, b.wind_down_path = WD.WindDownState(), os.path.join(tmp, "wind_down_state.json")
+    b.wd_med, b.wd_med_ts, b.wd_report_ts, b.wd_cap_logged = dict(med or {}), 9e18, 9e18, 0.0
+    b.exit_lock, b.mm_inv_base, b.cash, b.wd_mm_end, b.wd_foreign_logged = {}, 900.0, 50000.0, WD.MM_FLAT, {}
+    b.positions_snapshot, b.positions_ok, b.cost_basis = dict(pos), True, {}
+    b.open_orders_cache, b.open_orders_ts, b.trade_lock = {}, 0.0, threading.Lock()
+    b.churn, b.catchup_open, b.feed = ch, {}, None
+    b.cheapfav_races = lambda: set(cheapfav)
+    b.direction = types.SimpleNamespace(rows=[{"exchange_id": x, "fair": f} for x, f in (fairs or {}).items()])
+    b.mm = types.SimpleNamespace(quoted=[])
+    b.fresh_book = lambda ex, age=None: books.get(ex)
+    b.get_book = lambda ex, d=50, *a, **k: books[ex]
+    b.positions_map = lambda strict=False: (dict(v.pos), 0.0, len(v.pos))
+    return b, v
+
+
+def _wcycle(b, t, killed=False):
+    _keep = R.time.time
+    R.time.time = lambda: t
+    try:
+        R.Bot.wind_down_cycle(b, {}, killed)
+    finally:
+        R.time.time = _keep
+
+
+def _sent_keys(v):
+    return [k.split("-")[0] for k, _ in v.sent] + [o[0].split("-")[0] for o in v.orders]
+
+
+_HI = {"H1": _book(0.93, 0.935, 50000), "H2": _book(0.065, 0.07, 50000)}           # YES set exits at 0.995: 1 tick under payout
+_HIP = {"H1": 8743.0, "H2": 7658.0}                                                 # 7,658 YES sets + 1,085 spare YES on H1
+_HIF = {"H1": 0.93, "H2": 0.07}
+_HIM = {"Hawaii Governor": {"buy_set": (0.015, 0.015), "sell_set": (0.02, 0.02)}}   # usual cost 3 ticks: 1 tick is cheap
+_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
+_wcycle(_b, WD.START - 60)
+check("wind-down: nothing is sold before 31 Oct 00:00 ET (fake clock 30 Oct 23:59 ET)", _v.sent == [] and _v.orders == [], str(_sent_keys(_v)))
+_t1 = WD.START + 10 * 3600
+_wcycle(_b, _t1)
+_wcycle(_b, _t1 + 30)
+_wcycle(_b, _t1 + 60)
+_k1 = _sent_keys(_v)
+_wcycle(_b, _t1 + 1860)
+_k2 = _sent_keys(_v)
+_q = [l[0]["quantity"] for k, l in _v.sent]
+check("wind-down: 31 Oct 10:00 ET: one clip a cycle, cheapest first (the fair-priced spare leg, then a 1,000-set YES clip), "
+      "then nothing in that race for 30 min, then the next clip",
+      _k1 == ["unb", "wdx"] and _k2 == ["unb", "unb", "wdx"] and _q == [1000, 1000] and _v.pos["H2"] == 5658.0, f"{_k1} {_k2} {_q} {_v.pos}")
+check("wind-down: a YES-set clip buys NO on every leg at 1 - bid (the venue nets it against the YES held)",
+      all(l["side"] == "no" and l["action"] == "buy" for l in _v.sent[0][1]) and {l["price"] for l in _v.sent[0][1]} == {0.07, 0.935},
+      str(_v.sent[0][1]))
+check("wind-down: the spare YES on a leg is sold at the bid (NO buy at 1 - bid), 80% of the touch at most, and only that leg",
+      _v.orders[0][1:4] == ("H1", "no", 1085) and abs(_v.orders[0][4] - 0.07) < 1e-9, str(_v.orders))
+_b2, _ = _wdbot(_HIP, _HI, _HIF, _HIM)
+_b2.wind_down.load(_j3.load(open(_b.wind_down_path)))
+check("wind-down: the state file reloads after a restart (spacing kept)", _b2.wind_down.last_race.get("Hawaii Governor") == _t1 + 1860,
+      str(_b2.wind_down.last_race))
+
+# cost cap: a 3-leg NO set whose exit costs 3.1% of its proceeds, locked return 1%
+_RI = {"RD": _book(0.895, 0.90, 50000), "RR": _book(0.095, 0.10, 50000), "RI": _book(0.055, 0.06, 50000)}
+_RIP = {"RD": -12304.0, "RR": -12304.0, "RI": -12304.0}
+_RIM = {"Rhode Island Governor": {"sell_set": (0.08, 0.07), "buy_set": (None, None)}}
+_b, _v = _wdbot(_RIP, _RI, {"RD": 0.9, "RR": 0.08, "RI": 0.02}, _RIM)
+_b.cost_basis = {"RD": 12304 * 0.10, "RR": 12304 * 0.90, "RI": 12304 * 0.98}
+_wcycle(_b, WD.START + 3600)
+_n_early = len(_v.sent)
+_wcycle(_b, WD.LOOSEN + 60)
+check("wind-down: cost cap: a set costing 3.1% of proceeds is not sold on 31 Oct (cap = its 1% locked return), is sold from 2 Nov (4.5%)",
+      _n_early == 0 and len(_v.sent) == 1 and _sent_keys(_v) == ["unw"] and _v.sent[0][1][0]["quantity"] == 1000
+      and all(l["side"] == "yes" for l in _v.sent[0][1]), f"{_n_early} {_sent_keys(_v)}")
+check("wind-down: the cap schedule: locked return at the start, 4.5% on 2 Nov 00:00 ET, 5.5% at 17:45 ET 3 Nov, never below the locked return",
+      abs(WD.set_cost_cap(WD.START, 0.01) - 0.01) < 1e-9 and abs(WD.set_cost_cap(WD.LOOSEN, 0.0) - 0.045) < 1e-9
+      and abs(WD.set_cost_cap(WD.CAP_END, 0.0) - 0.055) < 1e-9 and abs(WD.set_cost_cap(WD.CAP_END, 0.08) - 0.08) < 1e-9)
+# timing gate (ev_hunt 2c, then level 0)
+_b, _v = _wdbot(_RIP, _RI, {}, {"Rhode Island Governor": {"sell_set": (0.06, 0.05), "buy_set": (None, None)}})
+_b.cost_basis = {"RD": 12304 * 0.10, "RR": 12304 * 0.90, "RI": 12304 * 0.98}
+_wcycle(_b, WD.LOOSEN + 60)
+_g1 = len(_v.sent)
+_b.wd_med = {"Rhode Island Governor": {"sell_set": (0.06, 0.06), "buy_set": (None, None)}}
+_wcycle(_b, WD.LOOSEN + 120)
+check("wind-down: timing gate: from 2 Nov a clip waits while the exit cost (12 ticks) is above the race's 24-h median (10), sells at the median",
+      _g1 == 0 and len(_v.sent) == 1, f"{_g1} {len(_v.sent)}")
+_b.wd_med = {"Rhode Island Governor": {"sell_set": (0.065, 0.10), "buy_set": (None, None)}}
+check("wind-down: timing gate before 2 Nov: the cost must be >= 1 tick below the 12-h median; near the deadline no gate",
+      not WD.gate_ok(WD.START + 3600, 0.06, 0.0625, 0.1, WD.DEADLINE)[0] and WD.gate_ok(WD.START + 3600, 0.06, 0.065, 0.1, WD.DEADLINE)[0]
+      and WD.gate_ok(WD.DEADLINE - 3600, 0.09, 0.05, 0.05, WD.DEADLINE - 7200)[0])
+# early-call sets are held; Rhode Island Governor is sold anyway; exempt sleeves untouched
+_FL = {"F1": _book(0.95, 0.955, 50000), "F2": _book(0.045, 0.05, 50000)}
+_b, _v = _wdbot({"F1": -5000.0, "F2": -5000.0}, _FL, {"F1": 0.95, "F2": 0.05},
+                {"Florida Governor": {"sell_set": (0.03, 0.03), "buy_set": (None, None)}})
+_wcycle(_b, WD.LOOSEN + 60)
+_b.cfg.wind_down_force_late = ["Florida Governor"]
+_wcycle(_b, WD.LOOSEN + 120)
+check("wind-down: an early-call set (Florida Governor, polls close 20:00 ET, favourite 0.95) is held; listed in force_late it is sold",
+      len(_v.sent) == 1 and WD.call_class("Florida Governor", 0.95)[0] == "early", str(_sent_keys(_v)))
+_b, _v = _wdbot({"O1": -3000.0, "O2": -3000.0, "T1": -3000.0, "T2": -3000.0},
+                {"O1": _book(0.5, 0.505, 50000), "O2": _book(0.495, 0.5, 50000), "T1": _book(0.5, 0.505, 50000), "T2": _book(0.495, 0.5, 50000)},
+                {}, {"Ohio Senate": {"sell_set": (0.02, 0.02)}, "Texas Senate": {"sell_set": (0.02, 0.02)}}, churn_lots=[("Ohio Senate", 3000)],
+                cheapfav=["Texas Senate"])
+_wcycle(_b, WD.LOOSEN + 60)
+check("wind-down: races high-frequency arb or cheap favourites hold are never sold by it (their own schedules)", _v.sent == [] and _v.orders == [],
+      str(_sent_keys(_v)))
+# never more than held now: the clip is re-clamped to the positions re-read under the lock
+_b, _v = _wdbot({"H1": 300.0, "H2": 300.0}, _HI, _HIF, _HIM)
+_b.positions_snapshot = dict(_HIP)
+_wcycle(_b, _t1)
+check("wind-down: a clip sized from a stale snapshot (7,658 sets) is cut to the sets held now (300); no leg ends short",
+      [l[0]["quantity"] for k, l in _v.sent] == [300] and _v.pos["H1"] == 0.0 and _v.pos["H2"] == 0.0 and _v.orders == [],
+      f"{_v.sent} {_v.pos} {_v.orders}")
+# partisan cap after every clip
+_b, _v = _wdbot({"O1": 1000.0, "T2": 11400.0}, {"O1": _book(0.5, 0.505, 50000), "T2": _book(0.5, 0.505, 50000)},
+                {"O1": 0.5, "T2": 0.5}, {}, cfg_over={"wind_down_clips_per_cycle": 5})
+_wcycle(_b, WD.START + 3600)
+_ex = [o[1] for o in _v.orders]
+check("wind-down: partisan cap: no sale of O1 (D YES, |net D| 5,200 -> 5,700), T2 (R YES) is sold",
+      "O1" not in _ex and "T2" in _ex, str(_v.orders))
+# single legs: fill-or-cancel
+_b, _v = _wdbot({"O1": 1000.0}, {"O1": _book(0.5, 0.505, 50000)}, {"O1": 0.5}, {})
+_v.leg_fill = 400
+_wcycle(_b, WD.START + 3600)
+check("wind-down: a leg clip's unfilled remainder is cancelled at once and only what traded is booked",
+      len(_v.cancels) == 1 and _b.wind_down.sold[-1][2] == 400 and _v.pos["O1"] == 600.0,
+      f"{_v.cancels} {_b.wind_down.sold} {_v.pos}")
+_b, _v = _wdbot({"O1": 1000.0, "T2": 1000.0}, {"O1": _book(0.5, 0.505, 50000), "T2": _book(0.5, 0.505, 50000)}, {"O1": 0.5, "T2": 0.5}, {},
+                cfg_over={"wind_down_clips_per_cycle": 5})
+_v.leg_fill, _v.cancel_fail = 400, True
+_wcycle(_b, WD.START + 3600)
+check("wind-down: a remainder that cannot be cancelled pulls that leg for 30 min and stops the cycle (no second order)",
+      len(_v.orders) == 1 and _b.wind_down.pulled.get(_v.orders[0][1], 0) > WD.START + 3600, f"{_v.orders} {_b.wind_down.pulled}")
+# zero-EV exit just sent on the leg: leave it this cycle
+_b, _v = _wdbot({"O1": 1000.0}, {"O1": _book(0.5, 0.505, 50000)}, {"O1": 0.5}, {})
+_b.store.record_order(77, "O1", None, "no", "buy", 0.5, 1000, "exit")
+_b.store.conn.execute("UPDATE orders SET placed_at=?", (WD.START + 3600 - 60,))
+_b.store.conn.commit()
+_wcycle(_b, WD.START + 3600)
+_z1 = list(_v.orders)
+_wcycle(_b, WD.START + 3600 + 130)
+check("wind-down: no leg clip while a zero-EV exit sent in the last 2 min may still rest on that leg; 2 min later it is sold",
+      _z1 == [] and [o[1] for o in _v.orders] == ["O1"], f"{_z1} {_v.orders}")
+# hourly cost budget and the kill switch
+_b, _v = _wdbot(_RIP, _RI, {}, _RIM, cfg_over={"wind_down_max_cost_per_hour": 50.0})
+_wcycle(_b, WD.LOOSEN + 60)
+check("wind-down: no clip whose exit cost would take the last hour past wind_down_max_cost_per_hour (kill switch at 400/h)", _v.sent == [],
+      str(_sent_keys(_v)))
+_b, _v = _wdbot(_RIP, _RI, {}, _RIM)
+_wcycle(_b, WD.LOOSEN + 60, killed=True)
+_n_k = len(_v.sent)
+_wcycle(_b, WD.DEADLINE - 600, killed=True)
+check("wind-down: while the kill switch is on only clips that cannot wait (past the race's fallback time) are sold",
+      _n_k == 0 and len(_v.sent) == 1, f"{_n_k} {len(_v.sent)}")
+check("wind-down: the MM is flat at 12:00 ET 3 Nov or at its own stop_quoting_at if earlier (live: 12:00 UTC = 07:00 ET)",
+      WD.mm_end("2026-11-03T12:00:00Z") == datetime(2026, 11, 3, 12, tzinfo=timezone.utc).timestamp() and WD.mm_end("2026-11-04T00:00:00Z") == WD.MM_FLAT
+      and WD.mm_end(None) == WD.MM_FLAT and WD.mm_inventory_cap(WD.mm_end("2026-11-03T12:00:00Z"), 900, WD.mm_end("2026-11-03T12:00:00Z")) == 0)
+_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
+_b.cfg.arb.recycle_enabled = True
+_wcycle(_b, WD.START - 60)
+_rec_before = _b.cfg.arb.recycle_enabled
+_wcycle(_b, WD.START + 60)
+check("wind-down: recycling stays on before 31 Oct 00:00 ET and is switched off from then (a recycled set would have to be sold again)",
+      _rec_before is True and _b.cfg.arb.recycle_enabled is False)
+# MM: cap shrinks from 1 Nov, flat (no quotes, no fast requotes) from 12:00 ET 3 Nov
+_calls = []
+_fb = types.SimpleNamespace(cfg=types.SimpleNamespace(mm_fast_requotes_per_min=3, mm=types.SimpleNamespace(enabled=True)), feed_ok=lambda: True,
+                            mm=types.SimpleNamespace(quoted=["H1"], state={"H1": types.SimpleNamespace(last_touch=(0.5, 0.51), last_reserve=0.5)}), killed_until=0.0, wind_down=WD.WindDownState(), strategy_kill=None,
+                            wd_mm_end=WD.MM_FLAT)
+_sc = R.ArbScanner.__new__(R.ArbScanner)
+_sc.bot, _sc.fast_log, _sc.stats = _fb, [], {}
+_fb.fresh_book = lambda ex, age=None: _calls.append(ex) or None
+_keep = R.time.time
+R.time.time = lambda: WD.MM_FLAT + 60
+try:
+    _sc.fast_requote_pass()
+finally:
+    R.time.time = _keep
+_c_after = list(_calls)
+R.time.time = lambda: WD.MM_FLAT - 60
+try:
+    _sc.fast_requote_pass()
+finally:
+    R.time.time = _keep
+_rs_wd = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+_mm = MarketMaker.__new__(MarketMaker)
+check("wind-down: the MM reads its cap from inv_cap_override when set, the shared config otherwise (the shadow tuner's replays read the config)",
+      "cap = getattr(self, \"inv_cap_override\", None) or self.cfg.max_inventory_notional" in open(os.path.join(ROOT, "sigbot", "mm.py")).read()
+      and getattr(_mm, "inv_cap_override", None) is None)
+check("wind-down: MM: inventory cap 900 until 1 Nov, ~531 on 2 Nov 00:00 ET, 0 at 12:00 ET 3 Nov; no fast requotes from 12:00 ET 3 Nov; "
+      "the cycle pulls MM quotes then (monitor-pause path)",
+      WD.mm_inventory_cap(WD.MM_SHRINK, 900) == 900 and abs(WD.mm_inventory_cap(WD.LOOSEN, 900) - 531.3) < 1 and WD.mm_inventory_cap(WD.MM_FLAT, 900) == 0
+      and _c_after == [] and _calls == ["H1"] and "if WD.mm_flat_due(now_, self.wd_mm_end):\n                mm_paused = True" in _rs_wd
+      and "self.mm.inv_cap_override = max(1.0, WD.mm_inventory_cap(now_, self.mm_inv_base, self.wd_mm_end))" in _rs_wd
+      and "self.cfg.mm.max_inventory_notional =" not in _rs_wd, f"{_c_after} {_calls}")
+
+# review 1 (Opus): blockers 1-4 and should-fixes 5, 9
+_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
+_b.open_orders_cache = {"H1": [{"id": 5, "quantity": 100}]}
+_wcycle(_b, WD.DEADLINE + 60)
+_wcycle(_b, WD.DEADLINE + 3 * 3600)
+check("wind-down: nothing is sold or cancelled at or after 18:00 ET 3 Nov (the punt and the election-night sleeve trade then)",
+      _v.sent == [] and _v.orders == [] and _v.cancel_alls == [] and WD.STOP == WD.DEADLINE, f"{_sent_keys(_v)} {_v.cancel_alls}")
+_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
+_b.store.record_order(88, "H2", None, "yes", "buy", 0.07, 500, "punt")
+_wcycle(_b, _t1)
+_wcycle(_b, _t1 + 3600)
+check("wind-down: a race with a punt / election-night order on any leg sells no set; that leg is never sold or cancelled (the other leg's spare YES may be)",
+      _v.sent == [] and "H2" not in _v.cancel_alls and all(o[1] != "H2" for o in _v.orders), f"{_sent_keys(_v)} {_v.orders} {_v.cancel_alls}")
+_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
+_b.wind_down_hold_path = os.path.join(tempfile.mkdtemp(), "wind_down_hold.json")
+open(_b.wind_down_hold_path, "w").write('{"races": ["Hawaii Governor"], "exchanges": []}')
+_wcycle(_b, _t1)
+_h1 = (list(_v.sent), list(_v.orders))
+open(_b.wind_down_hold_path, "w").write('{"races": [')
+_wcycle(_b, _t1 + 60)
+check("wind-down: the hold file (params/wind_down_hold.json) holds a race; an unreadable hold file stops every clip",
+      _h1 == ([], []) and _v.sent == [] and _v.orders == [], f"{_h1} {_sent_keys(_v)}")
+_b, _v = _wdbot({"O1": -1000.0, "O2": -1000.0}, {"O1": _book(0.5, 0.505, 50000), "O2": _book(0.5, 0.505, 50000)}, {},
+                {"Ohio Senate": {"sell_set": (0.03, 0.03)}}, cfg_over={"wind_down_force_late": ["Ohio Senate"]})
+_b.open_orders_cache = {"O1": [{"id": 5, "quantity": 500}]}
+_b.store.record_order(5, "O1", None, "yes", "buy", 0.495, 500, "mm")             # our own MM bid: known, so cancelled
+_ca = _v.cancel_all
+_v.cancel_all = lambda exchange_id=None, **k: (_v.pos.__setitem__("O1", _v.pos["O1"] + 500) if exchange_id == "O1" else None) or _ca(exchange_id)
+_wcycle(_b, WD.LOOSEN + 60)
+check("wind-down: our MM bid filling during the cancel (O1 -1,000 -> -500) shrinks the clip to the 500 sets held: no leg crosses zero",
+      [l[0]["quantity"] for k, l in _v.sent] == [500] and _v.pos["O1"] == 0.0 and _v.pos["O2"] == -500.0, f"{_v.sent} {_v.pos}")
+_b, _v = _wdbot({"O1": -300.0, "O2": -1000.0}, {"O1": _book(0.5, 0.505, 50000), "O2": _book(0.5, 0.505, 50000)}, {"O1": 0.5, "O2": 0.5},
+                {"Ohio Senate": {"sell_set": (0.03, 0.03)}}, cfg_over={"wind_down_force_late": ["Ohio Senate"]})
+_b.catchup_open = {"O1": -300.0}
+_wcycle(_b, WD.LOOSEN + 60)
+check("wind-down: a catch-up NO is not counted inside a set (O1 -300 is all catch-up): no set sold, O1 untouched",
+      _v.sent == [] and "O1" not in [o[1] for o in _v.orders] and _v.pos["O1"] == -300.0, f"{_sent_keys(_v)} {_v.orders}")
+check("wind-down: locked return only from legs holding exactly the sets, at most 5.5% (residual NO at other prices inflated it to 22%)",
+      WD.locked_return("sell_set", {"a": 1000 * 0.03 + 3000 * 0.30, "b": 1000 * 0.97}, {"a": -4000, "b": -1000}, ["a", "b"], 1000) == 0.0
+      and abs(WD.locked_return("sell_set", {"a": 30.0, "b": 940.0}, {"a": -1000, "b": -1000}, ["a", "b"], 1000) - 0.0309) < 1e-3
+      and WD.locked_return("sell_set", {"a": 10.0, "b": 10.0}, {"a": -1000, "b": -1000}, ["a", "b"], 1000) == WD.CAP_END_FRAC)
+_b, _v = _wdbot({"O1": 3000.0}, {"O1": {"bids": [{"price": 0.30, "quantity": 50000}], "asks": []}}, {}, {})
+_wcycle(_b, WD.START + 3600)
+check("wind-down: a leg with no outside fair and a one-sided book is not sold (no idea of its value)", _v.orders == [], str(_v.orders))
+check("wind-down: recycling is off at start-up when the bot restarts inside the window (before the scanner thread starts)",
+      "if time.time() >= WD.START and cfg.arb.recycle_enabled:\n                cfg.arb.recycle_enabled = False" in _rs_wd)
+
+# review 2 (Opus): N1-N5
+_b, _v = _wdbot({"O1": 2000.0}, {"O1": _book(0.50, 0.53, 50000)}, {"O1": 0.50}, {})
+_wcycle(_b, WD.START + 3600)
+check("wind-down: the hourly ledger books a leg's cost against the mark too (fair = bid 0.50, mid 0.515: 2,000 sold books 30, not 0)",
+      [o[1] for o in _v.orders] == ["O1"] and abs(_b.wind_down.cost_log[-1][1] - 30.0) < 1e-6, f"{_v.orders} {_b.wind_down.cost_log}")
+_b, _v = _wdbot({"O1": 1000.0}, {"O1": _book(0.5, 0.505, 50000)}, {"O1": 0.5}, {})
+_b.open_orders_cache = {"O1": [{"id": 999, "quantity": 300}]}
+_wcycle(_b, WD.START + 3600)
+check("wind-down: a leg carrying an open order the bot did not place (punt executor before it records, Sizhe's own) is not cancelled or sold",
+      _v.orders == [] and _v.cancel_alls == [], f"{_v.orders} {_v.cancel_alls}")
+_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
+_keep = R.time.time
+R.time.time = lambda: _t1
+try:
+    _cs = R.Bot.wind_down_candidates(_b, _t1, {})
+finally:
+    R.time.time = _keep
+R.time.time = lambda: WD.STOP + 1
+try:
+    _r = [R.Bot.wind_down_set_clip(_b, c, _t1, {}) if c["type"] == "set" else R.Bot.wind_down_leg_clip(_b, c, _t1, {}) for c in _cs]
+finally:
+    R.time.time = _keep
+check("wind-down: a clip whose lock is taken at or after 18:00 ET sends nothing and cancels nothing (candidates built before)",
+      _cs and all(x == "stop" for x in _r) and _v.sent == [] and _v.orders == [] and _v.cancel_alls == [], f"{len(_cs)} {_r} {_v.cancel_alls}")
+_g = WD.global_fallback_ts(1500.0, 30, 300.0, 60.0, 7200.0)
+check("wind-down: global fallback: 1,500 of exit cost at 300/h needs 5 h -> every race drops its gate at 11:00 ET 3 Nov (18:00 - 2 h - 5 h)",
+      abs(_g - (WD.DEADLINE - 7200 - 5 * 3600)) < 1 and WD.global_fallback_ts(0.0, 120, 300.0, 60.0, 7200.0) == WD.DEADLINE - 7200 - 7200)
+_b, _v = _wdbot(_RIP, _RI, {}, {"Rhode Island Governor": {"sell_set": (0.03, 0.03), "buy_set": (None, None)}},
+                cfg_over={"wind_down_max_cost_per_hour": 50.0})
+_wcycle(_b, WD.LOOSEN + 60)
+_n_g = len(_v.sent)
+_b2, _v2 = _wdbot({"RD": -40000.0, "RR": -40000.0, "RI": -40000.0}, _RI, {}, {"Rhode Island Governor": {"sell_set": (0.03, 0.03), "buy_set": (None, None)}})
+_wcycle(_b2, WD.DEADLINE - 6 * 3600)
+check("wind-down: with the gate shut (cost above the medians), 12,304 sets wait on 2 Nov; 40,000 sets (about 2.3k of exit cost) drop the gate "
+      "at 12:00 ET 3 Nov", _n_g == 0 and len(_v2.sent) == 1 and _b2.wd_global_fallback <= WD.DEADLINE - 6 * 3600, f"{_n_g} {len(_v2.sent)} "
+      f"{WD.et_str(_b2.wd_global_fallback)}")
+check("wind-down: a leg without its own cost basis gives a locked return of 0, not the 5.5% clamp",
+      WD.locked_return("sell_set", {"a": 970.0}, {"a": -1000, "b": -1000}, ["a", "b"], 1000) == 0.0)
+
+# merge with the cash raise (24 Oct): one shared exit lock, the wind-down owns its races 31 Oct - 3 Nov, the raise's MM pause
+_rB = _U.race_of(_L(_RB, "R")).name
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (300.0, "floor")})
+R.Bot.stamp_exit(_b, _rB, "wind_down")
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+check("merge: the cash raise leaves a race the wind-down clipped < 30 min ago (B) and sells elsewhere (A)",
+      _v.orders and all(o[0] not in _U.races[_rB].exchange_ids for o in _v.orders), str(_v.orders))
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (300.0, "floor")})
+R.Bot.stamp_exit(_b, _rB, "raise")
+R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+check("merge: a routine's own stamp does not lock it out (the raise's own spacing rules apply)", _v.orders and _v.orders[0][0] == _L(_RB, "R"),
+      str(_v.orders))
+_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (300.0, "floor")})
+_b.wind_down, _b.wind_down_exempt = WD.WindDownState(), (lambda: ({}, {}))
+_keep = R.time.time
+R.time.time = lambda: WD.START + 3600
+try:
+    R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+finally:
+    R.time.time = _keep
+_o_in = list(_v.orders)
+R.time.time = lambda: WD.STOP + 60
+try:
+    R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
+finally:
+    R.time.time = _keep
+check("merge: from 31 Oct 00:00 ET to 18:00 ET 3 Nov the cash raise leaves the wind-down's races alone; after 18:00 it may sell again",
+      _o_in == [] and len(_v.orders) >= 1, f"{_o_in} {_v.orders}")
+_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
+R.Bot.stamp_exit(_b, "Hawaii Governor", "raise", _t1 - 600)
+_wcycle(_b, _t1)
+_l1 = (list(_v.sent), list(_v.orders))
+_wcycle(_b, _t1 + 1201)
+check("merge: the wind-down leaves a race the cash raise clipped < 30 min ago (no set clip, no leg clip), then sells it",
+      _l1 == ([], []) and len(_v.sent) + len(_v.orders) == 1, f"{_l1} {_sent_keys(_v)}")
+_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
+_wcycle(_b, _t1)
+_wcycle(_b, _t1 + 30)
+check("merge: a wind-down clip keeps the MM off the race's legs with the cash raise's raise_pause (in the store, survives a restart) and stamps the lock",
+      {"H1", "H2"} <= set(_b.mm.raise_pause) and {"H1", "H2"} <= set(_b.store.get_param("raise_pause") or {})
+      and "wind_down" in _b.exit_lock.get("Hawaii Governor", {}) and _sent_keys(_v) == ["unb", "wdx"], f"{_b.mm.raise_pause} {_b.exit_lock}")
+_rs_m = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("merge: the RI trim and tier 2 also leave a wind-down race (or one the wind-down clipped < 30 min ago) alone; the wind-down sells YES "
+      "sets through the cash raise's unwind_buy_set",
+      "if rname in Bot.wind_down_owned(self, now) or Bot.exit_locked(self, rname, \"raise\", now=now):" in _rs_m
+      and 'self.arb.unwind_buy_set(race.name, c["books"], q, why="wind-down", purpose="arb")' in _rs_m
+      and 's_excl |= Bot.wind_down_owned(self, now) | {r for r in race_legs if Bot.exit_locked(self, r, "raise", now=now)}' in _rs_m
+      and _rs_m.count("    def unwind_buy_set(") == 0 and open(os.path.join(ROOT, "sigbot", "arb.py")).read().count("    def unwind_buy_set(") == 1)
+
+_b, _v = _sbot(_spos, _sbooks, {"hf_arb": (2000.0, "floor")})
+R.Bot.stamp_exit(_b, "Rhode Island Governor", "wind_down")
+R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
+_r1 = [_U.race_of(l[0]["exchangeId"]).name for k, l in getattr(_v, "sent_ml", [])]
+_b, _v = _sbot(_spos, _sbooks, {"hf_arb": (2000.0, "floor")})
+_b.wind_down, _b.wind_down_exempt = WD.WindDownState(), (lambda: ({}, {}))
+_keep = R.time.time
+_tn = time.time()
+R.time.time = lambda: max(_tn, WD.START + 3600)
+try:
+    _b.store.set_param("churn_cash_skips", [[R.time.time() - 1860 * i, "X%d" % i, 2000, 0, 0.98] for i in range(3)])
+    R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
+finally:
+    R.time.time = _keep
+check("merge (review M1): tier 2 skips a race the wind-down clipped < 30 min ago (RI Governor: A only) and sends no set at all in the window",
+      "Rhode Island Governor" not in _r1 and _RA in _r1 and getattr(_v, "sent_ml", []) == [], f"{_r1} {getattr(_v, 'sent_ml', [])}")
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

@@ -146,5 +146,6 @@
   "raise_sets_races": [
     "Rhode Island Governor"
   ],
-  "raise_ri_trim_sets": 4500.0
+  "raise_ri_trim_sets": 4500.0,
+  "wind_down_enabled": true
 }
