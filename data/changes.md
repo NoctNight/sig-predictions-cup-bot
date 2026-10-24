@@ -428,3 +428,10 @@
   clips at level 0, timed by deviation, cost cap loosening; RI forced late; early-call sets held, sell-at-call
   report-only until Sizhe approves. Tests: fake-clock guards, sim 34/34 with live params, day 0 violations, Opus merge
   review SAFE TO DEPLOY. 10-min watch passed. Rollback: wind_down_enabled false + botctl deploy.
+
+- 2026-10-24 19:00 BST: Shock mode ON at 40k per shock (Sizhe): both-venue 5+ pt jumps with SIG lagging; exempt from the
+  partisan cap; own -2,500 stop, its P&L outside the global drawdown; draws on the 15k shock reserve. Tests: guards 430,
+  precheck 38/38 with live config + shock, day 0 violations (+10,257), Opus reviews 11/13/14/15 SAFE TO DEPLOY. 10-min
+  watch passed (settlement 103,797 -> 103,762: the cash raise's selling costs). Reserve refill: cash 1.3k -> 11.6k in
+  10 min (72 raise fills); 3.4k short with no tier-1 clip under 1% left for now (the RI trim and refreshed books fill
+  the rest). Rollback: shock_enabled false + botctl deploy (also releases the reserve).

@@ -30,7 +30,7 @@ STRATEGIES = [
      "takes SIG's stale price when Polymarket and Kalshi have both moved 2+ pts (300/position, max 4, -50 stop)"),
     ("Cheap favourites", ("cheapfav", "cheapfav_exit"), "2026-10-24 14:04",
      "buys fast-count favourites SIG prices >= 2c below the outside fair, held through the call (15k budget, own net D +/-2,000)"),
-    ("Shock mode", ("shock", "shock_exit"), None,
+    ("Shock mode", ("shock", "shock_exit"), "2026-10-24 19:00",
      "trades SIG's lag after a 10-20 pt outside jump on both Polymarket and Kalshi"),
     ("Cash raise", ("raise", "raise_set", "ri_trim"), "2026-10-24 17:12",
      "sells cheap-to-exit holdings only when a higher-edge strategy is short of cash"),
