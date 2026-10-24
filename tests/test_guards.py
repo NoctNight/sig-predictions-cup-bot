@@ -34,7 +34,9 @@ def offload_bot(cash, tilt_free):
     calls = []
 
     class Arb:
-        def unwind_set(self, rname, books, q, why="", new_ret=None, min_gain=0.0):
+        protected = staticmethod(lambda: set())
+
+        def unwind_set(self, rname, books, q, why="", new_ret=None, min_gain=0.0, **kw):
             calls.append((rname, q))
             return {"race": rname, "qty": q}
 
@@ -43,7 +45,8 @@ def offload_bot(cash, tilt_free):
                               cfg=types.SimpleNamespace(arb=types.SimpleNamespace(cash_reserve=20000.0, recycle_min_gain=0.005), offload_arb_for_sleeves=True),
                               arb=Arb(), universe=types.SimpleNamespace(races=races), fresh_book=lambda ex, age=None: {"asks": []},
                               trade_lock=threading.Lock(), tilt=types.SimpleNamespace(unfunded=[1], free_last=tilt_free),
-                              api=types.SimpleNamespace(account=lambda: {"balance": cash}), store=None, universe_races=races)
+                              api=types.SimpleNamespace(account=lambda: {"balance": cash}), store=None, universe_races=races,
+                              refresh_snapshot=lambda deltas=None: None, unwind_deltas=lambda u: {})
     return b, calls
 
 
@@ -343,6 +346,8 @@ _books = {"a": _bk(0.60, 0.61), "b": _bk(0.45, 0.46)}
 class _Arb:
     committed = {"X": 1000.0}
     calls = []
+    protected = staticmethod(lambda: set())
+    no_buy = staticmethod(lambda race: False)
     def candidates_from_prices(self, p): return [_race]
     def x_for(self, r): return 0.0
     def race_budget_left(self, n, ret=None): return 1e9
@@ -515,15 +520,13 @@ _p = ch.close("R2", 1500, 0.98, _now + 900)
 check("churn: realised P&L of an exit, and no re-entry for 30 min after it", abs(_p - 15.0) < 1e-6 and ch.held("R2") == 0 and not ch.eligible(_r2, _now + 900 + 600))
 check("churn: stops entering at -600 (realised + open)", ch.check_kill(-615.0) and not ch.eligible(_r2, _now + 99999))
 check("churn: no entries after 2 Nov 23:00 UTC", not DC.DevChurn().eligible(_r2, DC.LAST_ENTRY + 1))
-check("churn: live config: on, pot <= 12k, 3k floor, stop between -600 and 0 (launch 24 Oct at 4k / -200 until the Fable check)",
-      _live.get("churn_enabled") is True and 0 < _live.get("churn_capital", 0) <= 12000.0
+check("churn: live config: on or off (off since 24 Oct 01:00 until the Fable fixes are reviewed), pot <= 12k, 3k floor, stop between -600 and 0",
+      _live.get("churn_enabled") in (True, False) and 0 < _live.get("churn_capital", 0) <= 12000.0
       and _live.get("churn_cash_floor") == 3000.0 and -600.0 <= _live.get("churn_kill", 1) < 0)
 
 _rs6 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 check("unwinds: the main-loop free unwind reads the latest snapshot under the lock, not the cycle-start positions (sim churn double unwind)",
       "fu = self.arb.free_unwinds(held_books, self.positions_snapshot, cycle_id)" in _rs6 and "free_unwinds(held_books, positions, cycle_id)" not in _rs6)
-check("churn: re-checks the sets actually held under the lock right before selling, and updates the shared snapshot after its baskets",
-      "held = min(held, sets_held(race))" in _rs6 and "snap_add(race, held)" in _rs6 and "snap_add(race, -q)" in _rs6)
 
 # 23 Oct: churn pauses on rising gap volatility (Sizhe), and stops entering 1 Nov 00:00 UTC
 def _ser(n_races, base_sd, rec_sd):
@@ -586,6 +589,246 @@ check("churn: no entries in races where we already hold > 4,000 shares on a leg 
       DC.big_holding({"a": -4500.0, "b": -100.0}, ["a", "b"], 0, 4000) and not DC.big_holding({"a": -4500.0, "b": -4500.0}, ["a", "b"], 2000, 4000)
       and not DC.big_holding({"a": -3900.0}, ["a", "b"], 0, 4000) and _live.get("churn_skip_holding") == 4000.0
       and "big_holding(self.positions_snapshot or positions, race.exchange_ids, ch.held(race.name), lim)" in open(os.path.join(ROOT, "sigbot", "run.py")).read())
+
+
+# ---------------------------------------------------------------- 24 Oct: high-frequency arb (churn) fixes after the Fable stress check
+from sigbot.store import Store as _Store  # noqa: E402
+from sigbot.api import ApiError as _ApiErr  # noqa: E402
+
+
+class _Venue:
+    """Signed positions (NO legs negative) and an all-or-none multi-leg endpoint filling `fill` shares a leg (None = all)."""
+    def __init__(self, pos):
+        self.pos, self.sent, self.fill, self.tournament_id, self.n = dict(pos), [], None, "t", 0
+
+    def new_key(self, p):
+        self.n += 1
+        return f"{p}-{self.n}"
+
+    def place_multi_leg(self, legs, all_or_none=True, key=None):
+        self.sent.append((key, [dict(l) for l in legs]))
+        out = []
+        for l in legs:
+            q = l["quantity"] if self.fill is None else min(self.fill, l["quantity"])
+            self.pos[l["exchangeId"]] = self.pos.get(l["exchangeId"], 0.0) + (-q if l["side"] == "no" else q)
+            out.append({"data": {"exchangeId": l["exchangeId"], "quantityTraded": q, "price": l["price"], "open": False, "orderId": self.n}})
+        return {"results": out}
+
+
+def _hrace(name, exs):                     # (_race is rebound to a stub further up)
+    return Race(name, {p: Leg(p, e, e, name) for p, e in zip("DR", exs)})
+
+
+_HR = {n: _hrace(n, [n + "1", n + "2"]) for n in ("CA", "CB", "Rhode Island Governor", "BIG")}
+
+
+def _hengine():                            # _engine() with real Race objects
+    _keep = globals()["_race"]
+    globals()["_race"] = _hrace
+    try:
+        return _engine()
+    finally:
+        globals()["_race"] = _keep
+
+
+def _hbot(pos, books, lots=(), races=(), kill=-600.0):
+    tmp = tempfile.mkdtemp()
+    st = _Store(os.path.join(tmp, "t.sqlite"))
+    v = _Venue(pos)
+    e = ArbEngine.__new__(ArbEngine)
+    e.cfg = ArbConfig(min_set_qty=20, min_edge_sell=0.01, min_ret_sell=0.005)
+    e.u, e.api, e.store, e.dry_run, e.starting_cash = types.SimpleNamespace(races=_HR), v, st, False, 100000.0
+    e.committed, e.cooldown, e.hostile, e.recycle_credit = {}, {}, set(), 0.0
+    e.x_table, e._x_live, e._x_live_mtime, e._x_hist = {}, {}, 0.0, {}
+    ch = DC.DevChurn(capital=12000, cash_floor=3000, kill=kill)
+    for race, qty, cost, ts in lots:
+        ch.add_lot(race, qty, cost, ts)
+    ch.races |= set(races)
+    b = types.SimpleNamespace(churn=ch, dry_run=False, store=st, churn_med_ts=9e18, churn_med={}, universe=types.SimpleNamespace(races=_HR),
+                              fresh_book=lambda ex, age=None: books.get(ex), get_book=lambda ex, d=50, *a, **k: books[ex],
+                              positions_snapshot=dict(pos), arb=e, trade_lock=threading.Lock(), cash=50000.0, basket_fills=R.Bot.basket_fills,
+                              cfg=types.SimpleNamespace(arb=e.cfg, churn_skip_holding=4000.0), churn_state_path=os.path.join(tmp, "churn_state.json"),
+                              open_orders_cache={}, open_orders_ts=0.0)
+    e.protected = lambda: {l["race"] for l in ch.lots}
+    b.positions_map = lambda: (dict(v.pos), 0.0, len(v.pos))
+    b.refresh_snapshot = lambda deltas=None: R.Bot.refresh_snapshot(b, deltas)
+    return b, v, ch
+
+
+def _legs(race, bid, ask, qty=50000):
+    return {ex: _book(bid, ask, qty) for ex in _HR[race].exchange_ids}
+
+
+def _sold(v):
+    return [l[0]["quantity"] for k, l in v.sent if k.startswith("unw")]
+
+
+_t = time.time()
+# fix 1: the recycler (and every unwind-to-fund path) leaves high-frequency arb's races alone and never buys into them
+_e = _hengine()
+_hpos = {"h1": -34479.0, "h2": -34479.0}
+_r_ok = _e.recycle(dict(best), {"HELD": held_books}, _hpos, 1000.0)
+_e.protected = lambda: {"HELD"}
+_r_prot = _e.recycle(dict(best), {"HELD": held_books}, _hpos, 1000.0)
+_u_prot = _e.unwind_set("HELD", held_books, 100, why="offload")
+_u_own = _e.unwind_set("HELD", held_books, 100, why="churn: x", allow_protected=True)
+check("hf arb: the recycler and offload unwinds never sell a race whose sets high-frequency arb holds (the sleeve itself still can)",
+      _r_ok is not None and _r_prot is None and _u_prot is None and _u_own is not None, f"{_r_ok} {_r_prot} {_u_prot} {_u_own}")
+_e.protected = lambda: set()
+_e.no_buy = lambda r: r == "TGT"
+check("hf arb: recycling never buys into a race high-frequency arb holds or excludes (recycle and its follow-through plan)",
+      _e.recycle(dict(best), {"HELD": held_books}, _hpos, 1000.0) is None and _e.plan({"TGT": tgt_books}, 1e6, extra_budget=50000.0, recycle=True) == []
+      and _e.plan({"TGT": tgt_books}, 1e6) != [])
+_e.no_buy = lambda r: False
+_e.protected = lambda: {"TGT"}
+check("hf arb: no arb plan adds sets to a race high-frequency arb holds (its ledger would not know them)", _e.plan({"TGT": tgt_books}, 1e6) == [])
+_nb = types.SimpleNamespace(churn=DC.DevChurn(), universe=types.SimpleNamespace(races=_HR), cfg=types.SimpleNamespace(churn_skip_holding=4000.0),
+                            positions_snapshot={"BIG1": -6000.0, "BIG2": -10.0, "CB1": -300.0, "CB2": -300.0})
+_nb.churn.add_lot("CA", 500, 0.98, _t)
+check("hf arb: races recycling may not buy: Rhode Island Governor, races it holds, races with > 4,000 shares on a leg; others are fine",
+      R.Bot.churn_no_buy(_nb, "Rhode Island Governor") and R.Bot.churn_no_buy(_nb, "CA") and R.Bot.churn_no_buy(_nb, "BIG")
+      and not R.Bot.churn_no_buy(_nb, "CB") and not R.Bot.churn_no_buy(types.SimpleNamespace(churn=None), "CA"))
+_hb = R.Bot.__new__(R.Bot)
+_hb.churn = None
+_hb.arb = ArbEngine.__new__(ArbEngine)
+check("hf arb: the hooks are wired only when the sleeve runs (defaults leave the arb engine as before)",
+      _hb.arb.protected() == set() and _hb.arb.no_buy("Rhode Island Governor") is False
+      and "self.arb.protected = lambda: {l[\"race\"] for l in self.churn.lots}" in _rs6 and "self.arb.no_buy = self.churn_no_buy" in _rs6)
+
+# fix 1: sets another path closed are booked as an exit (recorded unwind proceeds, else the exit value now) and the gap starts
+_b, _v, _ch = _hbot({"CA1": 0.0, "CA2": 0.0}, _legs("CA", 0.47, 0.48), lots=[("CA", 2000, 0.985, _t - 100)])
+_b.store.record_arb("CA", "unwind_set", [], 2000, 0.0, 1.0, True, {})
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: sets a free unwind closed are booked at its recorded proceeds (+30), the 30-min re-entry gap starts, nothing is sold again",
+      _ch.held("CA") == 0 and abs(_ch.realised - 30.0) < 1e-6 and not _ch.eligible(_HR["CA"], time.time() + 600) and _sold(_v) == [],
+      f"held {_ch.held('CA')} realised {_ch.realised} sold {_sold(_v)}")
+_b, _v, _ch = _hbot({"CA1": -500.0, "CA2": -500.0}, _legs("CA", 0.51, 0.52), lots=[("CA", 2000, 0.985, _t - 100)], kill=-40.0)
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: without a recorded unwind the dropped sets are booked at the exit value now (1500 x -0.025); the stop sees it and sells the rest",
+      abs(_ch.last_reconcile_pnl - 1500 * (0.96 - 0.985)) < 1e-6 and _ch.killed and _sold(_v) == [500] and abs(_ch.realised + 50.0) < 1e-6,
+      f"booked {_ch.last_reconcile_pnl} realised {_ch.realised} killed {_ch.killed} sold {_sold(_v)}")
+
+# fix 2: scanner paths refresh the shared snapshot inside the trade lock, right after the unwind
+class _SpyLock:
+    held = False
+
+    def __enter__(self):
+        self.held = True
+
+    def __exit__(self, *a):
+        self.held = False
+
+
+def _spybot(**kw):
+    lk, seen = _SpyLock(), []
+    fb = types.SimpleNamespace(feed_ok=lambda: True, killed_until=0.0, last_free_unwind=0.0, universe=types.SimpleNamespace(races=_HR),
+                               fresh_book=lambda ex, age=None: {}, trade_lock=lk, positions_snapshot={"CA1": -100.0, "CA2": -100.0}, cash=0.0,
+                               scan_api=types.SimpleNamespace(account=lambda: {"balance": 1.0}), **kw)
+    fb.refresh_snapshot = lambda d=None: R.Bot.refresh_snapshot(fb, d)
+    fb.unwind_deltas = lambda u: R.Bot.unwind_deltas(fb, u)
+    fb.positions_map = lambda: (seen.append(lk.held), ({"CA1": 0.0, "CA2": 0.0}, 0.0, 0))[1]
+    sc = R.ArbScanner.__new__(R.ArbScanner)
+    sc.bot, sc.stats, sc.best_unfunded = fb, {}, None
+    return sc, fb, seen
+
+
+_sc, _fb, _seen = _spybot(arb=types.SimpleNamespace(committed={"CA": 1.0}, free_unwinds=lambda h, p, c: [{"race": "CA", "qty": 100, "proceeds": 1.0}]),
+                          cfg=types.SimpleNamespace(free_unwind_scan_sec=0.0))
+_sc.free_unwind_pass()
+check("hf arb: the scanner's free unwind refreshes the shared snapshot inside the trade lock (sim churn_interleave: sets sold twice)",
+      _seen == [True] and _fb.positions_snapshot == {"CA1": 0.0, "CA2": 0.0}, str(_seen))
+
+
+def _raise():
+    raise _ApiErr(503, "DOWN", "down")
+
+
+_fb.positions_map, _fb.positions_snapshot, _fb.last_free_unwind = _raise, {"CA1": -100.0, "CA2": -100.0}, 0.0
+_sc.free_unwind_pass()
+check("hf arb: if the positions read fails, the unwound sets are taken out of the snapshot locally", _fb.positions_snapshot == {"CA1": 0.0, "CA2": 0.0},
+      str(_fb.positions_snapshot))
+
+
+def _no_acct():
+    raise _ApiErr(503, "DOWN", "down")
+
+
+_sc, _fb, _seen = _spybot(arb=types.SimpleNamespace(committed={"CB": 1.0}, recycle_credit=0.0, cooldown={}, protected=lambda: set(),
+                                                    recycle=lambda *a, **k: {"race": "CB", "qty": 100, "proceeds": 0.98}),
+                          cfg=types.SimpleNamespace(arb=types.SimpleNamespace(recycle_enabled=True, new_sets=False, min_set_qty=20)))
+_fb.scan_api = types.SimpleNamespace(account=_no_acct)
+_sc.best_unfunded = {"race": "CA", "kind": "sell_set", "ret": 0.05, "cost": 0.95, "qty": 500, "ts": time.time()}
+_sc.recycle_pass()
+check("hf arb: a recycle unwind refreshes the snapshot inside the same trade lock", _seen and _seen[0] is True, str(_seen))
+check("hf arb: the main cycle publishes its positions to the shared snapshot under the trade lock (an in-lock scanner refresh is never overwritten)",
+      "            self.positions_snapshot = positions\n" in _rs6 and "        self.positions_snapshot = positions      # read by" not in _rs6)
+
+# fix 3: the sell-all from 3 Nov 22:30 UTC: every two-leg set in a race it traded (not RI Governor / > 4,000-share races), halving
+_old_sa = DC.SELL_ALL_AT
+DC.SELL_ALL_AT = time.time() - 10
+try:
+    _books = dict(_legs("CA", 0.49, 0.50, 1100), **_legs("CB", 0.49, 0.50))
+    _pos = {"CA1": -2500.0, "CA2": -2500.0, "CB1": -300.0, "CB2": -300.0, "Rhode Island Governor1": -1000.0, "Rhode Island Governor2": -1000.0,
+            "BIG1": -6000.0, "BIG2": -6000.0}
+    _b, _v, _ch = _hbot(_pos, _books, lots=[("CA", 2000, 0.98, _t - 100)], races=["CB", "Rhode Island Governor", "BIG"])
+    _n = []
+    for _i in range(5):
+        R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+        _b.positions_snapshot = dict(_v.pos)
+        _n.append(len(_sold(_v)))
+    _p = _v.pos
+    check("hf arb: sell-all sells every set in the races it traded, ledger or not, halving on thin asks, retried every cycle",
+          _p["CA1"] == 0 and _p["CA2"] == 0 and _p["CB1"] == 0 and _ch.lots == [] and _sold(_v)[:2] == [1000, 300] and _n[-1] == _n[-2],
+          f"pos {_p} sold {_sold(_v)} per cycle {_n} lots {_ch.lots}")
+    check("hf arb: sell-all never touches Rhode Island Governor or a race holding > 4,000 shares on a leg",
+          _p["Rhode Island Governor1"] == -1000.0 and _p["BIG1"] == -6000.0)
+    check("hf arb: no entries once the sell-all is due", not _ch.eligible(_HR["CB"], time.time()))
+    _nb2 = types.SimpleNamespace(churn=_ch, universe=types.SimpleNamespace(races=_HR), cfg=types.SimpleNamespace(churn_skip_holding=4000.0),
+                                 positions_snapshot={})
+    check("hf arb: from the sell-all on, recycling never buys back into a race it traded (no sell / re-buy loop)",
+          R.Bot.churn_no_buy(_nb2, "CB") and not R.Bot.churn_no_buy(types.SimpleNamespace(churn=DC.DevChurn(), universe=_nb2.universe,
+                                                                                            cfg=_nb2.cfg, positions_snapshot={}), "CB"))
+finally:
+    DC.SELL_ALL_AT = _old_sa
+
+# fix 4: a 6-tick loss per set, or the stop, sells the race at the touch (not held to 24 h); no re-entry there for 24 h
+_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.52, 0.525), lots=[("CA", 2000, 0.985, _t - 100)])
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: a race 6+ ticks per set under water is sold at the touch, and is not bought again for 24 h",
+      _sold(_v) == [2000] and _ch.held("CA") == 0 and "CA" in _ch.last_loss and not _ch.eligible(_HR["CA"], time.time() + 23 * 3600)
+      and _ch.eligible(_HR["CA"], time.time() + 25 * 3600), str(_sold(_v)))
+_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.51, 0.5175), lots=[("CA", 2000, 0.97, _t - 100)], kill=-5.0)
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: when the stop trips, every churn set is sold at the touch in the same cycle", _ch.killed and _sold(_v) == [2000], str(_sold(_v)))
+check("hf arb: exit reasons: stop and 6-tick loss before take-profit / 24 h",
+      DC.DevChurn(kill=-1).exit_reason({"cost": 0.97, "ts": _t}, 0.969, _t) is None
+      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.940, _t) == DC.LOSS_WHY
+      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.9405, _t) is None)
+_k = DC.DevChurn(); _k.killed = True
+check("hf arb: a tripped stop gives the stop exit", _k.exit_reason({"cost": 0.97, "ts": _t}, 0.99, _t) == DC.STOP_WHY)
+
+# fix 5: churn sells its ledger's sets only, never MM inventory that also sits on both legs
+_b, _v, _ch = _hbot({"CA1": -5000.0, "CA2": -5000.0}, _legs("CA", 0.48, 0.49), lots=[("CA", 2000, 0.97, _t - 100)])
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: with 5,000 NO on both legs (MM inventory too) and 2,000 in the ledger, the +2-tick exit sells 2,000",
+      _sold(_v) == [2000] and _v.pos["CA1"] == -3000.0 and _b.positions_snapshot["CA1"] == -3000.0 and abs(_ch.realised - 100.0) < 1e-6,
+      f"sold {_sold(_v)} pos {_v.pos} realised {_ch.realised}")
+
+# fix 6: a partly filled entry books only what traded (ledger, snapshot, cash)
+_b, _v, _ch = _hbot({}, _legs("CA", 0.52, 0.525, 2000))
+_b.churn_med = {"CA": -0.01}
+_v.fill = 1200
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: a basket that fills 1,200 of 2,000 sets books 1,200 in the ledger, the snapshot and cash",
+      _ch.held("CA") == 1200 and _b.positions_snapshot.get("CA1") == -1200.0 and abs(_b.cash - (50000.0 - 1200 * 0.96)) < 1e-6,
+      f"held {_ch.held('CA')} snap {_b.positions_snapshot} cash {_b.cash}")
+_b, _v, _ch = _hbot({"CA1": 14.0}, _legs("CA", 0.52, 0.525, 2000))
+_b.churn_med = {"CA": -0.01}
+R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+check("hf arb: an entry that nets 14 NO against YES the MM held on a leg books the 1,986 sets the venue shows (cash: all 2,000 traded)",
+      _ch.held("CA") == 1986 and abs(_b.cash - (50000.0 - 2000 * 0.96)) < 1e-6, f"held {_ch.held('CA')} cash {_b.cash}")
+_st = DC.DevChurn(); _st.load(_ch.to_json())
+check("hf arb: traded races, loss gaps and booked unwind ids survive a restart", _st.races == {"CA"} and _st.seen_unwind == _ch.seen_unwind)
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

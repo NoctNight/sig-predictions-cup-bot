@@ -3,6 +3,7 @@
     python3 tests/sim_pipeline.py                 # every scenario; exit status 1 on any violation
     python3 tests/sim_pipeline.py calm sweep6     # only these scenarios
     python3 tests/sim_pipeline.py --list          # scenario names
+    python3 tests/sim_pipeline.py --churn         # high-frequency arb (churn_enabled) on in every scenario's sandbox, incl. day
     python3 tests/sim_pipeline.py -v              # also print per-scenario activity counts
     python3 tests/sim_pipeline.py --patch=fix.py  # exec fix.py (with `mods` = the sandbox sigbot modules) before running:
                                                   # try a candidate fix on the sandbox copy without touching sigbot/
@@ -41,7 +42,7 @@ Invariants checked after every step (violation kinds in brackets):
 
 Not exercised: the news LLM path (no key, nothing fetched), the shadow tuner / allocator self-tuning (stubbed: it
 replays logs in a thread), election night (off in config), thread interleaving between the scanner and the main loop
-(the sim runs them in sequence).
+(the sim runs them in sequence; churn_interleave runs the churn cycle the moment a scanner unwind releases the lock).
 """
 from __future__ import annotations
 
@@ -55,6 +56,7 @@ import shutil
 import socket
 import sys
 import tempfile
+import threading
 import time
 import traceback
 import urllib.request
@@ -70,6 +72,7 @@ T0 = datetime(2026, 10, 23, 14, 0, 0, tzinfo=timezone.utc).timestamp()   # 10:00
 TID = "00000000-0000-4000-8000-00000000517d"
 NET_ATTEMPTS: list = []
 LAST: dict = {}          # scenario name -> finished Sim (for interactive debugging)
+FORCE_CFG: dict = {}     # --churn: config overrides for every scenario (a scenario's own cfg still wins)
 
 
 # ======================================================================================== isolation
@@ -202,6 +205,7 @@ class Sim:
         # and recycle code switch it back on in their sandbox so that code stays regression-tested; every other scenario
         # (incl. the 24-h replay) runs the live config as deployed.
         overrides = dict(ARB_CODE_CFG) if sc.name in ARB_CODE_SCENARIOS else {}
+        overrides.update(FORCE_CFG)
         overrides.update(sc.cfg)
         for k, val in overrides.items():
             obj = cfg
@@ -423,6 +427,14 @@ class Checker:
         self.gated_flagged = set()
         self.kills: list = []
         self.own_guard = None                              # scenario: (race, exchange, order id) of our own top-of-book bid
+        self.cash_mode_baskets: list = []                  # ok arb baskets in cash mode that were not high-frequency arb entries
+        self.strict_unwinds = False                        # scenario: > 12 unwinds in 10 min is a violation, not a note
+
+    def churn_entry(self, c, race) -> bool:
+        """A high-frequency arb (churn) entry: a main-loop basket in a race the sleeve attempted at that moment."""
+        ch = getattr(self.sim.bot, "churn", None)
+        return (ch is not None and str(c.get("step", "")).startswith("cycle")
+                and abs(ch.last_entry.get(race, -1e18) - c["t"]) < 60.0)
 
     def reset_baseline(self):
         self.ci, self.fi, self.vi = len(self.v.calls), len(self.v.fills), len(self.v.violations)
@@ -531,11 +543,17 @@ class Checker:
                         traded = c.get("traded") or []
                         if len(set(traded)) > 1 or any(q != c["legs"][0]["quantity"] for q in traded):
                             self.violation("partial_basket", f"{c['key']} {race} legs traded {traded}")
-                        floor = min(reserve, self.cash0)
+                        churn = self.churn_entry(c, race)            # churn keeps its own floor (churn_cash_floor, 3k)
+                        res_ = float(getattr(cfg, "churn_cash_floor", 0.0)) if churn else reserve
+                        if churn:
+                            self.counts["churn_entries"] += 1
+                        elif not cfg.arb.new_sets:
+                            self.cash_mode_baskets.append(c)
+                        floor = min(res_, self.cash0)
                         if c["cash_after"] < floor - 1.0:
                             self.violation("arb_cash_reserve", f"{c['key']} {race} {len(c['legs'])} legs x{c['legs'][0]['quantity']}: cash "
-                                           f"{c['cash_before']:.0f} -> {c['cash_after']:.0f}, below min(reserve {reserve:.0f}, cash at step start "
-                                           f"{self.cash0:.0f})")
+                                           f"{c['cash_before']:.0f} -> {c['cash_after']:.0f}, below min({'churn floor' if churn else 'reserve'} {res_:.0f}, "
+                                           f"cash at step start {self.cash0:.0f})")
                 if c.get("ok") is False and not c.get("aon"):
                     pass
         self.ci = len(v.calls)
@@ -637,7 +655,10 @@ class Checker:
             self.notes.append(f"kill switch fired {len(self.kills)}x, first: {self.kills[0]}")
         for (cat, obj), (w, mx) in NOTE_LIMITS.items():
             n = worst(self.events.get((cat, obj), []), w)
-            if n > mx:
+            if n > mx and self.strict_unwinds:
+                self.viol.append({"scenario": self.sim.sc.name, "step": "rate check", "t": CLOCK.t, "kind": f"rate_{cat}_all",
+                                  "detail": f"{n} {cat}s in {w}s (the deploy watcher's alarm is {mx}); {len(self.events[(cat, obj)])} in the run", "trace": ""})
+            elif n > mx:
                 self.notes.append(f"{cat} {obj}: {n} in {w}s exceeds the deploy watcher's alarm ({mx}); {len(self.events[(cat, obj)])} in the run")
         for race, seq in self.unwind_seq.items():
             kinds = [k for _, k in sorted(seq)]
@@ -825,6 +846,397 @@ class DevChurnSim(Scenario):
         if sum(c["cash_before"] - c["cash_after"] for c in ent) > 12000 * 1.01:
             sim.chk.violation("churn_over_pot", "churn bought more than its 12k pot")
         self.summary = {"entries": len(ent), "exits": len(ext), "realised": round(ch.realised, 1)}
+
+
+# ---------------------------------------------------------------- high-frequency arb (churn) stress: Fable 24 Oct, ported
+VQ_INS = ("INSERT OR REPLACE INTO venue_quotes(ts,venue,race,party,instrument,bid,ask,mid,bid_sz,ask_sz,depth_usd,latency_ms) "
+          "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
+
+
+def DCm():
+    return sys.modules["sigbot.proposals.dev_churn"]
+
+
+def churn_races(sim, n):
+    return two_leg_mid_races(sim, 0.3, 0.7, exclude=("Rhode Island Governor",))[:n]
+
+
+def preload_quotes(sim, races, hours=25.0, noise_p=0.0, rng=None):
+    """10-min 'sig' heartbeat rows for `hours` back at today's touch; with noise_p, leg 0 sits +-1 tick off with that
+    probability (gives the volatility ratio a non-zero base)."""
+    v, rows = sim.v, []
+    for race in races:
+        legs = list(sim.universe.races[race].legs.items())
+        for k in range(int(hours * 6)):
+            t = v.now - hours * 3600 + 600 * k
+            for i, (party, l) in enumerate(legs):
+                bt, at = v.bid_t[l.exchange_id], v.ask_t[l.exchange_id]
+                if i == 0 and rng is not None and rng.random() < noise_p:
+                    d = rng.choice([-1, 1])
+                    bt, at = bt + d, at + d
+                b, a = SV.P(bt), SV.P(at)
+                rows.append((t, "sig", race, party, l.exchange_id, b, a, (b + a) / 2, None, None, None, None))
+    sim.bot.store.conn.executemany(VQ_INS, rows)
+    sim.bot.store.conn.commit()
+
+
+def bids_sum(sim, race):
+    return sum(SV.P(sim.v.bid_t[l.exchange_id]) for l in sim.universe.races[race].legs.values())
+
+
+def venue_sets(sim, race):
+    pos = sim.v.signed_positions()
+    qs = [pos.get(e, 0.0) for e in sim.legs(race)]
+    return int(min(-q for q in qs)) if qs and all(q < 0 for q in qs) else 0
+
+
+def is_main(c):
+    return str(c.get("step", "")).startswith("cycle")       # main-loop step = churn; scanner steps = recycle / free unwind
+
+
+class ChurnBase(Scenario):
+    """Stress at the sleeve's design maximum (12k pot, -600 stop), recycling on as in the live cash-mode config. Checked at
+    every step boundary: the venue's sets in these races (priced at their entry cost) stay within the pot and the per-race
+    cap at any moment (concurrent, not cumulative turnover); the ledger never claims more than the venue holds."""
+    cfg = {"churn_enabled": True, "churn_capital": 12000.0, "churn_kill": -600.0}
+    pass_dt = 30.0
+    n_races = 1
+
+    def bot_setup(self, sim):
+        self.races = churn_races(sim, self.n_races)
+        preload_quotes(sim, self.races)
+        self.common_setup(sim)
+
+    def common_setup(self, sim):
+        self.base = {r: bids_sum(sim, r) for r in self.races}
+        self.kill_t = self.pause_t = None
+        self.max_tot, self.max_race, self.cost, self._ci = 0.0, {}, {}, 0
+        sim.chk.strict_unwinds = True
+
+    def track(self, sim, ledger=False):
+        ch = sim.bot.churn
+        for c in sim.v.calls[self._ci:]:
+            if c["kind"] == "multileg" and c["prefix"] == "arb" and c.get("ok") and c["legs"]:
+                q = c["legs"][0]["quantity"]
+                self.cost[sim.race_of(str(c["legs"][0]["exchangeId"]))] = (c["cash_before"] - c["cash_after"]) / q if q else 1.0
+        self._ci = len(sim.v.calls)
+        per = {r: venue_sets(sim, r) * self.cost.get(r, 1.0) for r in self.races}
+        tot = sum(per.values())
+        if tot > self.max_tot:
+            self.max_tot = tot
+            if tot > ch.capital * 1.01 and not getattr(self, "pot_flagged", False):
+                self.pot_flagged = True
+                sim.chk.violation("churn_over_pot", f"venue sets in churn races worth {tot:.0f} at entry cost > pot {ch.capital:.0f} at one moment")
+        for r, x in per.items():
+            if x > self.max_race.get(r, 0.0):
+                self.max_race[r] = x
+                if x > ch.per_race * 1.01 and r not in getattr(self, "race_flagged", set()):
+                    self.race_flagged = getattr(self, "race_flagged", set()) | {r}
+                    sim.chk.violation("churn_over_race_cap", f"{r}: venue sets worth {x:.0f} > per-race cap {ch.per_race:.0f} at one moment")
+            if ledger and ch.held(r) > venue_sets(sim, r):     # after a cycle: churn reconciled taker fills on MM quotes
+                sim.chk.violation("churn_ledger_overstates", f"{r}: ledger {ch.held(r)} > venue sets {venue_sets(sim, r)}")
+        if ch.killed and self.kill_t is None:
+            self.kill_t = CLOCK.t
+        if ch.vol_paused and self.pause_t is None:
+            self.pause_t = CLOCK.t
+
+    def after_cycle(self, sim, i):
+        self.track(sim, ledger=True)
+
+    def on_tick(self, sim):
+        self.track(sim)
+
+    def calls(self, sim, prefixes, ok=True, main=None):
+        return [c for c in sim.v.calls if c["kind"] == "multileg" and c["prefix"] in prefixes and bool(c.get("ok")) == ok and c["legs"]
+                and sim.race_of(str(c["legs"][0]["exchangeId"])) in self.races and (main is None or is_main(c) == main)]
+
+    def entries_after(self, sim, t, race=None):
+        return [c for c in self.calls(sim, ("arb",), main=True) if c["t"] > t
+                and (race is None or sim.race_of(str(c["legs"][0]["exchangeId"])) == race)]
+
+    def report(self, sim):
+        self.track(sim)
+        ch = sim.bot.churn
+        ent, ext = self.calls(sim, ("arb",), main=True), self.calls(sim, ("unw", "fre"), main=True)
+        try:
+            st = json.load(open(os.path.join(sim.sb, "params", "churn_state.json")))
+        except Exception:
+            st = None
+        return {"entries": len(ent), "rejected": len(self.calls(sim, ("arb",), ok=False)), "exits": len(ext),
+                "recycle_buys": len(self.calls(sim, ("arb",), main=False)), "scanner_unwinds": len(self.calls(sim, ("unw", "fre"), main=False)),
+                "turnover": round(sum(c["cash_before"] - c["cash_after"] for c in ent)), "max_concurrent": round(self.max_tot),
+                "max_race": round(max(self.max_race.values(), default=0.0)), "realised": round(ch.realised, 1), "killed": ch.killed,
+                "vol_paused": ch.vol_paused, "lots_left": len(ch.lots), "venue_sets_left": sum(venue_sets(sim, r) for r in self.races),
+                "state_file_lots": None if st is None else len(st.get("lots", [])), "venue_pnl": round(sim.v.value() - sim.start_value, 1)}
+
+    def final_checks(self, sim):
+        self.summary = self.report(sim)
+        if self.summary["recycle_buys"]:
+            sim.chk.violation("churn_recycled_into", f"{self.summary['recycle_buys']} scanner baskets bought into churn races (recycling)")
+
+
+class ChurnWiden(ChurnBase):
+    name, cycles, seed, n_races = "churn_widen", 420, 31, 3
+    doc = "3 races: +6 ticks at cycle 20, then +2 ticks every 10 min up to +20: each race is sold at the touch at a 6-tick loss, never re-bought, loss bounded by the stop"
+
+    def bot_setup(self, sim):
+        super().bot_setup(sim)
+        DCm().MAX_HOLD = 2 * 3600.0
+
+    def before_cycle(self, sim, i):
+        if i >= 20 and (i - 20) % 20 == 0:
+            k = min((i - 20) // 20, 7)
+            for r in self.races:
+                set_race_bids_sum(sim, r, self.base[r] + 0.03 + 0.01 * k)
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        rep, ch = self.summary, sim.bot.churn
+        DCm().MAX_HOLD = 24 * 3600.0
+        if rep["entries"] == 0:
+            sim.chk.violation("churn_none", "no entry although every gap jumped 6 ticks")
+        if rep["lots_left"]:
+            sim.chk.violation("churn_held_widening", f"ledger still holds {sim.bot.churn.lots} while the gap kept widening")
+        for r in self.races:
+            ex = [c["t"] for c in self.calls(sim, ("unw",), main=True) if sim.race_of(str(c["legs"][0]["exchangeId"])) == r]
+            if ex and self.entries_after(sim, max(ex), r):
+                sim.chk.violation("churn_rebought_after_loss", f"{r}: bought again after its loss exit")
+        if ch.realised < ch.kill - 0.02 * ch.capital:
+            sim.chk.violation("churn_loss_unbounded", f"realised {ch.realised:.0f} far beyond the {ch.kill:.0f} stop")
+        if self.kill_t and self.entries_after(sim, self.kill_t):
+            sim.chk.violation("churn_entry_after_kill", "entries after the stop")
+
+
+class ChurnReject(ChurnBase):
+    name, cycles, seed, n_races = "churn_reject", 120, 32, 3
+    doc = "3 races +6 ticks at cycle 20, every all-or-none basket rejected: <= 1 attempt / race / 5 min, no ledger entries"
+
+    def bot_setup(self, sim):
+        super().bot_setup(sim)
+        sim.v.reject_aon = lambda legs, prefix: prefix == "arb"
+
+    def before_cycle(self, sim, i):
+        if i == 20:
+            for r in self.races:
+                set_race_bids_sum(sim, r, self.base[r] + 0.03)
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        by = {}
+        for c in self.calls(sim, ("arb",), ok=False):
+            by.setdefault(sim.race_of(str(c["legs"][0]["exchangeId"])), []).append(c["t"])
+        worst = sum(1 for ts in by.values() for a, b in zip(sorted(ts), sorted(ts)[1:]) if b - a < 300 - 1)
+        if worst:
+            sim.chk.violation("churn_hammering", f"{worst} re-attempts within 5 min of a rejection")
+        if not by:
+            sim.chk.violation("churn_none", "no attempt at all")
+        if self.summary["lots_left"] or self.summary["state_file_lots"]:
+            sim.chk.violation("churn_phantom_lot", f"ledger lots without a fill: {sim.bot.churn.lots}")
+
+
+class ChurnRestart(ChurnBase):
+    name, cycles, seed, n_races = "churn_restart", 120, 33, 1
+    doc = "+6 ticks at cycle 20 (entry), a new Bot over the same DB and state file at cycle 40, gap reverts at 60: ledger reloads, one exit, nothing left"
+
+    def before_cycle(self, sim, i):
+        r = self.races[0]
+        if i == 20:
+            set_race_bids_sum(sim, r, self.base[r] + 0.03)
+        if i == 40:
+            old = sim.bot
+            self.lots_before = [dict(l) for l in old.churn.lots]
+            old.stop = True
+            try:
+                old.store.conn.close()
+            except Exception:
+                pass
+            new = sim.R.Bot(sim.cfg, dry_run=False)
+            if new.news is not None:
+                new.news.collect = lambda prices: ([], {"sources": 0, "failed": 0, "items": 0})
+            new.arb.api = new.scan_api
+            new.scanner = sim.R.ArbScanner(new)
+            sim.bot = new
+            self.lots_after = [dict(l) for l in new.churn.lots]
+        if i == 60:
+            set_race_bids_sum(sim, r, self.base[r])
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        rep = self.summary
+        lb, la = getattr(self, "lots_before", None), getattr(self, "lots_after", None)
+        if not lb:
+            sim.chk.violation("churn_none", "no lot before the restart")
+        elif lb != la:
+            sim.chk.violation("churn_reload", f"ledger before {lb} != after reload {la}")
+        if rep["exits"] != 1:
+            sim.chk.violation("churn_exit_count", f"{rep['exits']} exits (want exactly 1)")
+        if rep["lots_left"] or rep["venue_sets_left"]:
+            sim.chk.violation("churn_left_over", f"lots {rep['lots_left']} venue sets {rep['venue_sets_left']}")
+
+
+class ChurnFreeFirst(ChurnBase):
+    name, cycles, seed, n_races = "churn_free_first", 90, 34, 1
+    doc = "entry at +6 ticks; between cycles the asks drop to the payout: the scanner's free unwind sells first, churn books it and never sells again"
+
+    def before_cycle(self, sim, i):
+        if i == 20:
+            set_race_bids_sum(sim, self.races[0], self.base[self.races[0]] + 0.03)
+
+    def on_tick(self, sim):
+        super().on_tick(sim)
+        if sim.cycle_i == 40 and not getattr(self, "dropped", False):
+            self.dropped = True
+            set_race_bids_sum(sim, self.races[0], 0.99)      # asks sum 1.00: proceeds 1.0 >= payout 1
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        ok = [c for c in sim.v.calls if c["kind"] == "multileg" and c.get("ok") and c["legs"] and sim.race_of(str(c["legs"][0]["exchangeId"])) in self.races]
+        bought = sum(c["legs"][0]["quantity"] for c in ok if c["prefix"] == "arb")
+        sold = sum(c["legs"][0]["quantity"] for c in ok if c["prefix"] in ("unw", "fre"))
+        self.summary.update(sets_bought=bought, sets_sold=sold)
+        if not bought:
+            sim.chk.violation("churn_none", "no entry")
+        if sold != bought:
+            sim.chk.violation("churn_oversold" if sold > bought else "churn_left_over", f"bought {bought} sets, unwound {sold}")
+        if self.summary["lots_left"]:
+            sim.chk.violation("churn_left_over", f"ledger still {sim.bot.churn.lots}")
+        if bought and sim.bot.churn.realised <= 0:
+            sim.chk.violation("churn_exit_unbooked", f"realised {sim.bot.churn.realised:+.1f}: the free unwind at the payout was not booked")
+
+
+class _HookLock:
+    """The trade lock, but whoever waits for it runs the moment it is released: models the main thread's churn cycle
+    taking the lock right after the scanner's unwind released it (real thread order, which the sequential sim hides)."""
+    def __init__(self):
+        self.inner, self.pending, self.running = threading.Lock(), None, False
+
+    def __enter__(self):
+        self.inner.acquire()
+        return self
+
+    def __exit__(self, *a):
+        self.inner.release()
+        h, self.pending = self.pending, None
+        if h and not self.running:
+            self.running = True
+            try:
+                h()
+            finally:
+                self.running = False
+
+
+class ChurnInterleave(ChurnFreeFirst):
+    name, seed = "churn_interleave", 35
+    doc = "as churn_free_first, but the main loop's churn cycle runs the moment the scanner's free unwind releases the trade lock (real thread order)"
+
+    def bot_setup(self, sim):
+        super().bot_setup(sim)
+        b, lk = sim.bot, _HookLock()
+        b.trade_lock = lk
+        real_fu = b.arb.free_unwinds
+
+        def churn_now():
+            v = sim.v
+            label, v.step = v.step, "cycle (interleaved churn)"
+            try:
+                b.churn_cycle(b.positions_snapshot, False, b.last_cycle_id)
+            finally:
+                v.step = label
+
+        def fu(*a, **k):
+            out = real_fu(*a, **k)
+            if out and sim.chk.sub == "free_unwind_pass":
+                lk.pending = churn_now
+                self.hooked = getattr(self, "hooked", 0) + 1
+            return out
+        b.arb.free_unwinds = fu
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        if not getattr(self, "hooked", 0):
+            sim.chk.violation("churn_interleave_idle", "the scanner never free-unwound: the interleaving was not exercised")
+
+
+class ChurnBlowout(ChurnBase):
+    name, cycles, seed, n_races = "churn_blowout", 200, 36, 14
+    doc = "14 races, 80 h of noisy history, recycling on: all gaps +6 ticks at cycle 20 and +-2 ticks every cycle: entries stop on the volatility pause; 7 races revert at 120, the sell-all at cycle 150 leaves no set in any of them"
+
+    def bot_setup(self, sim):
+        self.races = churn_races(sim, self.n_races)
+        self.rng = random.Random(99)
+        preload_quotes(sim, self.races, hours=80.0, noise_p=0.3, rng=self.rng)
+        self.common_setup(sim)
+        self.sell_all = T0 + 150 * self.pass_dt
+        self.saved = (DCm().SELL_ALL_AT, DCm().LAST_ENTRY, sim.R.CHURN_LAST_ENTRY)
+        DCm().SELL_ALL_AT = self.sell_all
+        DCm().LAST_ENTRY = self.sell_all - 1
+        sim.R.CHURN_LAST_ENTRY = self.sell_all - 1
+
+    def after_cycle(self, sim, i):
+        super().after_cycle(sim, i)
+        if CLOCK.t >= self.sell_all:          # right after a sell-all cycle (MM quotes are passive: nothing traded since)
+            self.left_after = {r: venue_sets(sim, r) for r in self.races if venue_sets(sim, r)}
+
+    def before_cycle(self, sim, i):
+        if i < 20:
+            return
+        for k, r in enumerate(self.races):
+            if i >= 120 and k < 7:
+                set_race_bids_sum(sim, r, self.base[r])
+            else:
+                set_race_bids_sum(sim, r, self.base[r] + 0.03 + self.rng.choice([-0.01, 0.0, 0.01]))
+
+    def final_checks(self, sim):
+        DCm().SELL_ALL_AT, DCm().LAST_ENTRY, sim.R.CHURN_LAST_ENTRY = self.saved
+        super().final_checks(sim)
+        rep, ch = self.summary, sim.bot.churn
+        if not rep["entries"]:
+            sim.chk.violation("churn_none", "no entry")
+        if self.pause_t is None:
+            sim.chk.violation("churn_no_pause", "gap movement rose on every race but entries never paused")
+        elif self.entries_after(sim, self.pause_t):
+            sim.chk.violation("churn_entry_while_paused", f"{len(self.entries_after(sim, self.pause_t))} entries after the volatility pause")
+        if rep["lots_left"]:
+            sim.chk.violation("churn_sell_all_incomplete", f"after the sell-all: ledger {ch.lots}")
+        left = getattr(self, "left_after", None)
+        if left is None or left:
+            sim.chk.violation("sets_left_at_sell_all", f"venue sets in churn races right after the last sell-all cycle: {left}")
+        if self.entries_after(sim, self.sell_all):
+            sim.chk.violation("churn_entry_after_sell_all", "bought again after the sell-all")
+        rep.update(pause_after_min=None if self.pause_t is None else round((self.pause_t - T0) / 60),
+                   vol_last=None if ch.vol_last is None else round(ch.vol_last, 2))
+
+
+class ChurnMany(ChurnBase):
+    name, cycles, seed, n_races = "churn_many", 60, 37, 20
+    doc = "20 races +6 ticks at once with 100k cash: the 12k pot binds"
+    cash = None
+
+    def bot_setup(self, sim):
+        super().bot_setup(sim)
+        if self.cash is not None:
+            sim.v.cash = float(self.cash)
+            sim.start_value = sim.v.value()
+
+    def before_cycle(self, sim, i):
+        if i == 20:
+            for r in self.races:
+                set_race_bids_sum(sim, r, self.base[r] + 0.03)
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        ent = self.calls(sim, ("arb",), main=True)
+        if not ent:
+            sim.chk.violation("churn_none", "no entry")
+        lo = min((c["cash_after"] for c in ent), default=None)
+        self.summary["min_cash_after_entry"] = None if lo is None else round(lo)
+        if lo is not None and lo < sim.bot.churn.cash_floor - 1:
+            sim.chk.violation("churn_below_floor", f"cash after an entry {lo:.0f} < {sim.bot.churn.cash_floor:.0f} floor")
+
+
+class ChurnManyLowCash(ChurnMany):
+    name, seed, cash = "churn_many_lowcash", 38, 14000.0
+    doc = "20 races +6 ticks at once with 14k cash: the 3k cash floor binds (churn keeps its own floor, not the 20k arb reserve)"
 
 
 class Recycle(Scenario):
@@ -1143,9 +1555,26 @@ class Day(Scenario):
 
     def bot_setup(self, sim):
         self.t_end = T0
+        sim.chk.strict_unwinds = sim.bot.churn is not None
+
+    def final_checks(self, sim):
+        ch = sim.bot.churn
+        if ch is None:
+            return
+        # with high-frequency arb on in cash mode, the only arb baskets are its own entries (Fable 24 Oct: the recycler
+        # bought Rhode Island Governor 43 times with cash from unwound churn sets)
+        out = sim.chk.cash_mode_baskets
+        if out:
+            c = out[0]
+            sim.chk.violation("cash_mode_basket_outside_churn", f"{len(out)} arb baskets outside high-frequency arb, first {c['key']} "
+                                                                f"{sim.race_of(str(c['legs'][0]['exchangeId']))} ({c.get('step')})")
+        self.summary = {"churn_entries": sim.chk.counts.get("churn_entries", 0), "realised": round(ch.realised, 1), "lots": len(ch.lots),
+                        "killed": ch.killed, "vol_paused": ch.vol_paused}
 
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, DevChurnSim, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide, Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
+SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnBlowout,
+             ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
+             Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
 
 
 # ======================================================================================== main
@@ -1161,6 +1590,8 @@ def import_sandbox(sb):
 
 def main(argv):
     verbose = "-v" in argv
+    if "--churn" in argv:
+        FORCE_CFG["churn_enabled"] = True
     names = [a for a in argv if not a.startswith("-")]
     if "--list" in argv:
         for s in SCENARIOS:
@@ -1205,6 +1636,8 @@ def main(argv):
                   f"unwinds {unw} | violations {len(chk.viol)} {dict(kinds) if kinds else ''}")
             for n_ in getattr(chk, "notes", []):
                 print("      note:", n_)
+            if getattr(sc, "summary", None) and (verbose or sc.name.startswith("churn") or FORCE_CFG):
+                print("      summary:", sc.summary)
             if verbose:
                 print("      activity:", dict(sorted(chk.counts.items())), "max |netD|", round(chk.max_netd))
             allv.extend(chk.viol)

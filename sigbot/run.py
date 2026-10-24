@@ -49,7 +49,7 @@ from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
 from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
 from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround, big_holding,
-                                  LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE)
+                                  sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
 from .proposals import election_night as EN
 from .proposals.own_book import OwnLevels
 
@@ -251,7 +251,7 @@ class ArbScanner(threading.Thread):
             allc = []
             for rname, books in cand_books.items():
                 allc.extend(b.arb.chunks_for_race(b.universe.races[rname], books))
-            allc = [c for c in allc if c.qty >= b.cfg.arb.min_set_qty]
+            allc = [c for c in allc if c.qty >= b.cfg.arb.min_set_qty and not b.arb.no_buy(c.race)]   # a target recycling may buy
             if allc:
                 best = max(allc, key=lambda c: c.ret)
                 self.best_unfunded = {"race": best.race, "kind": best.kind, "ret": best.ret, "cost": best.cost, "qty": best.qty, "ts": time.time()}
@@ -272,9 +272,9 @@ class ArbScanner(threading.Thread):
             if n:
                 try:
                     b.cash = float(b.scan_api.account().get("balance") or b.cash)
-                    b.positions_snapshot = b.positions_map()[0]
                 except ApiError:
                     pass
+                b.refresh_snapshot({e: -q for e, q in b.basket_fills(res).items()})
 
     def fast_requote_pass(self):
         """Half of our MM fills were stale: the DMM moves its touch 1-2 ticks in bursts and our level-1 order sat at the old
@@ -338,9 +338,10 @@ class ArbScanner(threading.Thread):
         if any(v is None for v in target.values()):
             return
         held_books = {}
+        prot = b.arb.protected()
         for rname in list(b.arb.committed):
             race = b.universe.races.get(rname)
-            if race is None or rname == tgt:
+            if race is None or rname == tgt or rname in prot:     # high-frequency arb's sets never fund anything
                 continue
             fb = {ex: b.fresh_book(ex, 30.0) for ex in race.exchange_ids}
             if all(v is not None for v in fb.values()):
@@ -349,6 +350,8 @@ class ArbScanner(threading.Thread):
             return
         with b.trade_lock:
             rec = b.arb.recycle(dict(best, fresh_books=target), held_books, b.positions_snapshot, b.cash, None)
+            if rec and not rec.get("dry"):
+                b.refresh_snapshot(b.unwind_deltas([rec]))
         if not rec:
             return
         self.stats["recycles"] = self.stats.get("recycles", 0) + 1
@@ -362,18 +365,19 @@ class ArbScanner(threading.Thread):
             b.cash = float(b.scan_api.account().get("balance") or b.cash)
             fresh = {ex: b.get_book(ex, 50, b.scan_api, max_age=3.0) for ex in b.universe.races[tgt].exchange_ids}
             with b.trade_lock:
-                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=(b.arb.recycle_credit if cash_mode else freed)) if c.race == tgt]
+                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=(b.arb.recycle_credit if cash_mode else freed), recycle=True)
+                        if c.race == tgt]
                 if plan:
                     res = b.arb.execute(plan, None)
                     spent = sum(r["chunk"].qty * r["chunk"].cost for r in res if r.get("ok") and r.get("chunk") is not None)
                     if cash_mode:
                         b.arb.recycle_credit = max(0.0, b.arb.recycle_credit - spent)
                     log.info("recycle follow-through %s: %d basket(s) filled", tgt, sum(1 for r in res if r.get("ok")))
+                    b.refresh_snapshot({e: -q for e, q in b.basket_fills(res).items()})
                 else:
                     b.arb.cooldown[tgt] = time.time() + 60      # do not unwind for this target again for 60 s
                     log.warning("recycle: target %s gone after unwind; capital stays free for the scanner", tgt)
             b.cash = float(b.scan_api.account().get("balance") or b.cash)
-            b.positions_snapshot = b.positions_map()[0]
         except ApiError as e:
             log.warning("recycle follow-through %s: %s", tgt, e)
 
@@ -385,7 +389,7 @@ class ArbScanner(threading.Thread):
         try:
             fresh = {ex: b.get_book(ex, 50, b.scan_api, max_age=3.0) for ex in b.universe.races[tgt].exchange_ids}
             with b.trade_lock:
-                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=b.arb.recycle_credit) if c.race == tgt]
+                plan = [c for c in b.arb.plan({tgt: fresh}, b.cash, extra_budget=b.arb.recycle_credit, recycle=True) if c.race == tgt]
                 if not plan:
                     b.arb.cooldown[tgt] = time.time() + 60
                     return
@@ -393,8 +397,8 @@ class ArbScanner(threading.Thread):
                 spent = sum(r["chunk"].qty * r["chunk"].cost for r in res if r.get("ok") and r.get("chunk") is not None)
                 b.arb.recycle_credit = max(0.0, b.arb.recycle_credit - spent)
                 log.info("recycle credit spent on %s: %.0f (credit left %.0f)", tgt, spent, b.arb.recycle_credit)
+                b.refresh_snapshot({e: -q for e, q in b.basket_fills(res).items()})
             b.cash = float(b.scan_api.account().get("balance") or b.cash)
-            b.positions_snapshot = b.positions_map()[0]
         except ApiError as e:
             log.warning("recycle credit %s: %s", tgt, e)
 
@@ -429,11 +433,12 @@ class ArbScanner(threading.Thread):
         b.last_free_unwind = time.time()
         with b.trade_lock:
             fu = b.arb.free_unwinds(held, b.positions_snapshot, None)
+            if fu:
+                b.refresh_snapshot(b.unwind_deltas(fu))      # in the lock: churn re-checks its sets against it under the lock
         if fu:
             log.info("free unwinds (scanner): %s", fu)
             try:
                 b.cash = float(b.scan_api.account().get("balance") or b.cash)
-                b.positions_snapshot = b.positions_map()[0]
             except ApiError:
                 pass
 
@@ -524,6 +529,9 @@ class Bot:
         log.info("universe: %d open markets, %d races (%d with an Independent leg)", len(self.universe.by_exchange), len(self.universe.races),
                  sum(r.has_independent for r in self.universe.races.values()))
         self.arb = ArbEngine(self.api, self.store, cfg.arb, self.universe, self.slug, cfg.starting_cash, dry_run)
+        if self.churn is not None:
+            self.arb.protected = lambda: {l["race"] for l in self.churn.lots}
+            self.arb.no_buy = self.churn_no_buy
         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
         self.tilt = TiltHarvester(self.api, self.store, cfg.tilt, self.universe, cfg.starting_cash, dry_run)
@@ -751,6 +759,57 @@ class Bot:
         self.settle_adj = adj
         return m, float(p.get("summary", {}).get("totalMarketValue", 0.0)), len(m)
 
+    def refresh_snapshot(self, deltas: Optional[dict] = None):
+        """Re-read positions into the shared snapshot. Call it INSIDE the trade lock, right after a basket or an unwind:
+        high-frequency arb's exits trust the snapshot under the lock, and a refresh after the lock let another thread sell a
+        free unwind's sets a second time (sim churn_interleave, 24 Oct). If the read fails, `deltas` ({exchange: signed
+        change}) are applied to the old snapshot instead, so it never keeps sets that are gone."""
+        try:
+            self.positions_snapshot = self.positions_map()[0]
+        except ApiError as e:
+            snap = dict(self.positions_snapshot or {})
+            for ex, d in (deltas or {}).items():
+                snap[ex] = snap.get(ex, 0.0) + d
+            self.positions_snapshot = snap
+            log.warning("positions refresh: %s; snapshot adjusted locally", e)
+
+    def unwind_deltas(self, unwinds) -> dict:
+        """Snapshot change of unwinds [{race, qty}]: every leg's NO short shrinks by qty (NO legs are negative)."""
+        out: dict = {}
+        for u in unwinds or []:
+            race = self.universe.races.get(u.get("race"))
+            if race is None or u.get("dry"):
+                continue
+            for e in race.exchange_ids:
+                out[e] = out.get(e, 0.0) + u.get("qty", 0)
+        return out
+
+    @staticmethod
+    def basket_fills(results) -> dict:
+        """Shares actually traded per leg by executed baskets ({exchange: qty}); an ok basket may still fill partly."""
+        out: dict = {}
+        for r in results or []:
+            if not r.get("ok"):
+                continue
+            for x in (r.get("resp") or {}).get("results", []):
+                d = x.get("data") or {}
+                if d.get("exchangeId") is not None:
+                    out[str(d["exchangeId"])] = out.get(str(d["exchangeId"]), 0.0) + float(d.get("quantityTraded") or 0)
+        return out
+
+    def churn_no_buy(self, rname: str) -> bool:
+        """Races recycling may not buy into while high-frequency arb runs: those it holds sets in, its exclusions (Rhode
+        Island Governor) and races where we already hold more than churn_skip_holding shares on a leg (Fable 24 Oct: the
+        recycler bought Rhode Island Governor with cash from unwound churn sets)."""
+        ch = self.churn
+        if ch is None:
+            return False
+        if rname in CHURN_EXCLUDE or ch.held(rname) > 0 or (rname in ch.races and sell_all_due(time.time())):
+            return True                    # (from the sell-all on, no race it traded is bought back into)
+        race = self.universe.races.get(rname)
+        lim = getattr(self.cfg, "churn_skip_holding", 0.0)
+        return bool(race is not None and lim > 0 and big_holding(self.positions_snapshot or {}, race.exchange_ids, ch.held(rname), lim))
+
     def open_orders_map(self) -> dict[str, list]:
         out: dict[str, list] = {}
         try:
@@ -895,9 +954,11 @@ class Bot:
         return summary
 
     def churn_cycle(self, positions: dict, killed: bool, cycle_id=None):
-        """Deviation churn (proposals/dev_churn.py): exits first (+2 ticks/set, 24 h, the 3 Nov sell-all), reconciled
-        against the sets actually held; then entries in two-leg races whose mid overround is >= 4 ticks above its 24-h
-        median and whose sell-set clears the arb thresholds. Baskets are all-or-none via the arb engine."""
+        """Deviation churn (proposals/dev_churn.py), "high-frequency arb": exits first (+2 ticks/set, 24 h; the stop or a
+        6-tick loss per set sells at the touch), reconciled against the sets actually held (sets another path closed are
+        booked as an exit); from 3 Nov 22:30 UTC every two-leg set in a race it traded is sold, halving on thin asks,
+        retried every cycle; then entries in two-leg races whose mid overround is >= 4 ticks above its 24-h median and
+        whose sell-set clears the arb thresholds. Baskets are all-or-none via the arb engine; only what traded is booked."""
         ch = self.churn
         if ch is None or self.dry_run or self.store is None:
             return
@@ -919,6 +980,9 @@ class Bot:
                      "?" if vr is None else "%.2f" % vr, " (entries paused)" if ch.vol_paused else "")
             self.churn_med_ts = now
         open_value = 0.0
+        min_qty = self.cfg.arb.min_set_qty
+        sell_all = sell_all_due(now)
+        lim = getattr(self.cfg, "churn_skip_holding", 0.0)
 
         def books_for(race, max_age):
             bk = {e: self.fresh_book(e, max_age) for e in race.exchange_ids}
@@ -930,59 +994,135 @@ class Bot:
                     return None
             return bk
 
-        def sets_held(race) -> int:
+        def venue_sets(race) -> int:
+            # the common NO quantity on both legs, whichever sleeve's (MM inventory, standing sets, ours)
             snap = self.positions_snapshot or {}
             qs = [snap.get(e, 0.0) for e in race.exchange_ids]
             return int(min(-q for q in qs)) if qs and all(q < 0 for q in qs) else 0
 
-        def snap_add(race, qty):
+        def sets_held(race) -> int:
+            # this sleeve's sets: the ledger capped by the common NO quantity (MM inventory is never counted as ours)
+            return min(ch.held(race.name), venue_sets(race))
+
+        def snap_add(deltas: dict):
             # keep the shared snapshot current after our own basket (other paths unwind from it); NO legs are negative
             snap = dict(self.positions_snapshot or {})
-            for e in race.exchange_ids:
-                snap[e] = snap.get(e, 0.0) + qty
+            for e, d in deltas.items():
+                snap[e] = snap.get(e, 0.0) + d
             self.positions_snapshot = snap
 
+        def last_arb_id(rname) -> int:
+            r = self.store.one("SELECT MAX(id) m FROM arb_trades WHERE race=?", (rname,))
+            return int(r["m"] or 0) if r else 0
+
+        def quote_down(race, books, q, floor):
+            # the most of q the asks can take now: all of it, else halving (thin asks), never below floor sets
+            while q >= max(1, floor):
+                uq = self.arb.unwind_quote(race, books, q)
+                if uq:
+                    return q, uq
+                q //= 2
+            return 0, None
+
+        def reconcile(race, books) -> int:
+            """Under the trade lock: shrink the ledger to the sets actually held. Sets another path closed (a free unwind)
+            are booked as an exit at that unwind's recorded proceeds (arb_trades), else at the current exit value, and the
+            30-min re-entry gap starts (Fable 24 Oct: dropped silently, no P&L for the stop, re-bought 5 min later)."""
+            rname = race.name
+            have = venue_sets(race)
+            excess = ch.held(rname) - have
+            if excess <= 0:
+                return 0
+            lots = [l for l in ch.lots if l["race"] == rname]
+            rows = self.store.rows("SELECT id, quantity q, cost_per_set p FROM arb_trades WHERE race=? AND kind='unwind_set' AND ok=1 "
+                                   "AND id>? AND ts>=?", (rname, ch.seen_unwind.get(rname, 0), min(l["ts"] for l in lots) - 1.0))
+            nq = sum(r["q"] for r in rows)
+            if nq > 0:
+                px, src = sum(r["q"] * r["p"] for r in rows) / nq, "recorded unwind"
+                ch.seen_unwind[rname] = max(r["id"] for r in rows)
+            else:
+                uq = self.arb.unwind_quote(race, books, excess) if books else None
+                px, src = (uq["proceeds"], "current exit value") if uq else (None, "")
+            if px is None:
+                px, src = sum(l["qty"] * l["cost"] for l in lots) / max(1, sum(l["qty"] for l in lots)), "cost (no quote)"
+            dropped = ch.reconcile(rname, have, px, now)
+            log.info("CHURN %s: %d sets no longer held (closed by another path), booked as an exit at %.4f/set (%s): %+.1f, realised so far %+.1f",
+                     rname, dropped, px, src, ch.last_reconcile_pnl, ch.realised)
+            return dropped
+
+        def sell(race, books, q, why, floor) -> Optional[tuple]:
+            """Unwind up to q sets now: re-checked under the lock against the sets actually held, halving when the asks
+            are too thin for all of it. Returns (sets sold, proceeds per set) or None."""
+            with self.trade_lock:
+                reconcile(race, books)
+                q = min(q, venue_sets(race))
+                q, uq = quote_down(race, books, q, floor)
+                if not uq:
+                    log.warning("CHURN %s: cannot sell (%s): the asks are too thin even for %d sets; retried next cycle", race.name, why, max(1, floor))
+                    return None
+                res = self.arb.unwind_set(race.name, books, q, why="churn: " + why, allow_protected=True, min_qty=floor)
+                if not res or res.get("dry"):
+                    return None
+                snap_add({e: q for e in race.exchange_ids})
+                ch.seen_unwind[race.name] = last_arb_id(race.name)     # our own exit is booked by close(), not reconcile
+            return q, res["proceeds"]
+
+        # ---- exits: value every race first (the stop sees the whole sleeve), then sell what a rule says to sell
+        plans = []
         for rname in sorted({l["race"] for l in ch.lots}):
             race = self.universe.races.get(rname)
             if race is None:
                 continue
-            with self.trade_lock:
-                dropped = ch.reconcile(rname, sets_held(race))
-            if dropped:
-                changed = True
-                log.info("CHURN %s: %d sets no longer held (closed by a recycle or free unwind); ledger adjusted", rname, dropped)
-            held = ch.held(rname)
-            if held < self.cfg.arb.min_set_qty:
-                continue
             books = books_for(race, 30.0)
-            if books is None:
+            with self.trade_lock:
+                if reconcile(race, books):
+                    changed = True
+            held = ch.held(rname)
+            if held <= 0 or (held < min_qty and not sell_all) or books is None:
                 continue
-            uq = self.arb.unwind_quote(race, books, held)
+            uq = self.arb.unwind_quote(race, books, held) or quote_down(race, books, held, 1)[1]   # thin asks: what part fetches
             proceeds = uq["proceeds"] if uq else None
             lots = [l for l in ch.lots if l["race"] == rname]
             avg = {"cost": sum(l["qty"] * l["cost"] for l in lots) / held, "ts": min(l["ts"] for l in lots)}
             if proceeds is not None:
                 open_value += held * (proceeds - avg["cost"])
-            why = ch.exit_reason(avg, proceeds, now)
-            if not why:
-                continue
-            with self.trade_lock:
-                held = min(held, sets_held(race))            # re-checked under the lock, right before selling
-                res = self.arb.unwind_set(rname, books, held, why="churn: " + why) if held >= self.cfg.arb.min_set_qty else None
-                if res and not res.get("dry"):
-                    snap_add(race, held)
-            if res and not res.get("dry"):
-                pnl = ch.close(rname, held, res["proceeds"], now)
-                if proceeds is not None:
-                    open_value -= held * (proceeds - avg["cost"])
-                changed = True
-                log.info("CHURN exit %s x%d at %.4f/set (%s): %+.1f, realised so far %+.1f", rname, held, res["proceeds"], why, pnl, ch.realised)
+            plans.append((race, books, held, avg, proceeds))
         was = ch.killed
         if ch.check_kill(open_value) and not was:
             changed = True
-            log.warning("CHURN: realised %+.1f + open %+.1f at or below %.0f: no more entries; held churn sets exit by their rules",
+            log.warning("CHURN: realised %+.1f + open %+.1f at or below %.0f: no more entries; every churn set is sold at the touch",
                         ch.realised, open_value, ch.kill)
-        if not killed and not ch.killed and now <= CHURN_LAST_ENTRY:
+        for race, books, held, avg, proceeds in plans:
+            why = ch.exit_reason(avg, proceeds, now)
+            if not why:
+                continue
+            got = sell(race, books, held, why, 1 if sell_all else min_qty)
+            changed = True
+            if got:
+                q, px = got
+                pnl = ch.close(race.name, q, px, now, why)
+                log.info("CHURN exit %s x%d of %d at %.4f/set (%s): %+.1f, realised so far %+.1f", race.name, q, held, px, why, pnl, ch.realised)
+        if sell_all:
+            # 3 Nov 22:30 UTC: every two-leg set in a race this sleeve traded, ledger or not (the ledger's own go first,
+            # above), except Rhode Island Governor and races where we hold > churn_skip_holding shares on a leg
+            for rname in sorted(ch.races):
+                race = self.universe.races.get(rname)
+                if race is None or len(race.exchange_ids) != 2 or rname in CHURN_EXCLUDE or ch.held(rname) > 0:
+                    continue
+                n = venue_sets(race)
+                if n <= 0:
+                    continue
+                if lim > 0 and big_holding(self.positions_snapshot or {}, race.exchange_ids, 0, lim):
+                    log.info("CHURN sell-all: %s skipped: %d sets outside the ledger in a race holding > %.0f shares on a leg", rname, n, lim)
+                    continue
+                books = books_for(race, 30.0)
+                if books is None:
+                    continue
+                got = sell(race, books, n, "sell-all before the 3 Nov punt (outside the ledger)", 1)
+                if got:
+                    log.info("CHURN sell-all %s: %d of %d sets outside the ledger sold at %.4f/set", rname, got[0], n, got[1])
+        # ---- entries
+        if not killed and not ch.killed and now <= CHURN_LAST_ENTRY and not sell_all:
             own = own_levels(self)
             for race in self.universe.races.values():
                 if not ch.eligible(race, now) or race.name in self.arb.hostile or self.arb.cooldown.get(race.name, 0) > now:
@@ -990,7 +1130,6 @@ class Bot:
                 med = self.churn_med.get(race.name)
                 if med is None:
                     continue
-                lim = getattr(self.cfg, "churn_skip_holding", 0.0)
                 if lim > 0 and big_holding(self.positions_snapshot or positions, race.exchange_ids, ch.held(race.name), lim):
                     continue                                   # big existing position here: leave the race alone
                 fb = {e: self.fresh_book(e, 10.0) for e in race.exchange_ids}
@@ -1002,20 +1141,32 @@ class Bot:
                 if not chunks:
                     continue
                 best = max(chunks, key=lambda c: c.ret)
-                q = ch.entry_qty(best, self.cash, self.cfg.arb.min_set_qty)
+                q = ch.entry_qty(best, self.cash, min_qty)
                 if not q:
                     continue
                 ch.last_entry[race.name] = now                 # one attempt per race per 5 min, filled or not
                 changed = True
                 with self.trade_lock:
+                    base = ch.held(race.name)                  # ledger sets here (reconciled to the venue above)
                     res = self.arb.execute([Chunk(best.race, "sell_set", q, best.edge, best.cost, best.limits)], cycle_id)
-                    if any(r.get("ok") for r in res):
-                        snap_add(race, -q)
-                if any(r.get("ok") for r in res):
-                    ch.add_lot(race.name, q, best.cost, now)
-                    self.cash -= q * best.cost
-                    log.info("CHURN enter %s x%d at cost %.4f/set (edge %.4f, overround %+.3f vs 24-h median %+.3f)", race.name, q,
-                             best.cost, best.edge, mid_overround(fb, race.exchange_ids), med)
+                    traded = self.basket_fills(res)            # an ok basket can still fill partly: only what traded counts
+                    got = int(min(traded.get(e, 0.0) for e in race.exchange_ids)) if traded else 0
+                    new = 0
+                    if traded:
+                        self.refresh_snapshot({e: -t for e, t in traded.items()})
+                        # the venue nets a NO buy against YES we already hold on that leg (MM inventory): book only the
+                        # sets the venue now shows beyond the ledger, never more than traded
+                        new = max(0, min(got, venue_sets(race) - base))
+                    if new > 0:
+                        if base == 0:
+                            ch.seen_unwind[race.name] = last_arb_id(race.name)
+                        ch.add_lot(race.name, new, best.cost, now)
+                if got > 0:
+                    self.cash -= got * best.cost
+                if new > 0:
+                    log.info("CHURN enter %s x%d%s at cost %.4f/set (edge %.4f, overround %+.3f vs 24-h median %+.3f)", race.name, new,
+                             "" if new == q else f" of {q} ({got} traded: partial fill or netted against YES held on a leg)", best.cost,
+                             best.edge, mid_overround(fb, race.exchange_ids), med)
         if changed:
             try:
                 tmp = self.churn_state_path + ".tmp"
@@ -1312,6 +1463,8 @@ class Bot:
                 if self.cash >= self.cfg.arb.cash_reserve or room >= opp["capital"] or time.time() - funded.get(okey, 0) < 1800:
                     continue
                 rname = u.get("race")
+                if rname in self.arb.protected():
+                    continue                     # high-frequency arb's sets never fund anything (unwind_set refuses them too)
                 race = self.universe.races.get(rname)
                 books = {ex: self.fresh_book(ex, 10.0) for ex in race.exchange_ids} if race else {}
                 if race and all(v is not None for v in books.values()):
@@ -1319,6 +1472,8 @@ class Bot:
                     with self.trade_lock:
                         res = self.arb.unwind_set(rname, books, q, why=f"fund {opp['kind']} {opp.get('exchange_id')}",
                                                   new_ret=opp["ret_net"], min_gain=self.cfg.arb.recycle_min_gain)
+                        if res and not res.get("dry"):
+                            self.refresh_snapshot(self.unwind_deltas([res]))
                     funded[okey] = time.time()
                     if res:
                         done += 1
@@ -1483,7 +1638,9 @@ class Bot:
             cycle_cash = self.cash
             cycle_adj = getattr(self, "settle_adj", 0.0)   # positions_map() set it from these positions; later calls
                                                           # (scanner thread, recycle backstop) move it, so keep this one
-        self.positions_snapshot = positions      # read by the scanner thread (free unwinds between cycles)
+            # read by the scanner thread (free unwinds between cycles); set under the lock: set after it, a scanner unwind
+            # (and its in-lock refresh) in between was overwritten by these older positions
+            self.positions_snapshot = positions
         open_orders = self.open_orders_map()
         self.open_orders_cache = open_orders
         self.open_orders_ts = time.time()
@@ -1534,13 +1691,16 @@ class Bot:
                     best = None
             if best and time.time() - best["ts"] < 120 and self.cfg.arb.recycle_enabled and self.arb.committed and not best.get("failed"):
                 held_books = {}
-                for rname in list(self.arb.committed)[:3]:
+                prot = self.arb.protected()
+                for rname in [r for r in self.arb.committed if r not in prot][:3]:
                     try:
                         held_books[rname] = {ex: self.get_book(ex, 50) for ex in self.universe.races[rname].exchange_ids}
                     except ApiError as e:
                         log.warning("recycle book %s: %s", rname, e)
                 with self.trade_lock:
-                    rec = self.arb.recycle(best, held_books, positions, self.cash, cycle_id)
+                    rec = self.arb.recycle(best, held_books, self.positions_snapshot, self.cash, cycle_id)
+                    if rec and not rec.get("dry"):
+                        self.refresh_snapshot(self.unwind_deltas([rec]))
                 if rec and not rec.get("dry"):
                     arb_summary["recycled"] = rec["race"]
                     try:
@@ -1552,16 +1712,17 @@ class Bot:
                         tgt = best["race"]
                         fresh = {ex: self.get_book(ex, 50) for ex in self.universe.races[tgt].exchange_ids}
                         with self.trade_lock:
-                            plan = [c for c in self.arb.plan({tgt: fresh}, self.cash, extra_budget=rec.get("qty", 0) * rec.get("proceeds", 0.0)) if c.race == tgt]
+                            plan = [c for c in self.arb.plan({tgt: fresh}, self.cash, extra_budget=rec.get("qty", 0) * rec.get("proceeds", 0.0),
+                                                             recycle=True) if c.race == tgt]
                             if plan:
                                 res = self.arb.execute(plan, cycle_id)
                                 arb_summary["recycle_funded"] = sum(1 for r in res if r.get("ok"))
+                                self.refresh_snapshot({e: -q for e, q in self.basket_fills(res).items()})
                             else:
                                 log.warning("recycle: target %s gone after unwind; capital stays free for the scanner", tgt)
                     except ApiError as e:
                         log.warning("recycle follow-through %s: %s", best.get("race"), e)
                     self.scanner.best_unfunded = None
-                    self.positions_snapshot = self.positions_map()[0]
 
         # ---- portfolio exposure limits (arb sets netted out)
         expo = risk.exposure(self.universe, positions, prices)
@@ -1731,7 +1892,7 @@ class Bot:
                     # earlier in this cycle may already have closed these sets (sim 'churn', 23 Oct: double unwind)
                     fu = self.arb.free_unwinds(held_books, self.positions_snapshot, cycle_id)
                     if fu:
-                        self.positions_snapshot = self.positions_map()[0]
+                        self.refresh_snapshot(self.unwind_deltas(fu))
                 if fu:
                     log.info("free unwinds: %s", fu)
 

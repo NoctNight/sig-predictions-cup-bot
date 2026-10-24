@@ -4,7 +4,8 @@ round trip earns 2 ticks per set, or after 24 h; the cash is then reused for the
 Evidence: research_notes/arb_convergence.md (a race's gap to payout sits around its own normal level and only the part
 above that level reverts, halving in 2-5 h). Fable double-check: honest estimate +0.4k to 3 Nov (range -1k..+2k), 20%
 of baskets rejected in the bot's own logs; Sizhe chose to run it live. Hence the caps: 12k pot, cash floor 3k, the sleeve
-stops entering at -600 (realised + open at the touch), no entries after 2 Nov 23:00 UTC and everything sold by
+stops entering at -600 (realised + open at the touch) and then sells at the touch, a race 6 ticks per set under water is
+sold at the touch (no re-entry there for 24 h), no entries after 1 Nov 00:00 UTC and every set in a race it traded sold by
 3 Nov 22:30 UTC (17:30 ET), before the punt.
 
 Scope: two-leg races only (sell-set = NO on both legs, pays 1), never Rhode Island Governor (capped by Sizhe) or any
@@ -36,6 +37,10 @@ VOL_BASE = 72 * 3600.0          # ... vs the 3 days before it
 VOL_PAUSE = 1.5                 # pause new entries when recent gap movement >= 1.5x normal
 VOL_RESUME = 1.2                # resume only below 1.2x (no flapping)
 SELL_ALL_AT = datetime(2026, 11, 3, 22, 30, tzinfo=timezone.utc).timestamp()   # 17:30 ET, before the punt
+LOSS_EXIT = 0.030               # sell a race at the touch once its open loss reaches 6 ticks per set (Fable 24 Oct) ...
+LOSS_REENTRY_GAP = 24 * 3600.0  # ... and leave that race alone for 24 h (no buy-lose-rebuy loop on a gap that keeps widening)
+LOSS_WHY = "loss >= 6 ticks per set"
+STOP_WHY = "stop reached: sell at the touch"
 
 
 GRID = 300.0                    # 5-min sampling grid (as in the study)
@@ -103,6 +108,11 @@ def vol_ratio(series: dict, now: float) -> Optional[float]:
     return median(ratios) if len(ratios) >= 10 else None
 
 
+def sell_all_due(now: float) -> bool:
+    """From 3 Nov 22:30 UTC every set in a race this sleeve traded is sold (module global, so tests can move it)."""
+    return now >= SELL_ALL_AT
+
+
 def big_holding(positions: dict, exchange_ids: list, own_sets: int, limit: float) -> bool:
     """True when we already hold more than `limit` shares on any leg of the race, not counting this sleeve's own sets
     (Sizhe 24 Oct: leave races with big existing positions alone for now, a mistake there costs thousands of edge)."""
@@ -126,6 +136,9 @@ class DevChurn:
         self.last_entry: dict = {}      # race -> ts
         self.last_exit: dict = {}       # race -> ts
         self.realised = 0.0
+        self.races: set = set()         # every race this sleeve ever bought (the 3 Nov sell-all clears all of them)
+        self.last_loss: dict = {}       # race -> ts of a loss exit (no re-entry for 24 h)
+        self.seen_unwind: dict = {}     # race -> last arb_trades id already booked (own exits, or sets another path closed)
         self.killed = False
         self.vol_paused = False
         self.vol_last: Optional[float] = None
@@ -133,13 +146,17 @@ class DevChurn:
     # ------------------------------------------------------------------ state
     def to_json(self) -> dict:
         return {"lots": self.lots, "last_entry": self.last_entry, "last_exit": self.last_exit, "realised": self.realised,
-                "killed": self.killed, "vol_paused": self.vol_paused}
+                "killed": self.killed, "vol_paused": self.vol_paused, "races": sorted(self.races), "last_loss": self.last_loss,
+                "seen_unwind": self.seen_unwind}
 
     def load(self, d: dict):
         self.lots = [dict(l) for l in d.get("lots") or [] if l.get("qty", 0) > 0]
         self.last_entry = dict(d.get("last_entry") or {})
         self.last_exit = dict(d.get("last_exit") or {})
         self.realised = float(d.get("realised", 0.0))
+        self.races = set(d.get("races") or []) | {l["race"] for l in self.lots}
+        self.last_loss = dict(d.get("last_loss") or {})
+        self.seen_unwind = {k: int(v) for k, v in (d.get("seen_unwind") or {}).items()}
         self.killed = bool(d.get("killed", False))
         self.vol_paused = bool(d.get("vol_paused", False))
 
@@ -152,9 +169,10 @@ class DevChurn:
     # ------------------------------------------------------------------ entries
     def eligible(self, race, now: float) -> bool:
         return (len(race.exchange_ids) == 2 and race.name not in EXCLUDE and not getattr(race, "has_independent", False)
-                and now <= LAST_ENTRY and not self.killed and not self.vol_paused
+                and now <= LAST_ENTRY and not sell_all_due(now) and not self.killed and not self.vol_paused
                 and now - self.last_entry.get(race.name, 0.0) >= ENTRY_GAP
-                and now - self.last_exit.get(race.name, 0.0) >= REENTRY_GAP)
+                and now - self.last_exit.get(race.name, 0.0) >= REENTRY_GAP
+                and now - self.last_loss.get(race.name, 0.0) >= LOSS_REENTRY_GAP)
 
     def unusually_cheap(self, ovr: Optional[float], med: Optional[float]) -> bool:
         return ovr is not None and med is not None and ovr >= med + DEV_MIN - 1e-9
@@ -171,6 +189,7 @@ class DevChurn:
     def add_lot(self, race: str, qty: int, cost: float, now: float):
         self.lots.append({"race": race, "qty": int(qty), "cost": float(cost), "ts": now})
         self.last_entry[race] = now
+        self.races.add(race)
 
     def update_vol(self, ratio: Optional[float]) -> Optional[str]:
         """Pause new entries when recent gap movement is >= 1.5x normal; resume below 1.2x. Returns 'paused'/'resumed' on a
@@ -188,32 +207,46 @@ class DevChurn:
 
     # ------------------------------------------------------------------ exits
     def exit_reason(self, lot: dict, proceeds: Optional[float], now: float) -> Optional[str]:
-        """proceeds = what selling one set back fetches now (unwind_quote, walked asks)."""
-        if now >= SELL_ALL_AT:
+        """proceeds = what selling one set back fetches now (unwind_quote, walked asks). The stop and a 6-tick loss per set
+        sell at the touch instead of holding to 24 h (Fable 24 Oct: a widening gap was held to the 24-h exit)."""
+        if sell_all_due(now):
             return "sell everything before the 3 Nov punt"
+        if self.killed:
+            return STOP_WHY
+        if proceeds is not None and proceeds - lot["cost"] <= -LOSS_EXIT + 1e-9:
+            return LOSS_WHY
         if proceeds is not None and proceeds - lot["cost"] >= TAKE - 1e-9:
             return "round trip +2 ticks"
         if now - lot["ts"] >= MAX_HOLD:
             return "24 h maximum hold"
         return None
 
-    def reconcile(self, race: str, actual_sets: int) -> int:
-        """Shrink the race's lots (oldest first) to the sets actually held (a recycle or free unwind may have closed some).
-        Returns the number of sets dropped from the ledger."""
+    def reconcile(self, race: str, actual_sets: int, proceeds: Optional[float] = None, now: Optional[float] = None) -> int:
+        """Shrink the race's lots (oldest first) to the sets actually held (a free unwind may have closed some). With
+        `proceeds` (per set: the recorded unwind's, else the current exit value) the dropped sets are booked as an exit, so
+        the stop sees them, and with `now` the 30-min re-entry gap starts (Fable 24 Oct: dropped lots had no P&L and the
+        race was bought again 5 min later). Returns the number of sets dropped from the ledger."""
         excess = self.held(race) - max(0, int(actual_sets))
-        dropped = 0
+        dropped, pnl = 0, 0.0
         for l in sorted((l for l in self.lots if l["race"] == race), key=lambda l: l["ts"]):
             if excess <= 0:
                 break
             take = min(excess, l["qty"])
+            if proceeds is not None:
+                pnl += take * (proceeds - l["cost"])
             l["qty"] -= take
             excess -= take
             dropped += take
         self.lots = [l for l in self.lots if l["qty"] > 0]
+        self.realised += pnl
+        self.last_reconcile_pnl = pnl
+        if dropped and now is not None:
+            self.last_exit[race] = now
         return dropped
 
-    def close(self, race: str, qty: int, proceeds: float, now: float) -> float:
-        """Book an exit of qty sets (oldest lots first) at proceeds per set; returns realised P&L."""
+    def close(self, race: str, qty: int, proceeds: float, now: float, why: Optional[str] = None) -> float:
+        """Book an exit of qty sets (oldest lots first) at proceeds per set; returns realised P&L. A loss exit also starts
+        the race's 24-h re-entry gap."""
         pnl, left = 0.0, int(qty)
         for l in sorted((l for l in self.lots if l["race"] == race), key=lambda l: l["ts"]):
             if left <= 0:
@@ -225,6 +258,8 @@ class DevChurn:
         self.lots = [l for l in self.lots if l["qty"] > 0]
         self.realised += pnl
         self.last_exit[race] = now
+        if why == LOSS_WHY:
+            self.last_loss[race] = now
         return pnl
 
     def check_kill(self, open_value: float) -> bool:

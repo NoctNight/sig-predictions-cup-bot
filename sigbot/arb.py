@@ -78,6 +78,12 @@ def _walk(books: dict, exs: list[str], side: str, edge_fn, min_edge: float) -> l
 
 
 class ArbEngine:
+    # High-frequency arb (the Bot replaces both when that sleeve runs; Fable 24 Oct: the recycler unwound its fresh sets at
+    # a loss to fund standing sets, 43 loops in the 24-h replay): races whose sets that sleeve owns are never unwound to
+    # fund anything nor bought into by a plan, and recycling never buys into a race it holds or excludes
+    protected = staticmethod(lambda: set())
+    no_buy = staticmethod(lambda race: False)
+
     def __init__(self, api: SuperMarketClient, store: Store, cfg: ArbConfig, universe: Universe, slug: str,
                  starting_cash: float, dry_run: bool = True):
         self.api, self.store, self.cfg, self.u, self.slug = api, store, cfg, universe, slug
@@ -183,9 +189,12 @@ class ArbEngine:
             lim = min(lim, max(float(cap), getattr(self, "race_cap_floor", 0.0)))
         return max(0.0, lim - self.committed.get(race, 0.0))
 
-    def plan(self, candidate_books: dict[str, dict[str, dict]], cash: float, extra_budget: float = 0.0) -> list[Chunk]:
-        """candidate_books: race name -> {exchange_id: orderbook}. Returns chunks to execute in order."""
+    def plan(self, candidate_books: dict[str, dict[str, dict]], cash: float, extra_budget: float = 0.0,
+             recycle: bool = False) -> list[Chunk]:
+        """candidate_books: race name -> {exchange_id: orderbook}. Returns chunks to execute in order. recycle=True for a
+        recycle follow-through (or its spare credit): never into a race no_buy() refuses."""
         allc: list[Chunk] = []
+        prot = self.protected()
         for rname, books in candidate_books.items():
             race = self.u.races[rname]
             allc.extend(self.chunks_for_race(race, books))
@@ -199,6 +208,8 @@ class ArbEngine:
                 break
             floor = self.cfg.min_ret_sell if (c.kind == "sell_set" and self.cfg.min_ret_sell >= 0) else self.cfg.min_ret
             if c.ret < floor or c.race in self.hostile or self.cooldown.get(c.race, 0) > time.time():
+                continue
+            if c.race in prot or (recycle and self.no_buy(c.race)):
                 continue
             rb = self.race_budget_left(c.race, c.ret if c.kind == "sell_set" else None) - race_spent.get(c.race, 0.0)
             cap = min(budget, rb)
@@ -303,7 +314,7 @@ class ArbEngine:
         saved = self.committed.get(unwound_race)
         self.committed[unwound_race] = max(0.0, (saved or 0.0) - freed)
         try:
-            return [c for c in self.plan({best_new["race"]: books}, cash + freed, extra_budget=freed) if c.race == best_new["race"]]
+            return [c for c in self.plan({best_new["race"]: books}, cash + freed, extra_budget=freed, recycle=True) if c.race == best_new["race"]]
         finally:
             if saved is None:
                 self.committed.pop(unwound_race, None)
@@ -353,6 +364,9 @@ class ArbEngine:
                                                              # before unwinding anything else (review 23 Oct: unbounded unwinds)
         if best_new.get("failed") or best_new["race"] in self.hostile or self.cooldown.get(best_new["race"], 0) > time.time():
             return None                                      # the opportunity was not executable a moment ago: do not unwind for it
+        if self.no_buy(best_new["race"]):
+            return None                                      # high-frequency arb holds or excludes the target race
+        prot = self.protected()
         fresh = best_new.get("fresh_books")
         if fresh:
             again = [c for c in self.chunks_for_race(self.u.races[best_new["race"]], fresh) if c.qty >= self.cfg.min_set_qty]
@@ -362,7 +376,7 @@ class ArbEngine:
         candidates = []
         for rname, books in held_books.items():
             race = self.u.races[rname]
-            if rname == best_new["race"] or rname not in real_sets:
+            if rname == best_new["race"] or rname not in real_sets or rname in prot:
                 continue
             qs = [positions.get(l.exchange_id, 0.0) for l in race.legs.values()]
             if not qs or not all(q < 0 for q in qs):
@@ -411,12 +425,16 @@ class ArbEngine:
         return {"race": rname, "qty": q, "proceeds": uq["proceeds"], "fund": best_new}
 
     def unwind_set(self, rname: str, books: dict, qty: int, why: str = "offload", new_ret: Optional[float] = None,
-                   min_gain: float = 0.0) -> Optional[dict]:
+                   min_gain: float = 0.0, allow_protected: bool = False, min_qty: Optional[int] = None) -> Optional[dict]:
         """Unwind `qty` held sets of `rname` now, all legs or none, at limits from walking the asks. With new_ret, only if
-        the trade being funded beats the REAL exit cost (walked asks, not a snapshot estimate) by min_gain."""
+        the trade being funded beats the REAL exit cost (walked asks, not a snapshot estimate) by min_gain. A protected
+        race (high-frequency arb lots) is unwound only by that sleeve itself (allow_protected)."""
+        if rname in self.protected() and not allow_protected:
+            log.info("unwind %s (%s) skipped: high-frequency arb holds sets there", rname, why)
+            return None
         race = self.u.races[rname]
         uq = self.unwind_quote(race, books, qty)
-        if not uq or qty < self.cfg.min_set_qty:
+        if not uq or qty < (self.cfg.min_set_qty if min_qty is None else min_qty) or qty <= 0:
             return None
         if new_ret is not None and new_ret - uq["forgone_ret"] < min_gain:
             log.info("unwind %s skipped: real exit gives up %.2f%%, the trade it would fund returns %.2f%%", rname, 100 * uq["forgone_ret"], 100 * new_ret)
