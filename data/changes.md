@@ -407,3 +407,7 @@
   untouched. First check: mm ok (n 190, +0.084 tick), recycle ok, catch-up / HF arb / cheapfav too few trades. Tests:
   guards, test_strategy_monitor, precheck sim 28/28 with it on, two Opus reviews SAFE TO DEPLOY. 10-min watch passed.
   Rollback: strategy_monitor_enabled false + botctl deploy.
+
+- 2026-10-24 15:24 BST: High-frequency arb loss exit widened 6 -> 9 ticks (param audit; t +2.1 on unseen data, 4-5
+  events; -200 stop still binds first). Tests: guards 207/207, precheck sim 29/29, full --churn incl. day 30/30, Opus
+  SAFE TO DEPLOY. Rollback: git revert + botctl deploy.

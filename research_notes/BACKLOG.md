@@ -9,6 +9,13 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
 (guard test + tests/sim_pipeline.py + precheck + Fable review + 10-min post-deploy watch).
 
 ## Open
+0a. (added 24 Oct) WEEKEND LAG decision, Mon 26 Oct: re-run research_notes/overnight_followups.md section 2 on all of
+   24-25 Oct (both-venue moves; SIG copy share at 10/30 min vs weekday 29% / 44%). Act only if the weekend copy at 10 min
+   is < 15% with n >= 10 (then raise catch-up size on weekends via the usual gates).
+0b. (added 24 Oct) RIVAL LIQUIDATION ABSORB (overnight_followups.md section 3): research_notes/liquidation_absorb_wiring.diff
+   is built and reviewed SAFE (switched off). From 31 Oct the daily brief runs its detector; apply the diff (still off) in
+   a gated deploy before 31 Oct, and enable it only if taker sell/buy > 60/40 for a day AND the favourite SIG-outside gap
+   widens > 2 ticks.
 0000. PUNT EXECUTOR (Sizhe 23 Oct: "let me verify the punts and you send the orders"). Build and fully test BEFORE 1 Nov:
    a plan-driven executor (sigbot/proposals/punt_executor.py + Bot wiring, OFF by default, enabled only by a session in
    which Sizhe approved the exact plan in chat). Plan = ordered steps, each with market (exchange id), side, max price,
@@ -71,6 +78,14 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
    e. Daily brief: report projected liquid cash at 18:00 ET 3 Nov (cash + sale value of everything, by call time).
    f. Refresh proposals/punt_screener.py with the projected cash and the live third-place balance before 3 Nov.
    Never place the punt; Sizhe does that.
+   g. EXECUTION FINDINGS 24 Oct (build these in; build handed to the ladder-exits session 24 Oct ~15:20 BST):
+      * ladder_exits.md (Fable-checked): never sell a big set in one go; ~1,000-set clips about every 30 min, only when
+        the clip's exit cost is at or below the race's trailing-24-h median ("level 0"). Holding a remainder for a
+        better price (Sizhe's ladder) is not proven and costs time; no ladder.
+      * ev_hunt.md 2c (Fable-checked GO with changes): time the sales the wind-down must make anyway by deviation
+        (sell holdings when rich vs their usual level), ~+80 S (+50 to +110) on today's holdings.
+      * ev_hunt.md part 3: Polymarket/Kalshi favourites are underpriced and longshots overpriced (the shrunk map beats
+        raw prices in 4/4 held-out cycles): cheap favourites' edge is ~2x at settlement; the punt screener's map holds.
 00. SIZHE'S DECISIONS 23 Oct ~11:45 BST (do these first, under the normal gates):
    a. Rhode Island Governor: CAP IT. Its three legs (D 1073, R 1074, I 880) are separate binary markets (the I market was
       created 24 Aug, D/R on 18 Sep); nothing guarantees exactly one resolves YES. Our sell-set (NO x3) pays 2 only if
@@ -154,6 +169,14 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
   a 23:00+ fair-price leg); (3) do not apply the longshot haircut to 25-40c legs; (4) relabel the 2-15c statistics
   without presidential safe states (comparable races 0/32, P = 0.13, weak evidence). Realistic EV ~$300-600 (range
   $100-1,100), a ~2% shot at $30k. Build these into the punt executor's plan (item 0000).
+
+- 24 Oct studies (side sessions; notes in research_notes/): skewed arb (skewed_arb.md) DROP; resting orders for
+  high-frequency arb DROP; long volatility (long_vol.md) DROP before election night, keep long-vol for the punt; taker
+  flow types (flow_patterns.md) DROP, quoting tighter or deeper does not pay; SIG convergence (sig_convergence.md) DROP
+  as a trade (deviation half-life 1-1.7 days), gap-prediction follow-up running; more trades (more_trades.md): nothing
+  new clears the bar. FOLLOW-UP for the daily run on 26 Oct: if high-frequency arb has >= 20 exits and earns >= +5 per
+  1k of capital per day (and the Fable test-environment check passed), ask Sizhe whether to raise its pot to 24k funded
+  by selling late-call sets at cheap moments.
 
 ## Done
 - 23 Oct: Directional trades sized by market impact / 6+ tick gap held 12 h: NEGATIVE. New day out of sample -0.49
