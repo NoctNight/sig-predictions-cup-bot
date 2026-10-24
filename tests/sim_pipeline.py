@@ -202,7 +202,9 @@ class Sim:
         D = mods["direction"]
         smap = synthetic_map(self.universe)
         D.load_map = lambda max_age_sec=0: smap
-        D.DirectionTrader.fetch_outside = lambda self_: v.outside_quotes()
+        D.DirectionTrader.fetch_outside = lambda self_, pm=None, ks=None: v.outside_quotes()
+        # shock mode's fast detector: Polymarket /midpoints from the scenario's outside fair (tokens are "pm" + exchange id)
+        D.Polymarket.midpoints = lambda self_, toks: {t: round(v.outside[t[2:]], 4) for t in toks if t[2:] in v.outside}
         cfg = mods["config"].BotConfig.load(os.path.join(sb, "config.json"))
         cfg.api_key = "sim-no-key"
         cfg.db_path = "data/sim.sqlite"
@@ -286,6 +288,10 @@ class Sim:
             self.chk.sub = name
             self.v.step = f"{self.chk.label} {name}"
             getattr(s, name)()
+        if getattr(self.bot, "shock", None) is not None:   # shock mode's own thread (shock_loop), run in sequence here
+            self.chk.sub = "shock_tick"
+            self.v.step = f"{self.chk.label} shock_tick"
+            self.bot.shock_tick()
         self.chk.sub = None
 
     def run(self):
@@ -396,7 +402,7 @@ def set_race_bids_sum(sim, race_name, total, spread_ticks=1):
 
 
 # ======================================================================================== invariants
-EXEMPT_ADD = {"exit", "offload", "arb", "unw", "fre", "seed", "hedge"}
+EXEMPT_ADD = {"exit", "offload", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct)
 RATE_LIMITS = {
     # category: [(window_sec, max events per object), ...]   object = exchange or race
     "requote": [(60, 5)],            # MM/tilt/inside cancel-all per exchange: 1 per 30-s cycle + fast requotes (3/min total)
@@ -627,12 +633,22 @@ class Checker:
         expo = risk.exposure(self.sim.universe, v.signed_positions(), prices)
         nd = abs(expo.net_d_notional)
         capp = cfg.mm.portfolio_max_partisan_notional
-        if nd > self.max_netd:
+        # shock mode is exempt from the cap (Sizhe 24 Oct): the bound widens by exactly the shock sleeve's own net D, in
+        # its direction; every other sleeve still sees the total (shock included) and must stay inside the rest
+        sk_pos = {}                                     # the venue's own record of shk/shx fills (the bot's ledger lags a cycle)
+        for m in v.fill_meta.values():
+            if m.get("prefix") in ("shk", "shx", "shm"):
+                sk_pos[m["ex"]] = sk_pos.get(m["ex"], 0.0) + (m["qty"] if m["side"] == "yes" else -m["qty"])
+        sk_pos = {ex: q for ex, q in sk_pos.items() if abs(q) >= 1}
+        sk_nd = risk.exposure(self.sim.universe, sk_pos, prices).net_d_notional if sk_pos else 0.0
+        hi, lo = capp + 1000 + max(0.0, sk_nd), -(capp + 1000) + min(0.0, sk_nd)
+        if nd > self.max_netd or not (lo <= expo.net_d_notional <= hi):
             # the block is computed once per cycle, so one cycle's directional adds (per_poll_budget 900) may overshoot it
-            if nd > capp + 1000 and not self.netd_flagged:
+            if not (lo <= expo.net_d_notional <= hi) and not self.netd_flagged:
                 self.netd_flagged = True
-                self.violation("partisan_cap", f"net D notional {expo.net_d_notional:+.0f} beyond cap {capp:.0f} + 1,000 (one cycle of adds)")
-            self.max_netd = nd
+                self.violation("partisan_cap", f"net D notional {expo.net_d_notional:+.0f} outside [{lo:.0f}, {hi:.0f}] (cap {capp:.0f} + 1,000 "
+                                               f"+ the shock sleeve's own {sk_nd:+.0f})")
+            self.max_netd = max(self.max_netd, nd)
 
     def _order_trace(self, ex):
         rows = [c for c in self.v.calls if c.get("ex") == ex or any(str(l.get("exchangeId")) == ex for l in c.get("legs", []))][-6:]
@@ -2199,7 +2215,125 @@ class WindDown(Scenario):
                         "by_race": {r: len(t) for r, t in by_race.items()}}
 
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
+
+class Shock(Scenario):
+    name, cycles, seed = "shock", 420, 41
+    post_only_dmm = False
+    cfg = {"shock_enabled": True}
+    doc = ("shock mode: 45+ min of flat history; then (a) Polymarket jumps +8 pts on one race while Kalshi moves +2 "
+           "(venues disagree: no entry); (b) both venues jump +14 pts on a second race, SIG's DMM lags 2 min then walks "
+           "1 tick / 30 s: enter both legs (walk <= 4 ticks, <= 20k notional), exit within ~60 min; (c) later both venues "
+           "jump +8 pts on a third race and revert 8 min later, SIG never moves: enter, then the hoax guard closes it; flat "
+           "at the end, partisan cap exempt for shock only")
+
+    def before_cycle(self, sim, i):
+        v = sim.v
+        if i == 3:
+            self.races = [r for r in two_leg_mid_races(sim, 0.3, 0.7) if not r.startswith("Alaska")][:3]
+            for r in self.races:
+                for ex in sim.legs(r):
+                    v.outside[ex] = round(v.mid(ex), 4)
+            self.t0 = v.now
+            self.events = {}
+        if not getattr(self, "races", None) or len(self.races) < 3:
+            return
+        t = v.now - self.t0
+        rD = lambda r: sim.universe.races[r].legs["D"].exchange_id
+        rR = lambda r: sim.universe.races[r].legs["R"].exchange_id
+        if "split" not in self.events and t >= 50 * 60:                 # (a) Polymarket only
+            r = self.races[0]
+            for ex, sgn in ((rD(r), 1), (rR(r), -1)):
+                v.outside[ex] = round(v.outside[ex] + sgn * 0.08, 4)
+                v.kalshi_offset[ex] = -sgn * 0.06
+            self.events["split"] = v.now
+        if "shock" not in self.events and t >= 60 * 60:                 # (b) a real shock
+            r = self.races[1]
+            v.outside[rD(r)] = round(min(0.97, v.outside[rD(r)] + 0.14), 4)
+            v.outside[rR(r)] = round(max(0.03, v.outside[rR(r)] - 0.14), 4)
+            self.events["shock"] = v.now
+        if "hoax" not in self.events and t >= 140 * 60:                 # (c) a hoax
+            r = self.races[2]
+            v.outside[rD(r)] = round(v.outside[rD(r)] + 0.08, 4)
+            v.outside[rR(r)] = round(v.outside[rR(r)] - 0.08, 4)
+            self.events["hoax"] = v.now
+        if "hoax" in self.events and "revert" not in self.events and v.now - self.events["hoax"] >= 8 * 60:
+            r = self.races[2]
+            v.outside[rD(r)] = round(v.outside[rD(r)] - 0.08, 4)
+            v.outside[rR(r)] = round(v.outside[rR(r)] + 0.08, 4)
+            self.events["revert"] = v.now
+
+    def on_tick(self, sim):
+        v = sim.v
+        if getattr(self, "events", None) and "shock" in self.events and v.now - self.events["shock"] >= 120:
+            r = self.races[1]
+            last = getattr(self, "last_walk", 0.0)
+            if v.now - last >= 30:                                      # the DMM walks 1 tick / 30 s toward the outside
+                self.last_walk = v.now
+                for ex in sim.legs(r):
+                    gap = v.outside[ex] - v.mid(ex)
+                    if abs(gap) > SV.TICK:
+                        step = 1 if gap > 0 else -1
+                        if self.post_only_dmm and any((o.book == "ask" and step > 0 and o.tick <= v.bid_t[ex] + 1) or
+                                                      (o.book == "bid" and step < 0 and o.tick >= v.ask_t[ex] - 1) for o in v.ours[ex]):
+                            continue                                   # a post-only DMM stops one tick short of our order
+                        v.shift(ex, step)
+
+    def final_checks(self, sim):
+        b = sim.bot
+        calls = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] in ("shk", "shx", "shm")]
+        if not getattr(self, "races", None) or len(self.races) < 3:
+            sim.chk.violation("shock_setup", "fewer than 3 two-leg mid races")
+            return
+        legs = {r: set(sim.legs(r)) for r in self.races}
+        ent = [c for c in calls if c["prefix"] == "shk"]
+        by_race = {r: [c for c in ent if c["ex"] in legs[r]] for r in self.races}
+        if by_race[self.races[0]]:
+            sim.chk.violation("shock_on_split", f"entered {self.races[0]} although Kalshi did not confirm Polymarket's jump")
+        if {c["ex"] for c in by_race[self.races[1]]} != legs[self.races[1]]:
+            sim.chk.violation("shock_missed", f"real shock on {self.races[1]}: entries on {sorted({c['ex'] for c in by_race[self.races[1]]})}, want both legs")
+        if not by_race[self.races[2]]:
+            sim.chk.violation("shock_hoax_none", f"no entry on the hoax race {self.races[2]} (expected an entry, then the hoax exit)")
+        for r in self.races:
+            notional = sum(c["qty"] * c["price"] for c in by_race[r])
+            if notional > b.cfg.shock_per_shock * 1.01:
+                sim.chk.violation("shock_oversize", f"{r}: {notional:.0f} entered > per-shock cap {b.cfg.shock_per_shock:.0f}")
+        fills = [dict(x) for x in b.store.rows("SELECT exchange_id, quantity, price, filled_at FROM fills WHERE purpose IN ('shock','shock_exit') ORDER BY filled_at")]
+        pos = {}
+        for f in fills:
+            pos[f["exchange_id"]] = pos.get(f["exchange_id"], 0.0) + float(f["quantity"])
+        net = b.shock.netted if b.shock else {}
+        still = {e: q for e, q in pos.items() if abs(q - net.get(e, 0.0)) >= 1}
+        vpos = sim.v.signed_positions()
+        if any(abs(net.get(e, 0.0)) >= 1 and vpos.get(e, 0.0) * net[e] > 0 for e in net):
+            sim.chk.violation("shock_netted_wrong", f"netted {net} but the venue still holds that side: {vpos}")
+        if still:
+            sim.chk.violation("shock_not_flat", f"shock positions still open at the end: {still}")
+        cash = -sum(float(f["quantity"]) * float(f["price"]) for f in fills)
+        real = {r: -sum(float(f["quantity"]) * float(f["price"]) for f in fills if f["exchange_id"] in legs[r]) for r in self.races}
+        if real[self.races[1]] <= 0:
+            sim.chk.violation("shock_real_lost", f"the real shock lost {real[self.races[1]]:+.0f} with the DMM lagging")
+        self.summary = {"entries": len(ent), "exits": len(calls) - len(ent), "pnl_by_race": {r: round(x) for r, x in real.items()},
+                        "pnl": round(cash), "killed": b.shock.killed if b.shock else None,
+                        "events_utc": {k: datetime.fromtimestamp(t, timezone.utc).strftime("%H:%M") for k, t in self.events.items()}}
+
+
+class ShockMaker(Shock):
+    name = "shock_maker"
+    cfg = {"shock_enabled": True, "shock_exit_maker": True}
+    doc = "the shock scenario with the R3 exit: rest the exit at the 70%-convergence price (the DMM's walk fills it), taker only on a stop"
+
+
+class ShockMakerPostOnly(ShockMaker):
+    name = "shock_maker_postonly"
+    post_only_dmm = True
+    doc = "R3 worst case: the DMM quotes post-only, so its walk stops one tick short of our resting exit and never fills it"
+
+# scenarios built on a cash shortfall: with the live config's shock_enabled true, the 15k shock reserve would take their
+# cash before their own premise (low cash) is reached; shock with the reserve has its own scenarios (shock*, shock_reserve)
+for _c in (ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, RecycleOversize):
+    _c.cfg = {**(getattr(_c, "cfg", None) or {}), "shock_enabled": False}
+
+SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, Shock, ShockMaker, ShockMakerPostOnly, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
              ChurnMany, ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, ShockReserve, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
              Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Day]
 

@@ -228,12 +228,15 @@ class DirectionTrader:
         a, b = self.cfg.day_hours_et
         return self.cfg.poll_sec_day if a <= h < b else self.cfg.poll_sec_night
 
-    def fetch_outside(self) -> tuple[dict, dict]:
-        """Both venues in parallel. Returns ({token: quote}, {ticker: quote}); a failed venue returns {}."""
+    def fetch_outside(self, pm=None, ks=None) -> tuple[dict, dict]:
+        """Both venues in parallel. Returns ({token: quote}, {ticker: quote}); a failed venue returns {}. pm / ks: other
+        clients (shock mode passes its own, so its failures never open this sleeve's circuit breakers)."""
+        pm, ks = pm or self.pm, ks or self.ks
+
         def pmf():
             t0 = _now()
             try:
-                return self.pm.books(self.pm_tokens), (_now() - t0) * 1000
+                return pm.books(self.pm_tokens), (_now() - t0) * 1000
             except VenueError as e:
                 log.warning("polymarket poll failed: %s", e)
                 return {}, None
@@ -241,7 +244,7 @@ class DirectionTrader:
         def ksf():
             t0 = _now()
             try:
-                return self.ks.quotes(self.k_tickers), (_now() - t0) * 1000
+                return ks.quotes(self.k_tickers), (_now() - t0) * 1000
             except VenueError as e:
                 log.warning("kalshi poll failed: %s", e)
                 return {}, None
@@ -249,8 +252,9 @@ class DirectionTrader:
         with ThreadPoolExecutor(max_workers=2) as ex:
             fp, fk = ex.submit(pmf), ex.submit(ksf)
             (pmq, pm_ms), (kq, k_ms) = fp.result(), fk.result()
-        self.latency = {"polymarket_ms": round(pm_ms) if pm_ms else None, "kalshi_ms": round(k_ms) if k_ms else None,
-                        "polymarket": self.pm.state.stats(), "kalshi": self.ks.state.stats()}
+        if pm is self.pm and ks is self.ks:          # the directional poll's own latency record only
+            self.latency = {"polymarket_ms": round(pm_ms) if pm_ms else None, "kalshi_ms": round(k_ms) if k_ms else None,
+                            "polymarket": self.pm.state.stats(), "kalshi": self.ks.state.stats()}
         return pmq, kq
 
     @staticmethod

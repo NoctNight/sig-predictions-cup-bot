@@ -137,6 +137,25 @@ class Polymarket:
                             "ts": (float(b["timestamp"]) / 1000.0) if b.get("timestamp") else time.time(), "latency_ms": lat}
         return out
 
+    def midpoints(self, tokens: list[str]) -> dict[str, float]:
+        """{token: midpoint} from the batch midpoints endpoint (chunks of 500): a light poll for shock detection (no depth)."""
+        out: dict[str, float] = {}
+        if not self.state.available():
+            raise VenueError("polymarket circuit open")
+        for i in range(0, len(tokens), 500):
+            chunk = tokens[i : i + 500]
+            try:
+                res, lat = self.http.post(f"{CLOB}/midpoints", [{"token_id": t} for t in chunk], retries=0, timeout=5)
+            except VenueError as e:
+                self.state.fail(e)
+                raise
+            self.state.ok(lat)
+            for tok, mid in (res or {}).items():
+                m = _f(mid)
+                if m is not None:
+                    out[str(tok)] = m
+        return out
+
     # -------------------------------------------------------------- history
     def history(self, token: str, start_ts: int, end_ts: int, fidelity: int = 5) -> list[tuple[float, float]]:
         """[(ts, price)] from prices-history; fidelity in minutes."""

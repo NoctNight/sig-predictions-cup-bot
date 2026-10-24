@@ -51,6 +51,10 @@ from .proposals.volatile_moves import MoveDetector, VolatileMoves
 from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
 from .proposals import cheap_favourites as CF
 from .proposals import cash_raise as CR
+from .proposals import shock_mode as SHK
+from .venues.http import Http as _ShockHttp
+from .venues.polymarket import Polymarket as _ShockPM
+from .venues.kalshi import Kalshi as _ShockKS
 from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround, big_holding,
                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
 from .proposals import election_night as EN
@@ -66,6 +70,12 @@ def cheapfav_races_of(bot) -> set:
 
 
 LASTLOOK_MAX_AGE = 15.0     # seconds: the oldest REST touch the MM's last look accepts when the feed book is stale
+def shock_races_of(bot) -> set:
+    """Races where shock mode holds positions or has an entry in flight (empty when it is not wired, e.g. on test stubs).
+    The set paths (recycler, free unwinds, offload, churn) leave these races alone: a single-leg position next to another
+    sleeve's NO looks like an arb set."""
+    g = getattr(bot, "shock_races", None)
+    return g() if callable(g) else set()
 
 
 class ExplainedDirection(DirectionTrader):
@@ -474,8 +484,8 @@ class ArbScanner(threading.Thread):
         if time.time() - b.last_free_unwind < b.cfg.free_unwind_scan_sec:
             return
         held = {}
-        cf_races = cheapfav_races_of(b)                  # a cheap-favourite NO next to another sleeve's NO is not a set
-        for rname in list(b.arb.committed):
+        cf_races = cheapfav_races_of(b) | shock_races_of(b)   # a cheap-favourite or shock position next to another
+        for rname in list(b.arb.committed):                  # sleeve's NO is not a set
             race = b.universe.races.get(rname)
             if race is None or rname in cf_races:
                 continue
@@ -573,6 +583,47 @@ class Bot:
                                                    net_max=cfg.cheapfav_net_max, headroom=cfg.cheapfav_headroom)
                 log.warning("CHEAPFAV sleeve enabled: budget %.0f, min edge %.3f, %.0f per leg, %d same-terms legs",
                             cfg.cheapfav_budget, cfg.cheapfav_min_edge, cfg.cheapfav_leg_cap, len(same))
+        self.shock = (SHK.ShockMode(per_shock=cfg.shock_per_shock, total=cfg.shock_total, kill_pnl=cfg.shock_kill)
+                      if getattr(cfg, "shock_enabled", False) else None)
+        self.shock_state_path = os.path.join(HERE, "params", "shock_state.json")
+        self.shock_open: dict = {}
+        self.shock_last_poll = 0.0                   # last fast (midpoints) check
+        self.shock_last_full = 0.0                   # last full two-venue poll
+        self.shock_rows_last: list = []
+        self.shock_fast = SHK.FastDetector()
+        self.shock_races_cache: frozenset = frozenset()
+        self.shock_hold: dict = {}                   # exchange -> no exit before (a maker cancel failed: it may have filled)
+        self.shock_vpos = (0.0, {})                  # (ts, venue positions) re-read under the lock before exits
+        # the fast detector's own Polymarket client and circuit breaker: its failures must not blind the direction poller
+        self.shock_pm = _ShockPM(_ShockHttp(timeout=5.0)) if self.shock is not None else None
+        self.shock_ks = _ShockKS(_ShockHttp(timeout=8.0), os.path.join(HERE, "data")) if self.shock is not None else None
+        self.shock_vfail = 0                         # consecutive failed venue position reads (flatten fallback)
+        self.shock_exit_sent: dict = {}              # exchange -> last shock exit order (taker or maker) sent
+        self.shock_ingest_ts = 0.0                   # last successful fills pull by the shock thread
+        self.shock_cleared: dict = {}                # race -> when its orders were cleared for a shock (once per shock)
+        self.shock_unknown: list = []                # [(exchange, sent ts, purpose)]: orders whose outcome is unknown
+        if self.shock is None and self.store is not None:
+            try:                                     # switched off with positions still open: nothing will close them
+                _f = [dict(r) for r in self.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('shock','shock_exit')")]
+                _open = pnl_from_fills(_f, {})[1] if _f else {}
+                if _open:
+                    log.error("SHOCK mode is OFF but its ledger still holds %s: close these by hand or re-enable it", _open)
+            except Exception as e:
+                log.warning("shock ledger check: %s", e)
+        if self.shock is not None:
+            try:
+                self.shock.load(json.load(open(self.shock_state_path)))
+            except Exception as e:                   # missing or corrupt: start empty (positions without context are closed)
+                log.warning("shock state unreadable (%s): starting empty", e)
+            try:                                     # the 45-min reference window from stored quotes: no wait after a restart
+                leg_of = {(r.name, p): l.exchange_id for r in self.universe.races.values() for p, l in r.legs.items()}
+                vq = self.store.rows("SELECT ts, venue, race, party, COALESCE(mid, (bid + ask) / 2.0) m FROM venue_quotes "
+                                     "WHERE ts > ? AND venue IN ('polymarket', 'kalshi', 'sig')", (time.time() - 3 * 3600,))
+                self.shock.push(rows_from_venue_quotes([(r["ts"], r["venue"], r["race"], r["party"], r["m"]) for r in vq], leg_of))
+            except Exception as e:
+                log.warning("shock history load: %s", e)
+            log.warning("SHOCK mode enabled: %.0f per shock, %.0f total, stop %.0f, poll %.0fs (exempt from the partisan cap)",
+                        cfg.shock_per_shock, cfg.shock_total, cfg.shock_kill, cfg.shock_poll_sec)
         self.churn = (DevChurn(capital=cfg.churn_capital, cash_floor=cfg.churn_cash_floor, kill=cfg.churn_kill)
                       if getattr(cfg, "churn_enabled", False) else None)
         self.churn_state_path = os.path.join(HERE, "params", "churn_state.json")
@@ -634,6 +685,14 @@ class Bot:
                 self.cheapfav_refresh()
             except Exception as e:
                 log.warning("cheapfav ledger at start-up: %s", e)
+        if self.shock is not None:
+            # races holding shock positions are never touched by the set paths (same reason as cheap favourites)
+            _prot2 = self.arb.protected
+            self.arb.protected = lambda: set(_prot2()) | self.shock_races()
+            try:
+                self.shock_ledger()
+            except Exception as e:
+                log.warning("shock ledger at start-up: %s", e)
         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
         self.cash_needs: dict = {}             # sleeve -> (cash short this cycle, why): what the cash raise may sell for
@@ -843,6 +902,15 @@ class Bot:
             return {}, 0.0, 0
         self.positions_ok = True
         m = {str(x["exchangeId"]): float(x["quantity"]) for x in p.get("positions", []) if not x.get("settled")}
+        # the venue's own mark per YES share (marketValue / |quantity|; a NO holding's value is 1 - YES per share): shock
+        # mode values its ledger on this basis for the kill switch's drawdown, the same basis as pos_value
+        vm = {}
+        for x in p.get("positions", []):
+            q = float(x.get("quantity") or 0.0)
+            if not x.get("settled") and abs(q) >= 1 and x.get("marketValue") is not None:
+                per = float(x["marketValue"]) / abs(q)
+                vm[str(x["exchangeId"])] = per if q > 0 else 1.0 - per
+        self.venue_mark = vm
         self.cost_basis = {str(x["exchangeId"]): float(x.get("costBasis") or 0.0) for x in p.get("positions", []) if not x.get("settled")}
         # arb capital already locked, per race, derived from positions (survives restarts): NO legs' cost basis
         committed = {}
@@ -1020,6 +1088,13 @@ class Bot:
         excl_races |= Bot.wind_down_owned(self, now) | {r for r in race_legs if Bot.exit_locked(self, r, "raise", now=now)}
         sent = 0.0
         with self.trade_lock:
+            # shock mode trades in its own thread under this lock: a race it entered since the raise planned is excluded,
+            # and a reserve refill waits while a shock is open (review 14: the plan above was read before the lock)
+            sk_now = shock_races_of(self)
+            busy_races |= sk_now
+            excl_races |= sk_now
+            if set(needs) == {"shock_reserve"} and bool(getattr(self, "shock_active", lambda: False)()):
+                return
             # a clip of ours that may still rest anywhere: pulled before positions are read (review 3: a rested clip filling
             # later is in no cap check, net D -1 -> +1199 past a 900 cap)
             for r in self.store.rows("SELECT DISTINCT exchange_id FROM orders WHERE purpose='raise' AND status='open' AND placed_at > ?", (now - 120,)):
@@ -1712,8 +1787,8 @@ class Bot:
                 race = self.universe.races.get(rname)
                 if race is None or len(race.exchange_ids) != 2 or rname in CHURN_EXCLUDE or ch.held(rname) > 0:
                     continue
-                if rname in cheapfav_races_of(self):
-                    continue                                   # cheap-favourite NO legs are not sets: held to the call
+                if rname in cheapfav_races_of(self) or rname in shock_races_of(self):
+                    continue                                   # cheap-favourite NO legs (held to the call) and shock positions are not sets
                 n = venue_sets(race)
                 if n <= 0:
                     continue
@@ -1733,8 +1808,8 @@ class Bot:
             for race in self.universe.races.values():
                 if not ch.eligible(race, now) or race.name in self.arb.hostile or self.arb.cooldown.get(race.name, 0) > now:
                     continue
-                if race.name in cheapfav_races_of(self):
-                    continue                                   # cheap-favourite race: the two ledgers stay apart
+                if race.name in cheapfav_races_of(self) or race.name in shock_races_of(self):
+                    continue                                   # a cheap-favourite or shock race: the ledgers stay apart
                 med = self.churn_med.get(race.name)
                 if med is None:
                     continue
@@ -1821,6 +1896,7 @@ class Bot:
         or the election-night sleeve trade (any fill or order of WD.HOLD_PURPOSES) and params/wind_down_hold.json
         ({"races": [...], "exchanges": [...]}, written by hand or by the punt executor; read every call)."""
         races = {r: "cheap favourites" for r in cheapfav_races_of(self)}
+        races.update({r: "shock mode" for r in shock_races_of(self)})   # shock closes its own (flat by 12:00 ET 3 Nov)
         if self.churn is not None:
             races.update({l["race"]: "high-frequency arb" for l in self.churn.lots})
         legs = {str(e): "catch-up sweep" for e, q in (getattr(self, "catchup_open", None) or {}).items() if q}
@@ -1845,7 +1921,8 @@ class Bot:
         sets or inventory of ours to sell (review 1: a catch-up NO counted inside a set was sold, then catch-up's own exit
         crossed zero)."""
         out = dict(positions or {})
-        for led in (getattr(self, "catchup_open", None) or {}, getattr(self, "cheapfav_open", None) or {}):
+        for led in (getattr(self, "catchup_open", None) or {}, getattr(self, "cheapfav_open", None) or {},
+                    getattr(self, "shock_open", None) or {}):
             for ex, q in led.items():
                 out[str(ex)] = out.get(str(ex), 0.0) - q
         return out
@@ -2274,10 +2351,11 @@ class Bot:
         log.info("order books saved: %d markets -> data/books_latest.json", len(books))
 
     def mm_positions(self, positions: dict) -> dict:
-        """Positions the MM manages: the venue's, minus the catch-up sweep's and the cheap-favourites sleeve's own open
-        positions (the MM used to count them as inventory and skew to unload them before they converged; review 23 Oct)."""
+        """Positions the MM manages: the venue's, minus the catch-up sweep's, the cheap-favourites sleeve's and shock mode's
+        own open positions (the MM used to count them as inventory and skew to unload them before they converged; review 23 Oct)."""
         cu = dict(getattr(self, "catchup_open", None) or {})
-        for ex, q in (getattr(self, "cheapfav_open", None) or {}).items():   # held to the call: not MM inventory either
+        for ex, q in (list((getattr(self, "cheapfav_open", None) or {}).items())     # held to the call: not MM inventory
+                      + list((getattr(self, "shock_open", None) or {}).items())):     # shock closes its own within ~60 min
             cu[ex] = cu.get(ex, 0.0) + q
         if not cu:
             return positions
@@ -2506,7 +2584,7 @@ class Bot:
         cu_races = {self.universe.by_exchange[e][0] for e in cu_ex if e in self.universe.by_exchange}
         cands = [c for c in cf.candidates(rows, positions, race_legs) if c["exchange_id"] not in resting   # the venue shows,
                  and not (ch is not None and ch.held(c["race"])) and skip.get(c["exchange_id"], 0) <= now   # keep them apart
-                 and c["race"] not in cu_races]
+                 and c["race"] not in cu_races and c["race"] not in shock_races_of(self)]   # nor shock's races
         if not cands:
             return
         touch = {}
@@ -2531,11 +2609,11 @@ class Bot:
         # the inside quoter's 300 s) or still resting at the venue (tilt orders can rest for hours); review 24 Oct
         resting_ids = {str(o.get("id")) for lst in (getattr(self, "open_orders_cache", None) or {}).values() for o in lst}
         others = [dict(r) for r in self.store.rows("SELECT order_id, exchange_id, side, quantity, price, placed_at FROM orders WHERE purpose IN "
-                                                   "('catchup','direction','tilt','inside') AND (placed_at > ? OR status='open')", (now - 330,))]
+                                                   "('catchup','direction','tilt','inside','shock') AND (placed_at > ? OR status='open')", (now - 330,))]
         others = [o for o in others if float(o.get("placed_at") or 0) > now - 330 or str(o.get("order_id")) in resting_ids]
         o_filled: dict = {}
         if others:
-            for f in self.store.rows("SELECT order_id, quantity FROM fills WHERE purpose IN ('catchup','direction','tilt','inside') "
+            for f in self.store.rows("SELECT order_id, quantity FROM fills WHERE purpose IN ('catchup','direction','tilt','inside','shock') "
                                      "AND ingested_at > ?", (now - 6 * 3600,)):
                 o_filled[str(f["order_id"])] = o_filled.get(str(f["order_id"]), 0.0) + abs(float(f["quantity"]))
         pend_d, pend_r = cf_pend[1], cf_pend[2]
@@ -2567,6 +2645,512 @@ class Bot:
                          o["qty"], o["price"], o["p_win"], 100 * (o["p_win"] - o["price"]))
             except ApiError as e:
                 log.warning("cheapfav entry %s: %s", o["exchange_id"], e)
+    # ------------------------------------------------------------------ shock mode (proposals/shock_mode.py)
+    def shock_races(self) -> set:
+        """Races where shock mode holds a position or has an entry in flight (its ledger plus entry contexts)."""
+        return set(getattr(self, "shock_races_cache", None) or ())   # published by shock_ledger / shock_tick under the lock
+
+    def shock_active(self) -> bool:
+        """True while shock mode holds a position or has an entry in flight: the cash raise should not refill the shock
+        reserve (or sell into these races, see shock_races) until this is False."""
+        return bool(getattr(self, "shock_races_cache", None))
+
+    def shock_publish_races(self):
+        bx = self.universe.by_exchange
+        out = {bx[ex][0] for ex in (self.shock_open or {}) if ex in bx}
+        if self.shock is not None:
+            out |= {c.get("race") for c in list(self.shock.ctx.values()) if c.get("race")}
+        self.shock_races_cache = frozenset(out)
+
+    def shock_ledger(self, venue_marks: Optional[dict] = None) -> tuple:
+        """(pnl, open positions YES-signed) of the shock sleeve from its fills, marked at the venue's own per-share value
+        when given (the kill switch's basis), else at the freshest SIG mid."""
+        fills = [dict(r) for r in self.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('shock','shock_exit') ORDER BY filled_at")]
+        marks = {}
+        for ex in {f["exchange_id"] for f in fills}:
+            if venue_marks and venue_marks.get(ex) is not None:
+                marks[ex] = venue_marks[ex]
+                continue
+            bk = self.fresh_book(ex, 60.0)
+            if bk and bk.get("bids") and bk.get("asks"):
+                marks[ex] = (bk["bids"][0]["price"] + bk["asks"][0]["price"]) / 2
+        pnl, open_pos = pnl_from_fills(fills, marks)
+        if self.shock is not None and self.shock.netted:
+            for ex in list(self.shock.netted):       # the leg's ledger is flat again: the netting episode is over
+                if ex not in open_pos:
+                    self.shock.netted.pop(ex)
+                    self.shock_netted_dirty = True
+            # residuals the venue netted against other inventory are not ours
+            open_pos = {ex: q - self.shock.netted.get(ex, 0.0) for ex, q in open_pos.items()}
+            open_pos = {ex: q for ex, q in open_pos.items() if abs(q) >= 1}
+        self.shock_open = dict(open_pos)
+        self.shock_publish_races()
+        return pnl, open_pos
+
+    def shock_venue_positions(self) -> Optional[dict]:
+        """{exchange: YES-signed quantity} straight from the venue, or None when the read fails. No side effects (unlike
+        positions_map, which also resets cost basis, committed sets and the settlement adjustment), and the status is
+        local to this call, never a flag another thread can flip (review 4)."""
+        try:
+            p = self.api.positions(self.slug)
+        except Exception as e:
+            log.warning("shock positions read: %s", e)
+            return None
+        return {str(x["exchangeId"]): float(x["quantity"]) for x in p.get("positions", []) if not x.get("settled")}
+
+    def shock_claim(self, now: float):
+        """Fills with no purpose on an exchange where a shock order of unknown outcome was sent (no order row, so the
+        store could not attribute them) are shock's: tag them so the ledger and its exits see them (review 8)."""
+        keep = []
+        for ex, ts, purpose in self.shock_unknown:
+            since = datetime.fromtimestamp(ts - 5, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+            try:
+                self.store.exec("UPDATE fills SET purpose=? WHERE exchange_id=? AND purpose IS NULL AND filled_at >= ?",
+                                (purpose, ex, since))
+            except Exception as e:
+                log.warning("shock claim %s: %s", ex, e)
+            if now - ts < 900:                       # an order lives <= 600 s: keep claiming for 15 min
+                keep.append((ex, ts, purpose))
+        self.shock_unknown = keep
+
+    def shock_ingest(self) -> bool:
+        """Pull the newest fills into the store (like ingest_fills); True only when every page read succeeded."""
+        cursor, pages = None, 0
+        while pages < 5:
+            try:
+                page = self.api.fills(self.slug, 200, cursor)
+            except Exception as e:
+                log.warning("shock fills read: %s", e)
+                return False
+            data = page.get("data", [])
+            n = self.store.ingest_fills(data)
+            pages += 1
+            if n < len(data) or not (page.get("pagination") or {}).get("hasMore"):
+                if self.shock_unknown:
+                    self.shock_claim(time.time())
+                return True
+            cursor = page["pagination"]["nextCursor"]
+        return True
+
+    def shock_rows(self) -> list:
+        """A fast two-venue poll for shock mode: the directional poller's batched Polymarket + Kalshi fetch, priced
+        against the freshest SIG books (no storing, no directional signals)."""
+        prices = {}
+        for race in self.universe.races.values():
+            for leg in race.legs.values():
+                bk = self.fresh_book(leg.exchange_id, 300.0)   # a lagging SIG book is quiet: detection reads it up to
+                if bk:                                           # 5 min old (healthy feed, no resync); orders re-read REST
+                    prices[leg.exchange_id] = {"bestBid": bk["bids"][0]["price"] if bk.get("bids") else None,
+                                               "bestAsk": bk["asks"][0]["price"] if bk.get("asks") else None}
+        dr = self.direction
+        rows = list(getattr(dr, "rows", None) or [])
+        if rows and time.time() - float(rows[0].get("ts") or 0) < 15:
+            return rows                              # the directional poll just ran: no second fetch (Kalshi rate budget)
+        with dr.lock:                                # the map only; the fetch runs outside the lock so a venue's
+            dr._ensure_map()                         # 429 backoff never stalls the main cycle's directional poll
+        pmq, kq = dr.fetch_outside(pm=getattr(self, "shock_pm", None), ks=getattr(self, "shock_ks", None))
+        if not pmq or not kq:
+            return []                                # one venue down: no both-venue signal, no exits on stale outside
+        return dr.compute(prices, pmq, kq, time.time())
+
+    def shock_fast_mids(self) -> dict:
+        """{exchange_id: Polymarket midpoint sum} from one batched /midpoints call (no depth, no Kalshi: a trigger only)."""
+        dr = self.direction
+        tok_of = {}
+        for race in self.universe.races.values():
+            e = (dr.map.get("races") or {}).get(race.name) or {}
+            for party, ls in ((e.get("polymarket") or {}).get("legs") or {}).items():
+                leg = race.legs.get(party)
+                if leg is not None:
+                    tok_of[leg.exchange_id] = [l["token"] for l in ls if l.get("token")]
+        toks = sorted({t for ts in tok_of.values() for t in ts})
+        if not toks:
+            return {}
+        mids = (self.shock_pm or dr.pm).midpoints(toks)
+        return {ex: sum(mids[t] for t in ts) for ex, ts in tok_of.items() if ts and all(t in mids for t in ts)}
+
+    def shock_loop(self):
+        """Thread: one shock_tick every shock_poll_sec; never dies."""
+        while not self.stop:
+            t0 = time.time()
+            try:
+                self.shock_tick()
+            except Exception as e:
+                log.exception("shock tick failed: %s", e)
+            time.sleep(max(1.0, self.cfg.shock_poll_sec - (time.time() - t0)))
+
+    def shock_tick(self, rows: Optional[list] = None):
+        """Shock mode: exits first (60-min stop, convergence, outside give-back or disagreement, stop, 3 Nov flatten), then
+        pyramid adds and new entries. Exempt from the partisan cap (Sizhe 24 Oct); its positions still count in net D for
+        every other sleeve (risk.exposure reads venue positions). One order per exchange in flight (60 s TTL)."""
+        sk = self.shock
+        if sk is None or self.dry_run or self.store is None:
+            return
+        now = time.time()
+        fresh = rows is not None
+        if rows is None:
+            if now - self.shock_last_poll < self.cfg.shock_poll_sec - 0.5:
+                return
+            self.shock_last_poll = now
+            full = now - self.shock_last_full >= self.cfg.shock_full_sec - 0.5
+            if not full and now - self.shock_last_full >= SHK.FULL_MIN_GAP:
+                try:                                 # fast look: one batched Polymarket /midpoints call
+                    hot = self.shock_fast.update(self.shock_fast_mids(), now)
+                except Exception as e:               # VenueError, map not loaded yet: wait for the next full poll
+                    log.debug("shock fast check: %s", e)
+                    hot = []
+                if hot:
+                    full = True
+                    log.info("SHOCK fast detector: Polymarket jumped on %s: full poll now", hot[:4])
+            if full:
+                self.shock_last_full = now
+                rows = self.shock_rows()
+                self.shock_rows_last = rows
+                fresh = True
+            else:                                    # between full polls: exits use the last rows while < 45 s old
+                rows = [r for r in self.shock_rows_last if now - float(r.get("ts") or 0) < 45]
+        if rows and fresh:
+            sk.push(rows)
+        byex = {str(r["exchange_id"]): r for r in rows or [] if r.get("exchange_id")}
+        changed = False
+        with self.trade_lock:
+            if self.shock_unknown:
+                self.shock_claim(now)                # fills the main cycle ingested for our unknown-outcome orders
+            pnl, open_pos = self.shock_ledger()
+            if getattr(self, "shock_netted_dirty", False):
+                self.shock_netted_dirty = False
+                changed = True
+            if not sk.killed and sk.check_kill(pnl):
+                changed = True
+                log.warning("SHOCK: sleeve P&L %.1f at or below %.0f: stopped; open positions are being closed", pnl, sk.kill_pnl)
+            # in flight = sent within its own TTL (+5 s): entries 60 s, taker exits 15 s (the venue expires them; the
+            # open-orders cache is up to a cycle old and kept exits blocked for 90 s). Maker exits live in the context.
+            resting = {str(r["exchange_id"]) for r in self.store.rows(
+                "SELECT exchange_id FROM orders WHERE purpose='shock' AND status='open' AND placed_at > ?", (now - 65,))}
+            resting |= {str(r["exchange_id"]) for r in self.store.rows(
+                "SELECT exchange_id FROM orders WHERE purpose='shock_exit' AND status='open' AND placed_at > ?", (now - 20,))
+                if not any((c.get("maker") or {}).get("ex") == str(r["exchange_id"]) for c in sk.ctx.values())}
+            ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            xttl = (datetime.now(timezone.utc) + timedelta(seconds=15)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            def venue_qty(ex: str, q: float) -> Optional[int]:
+                """Shares we may close: the ledger's q, never more than the venue shows held on that side (the fills
+                ledger only moves when the main cycle ingests; review 24 Oct: stale ledger -> re-sent exits flipped)."""
+                if now - self.shock_vpos[0] > 3.0:
+                    m = self.shock_venue_positions()     # one positions read per tick, only when an exit is due
+                    self.shock_vfail = self.shock_vfail + 1 if m is None else 0
+                    self.shock_vpos = (now, m)           # a failure is cached too: one count per read, not per leg
+                if self.shock_vpos[1] is None:
+                    if now >= SHK.FLATTEN_AT and self.shock_vfail >= 6:
+                        return int(abs(q))               # past the flatten with positions unreadable for ~30 s: the ledger
+                    return None                          # read failed: unknown, never "flat" (review 3)
+                vpos = self.shock_vpos[1].get(ex, 0.0)
+                return int(min(abs(q), abs(vpos) if vpos * q > 0 else 0.0))
+            # ---- exits
+            maker_on = bool(getattr(self.cfg, "shock_exit_maker", False))
+            for ex, q in open_pos.items():
+                c = sk.ctx.get(ex) or {}
+                why = sk.exit_reason(ex, byex.get(ex), now, SHK.CONVERGE_WITH_MAKER if maker_on else SHK.CONVERGE)
+                mk = c.get("maker")                       # R3: our resting maker exit {id, ts, qty}
+                if mk and (why or now - mk["ts"] > 540 or abs(q) != mk["qty"]):
+                    # an exit rule fired, the position changed, or it is near its TTL: cancel before forgetting it (review
+                    # 3: two live makers). A failed cancel keeps it and retries every tick; no taker exit while it may rest
+                    # (review 4). It is dead once cancelled, once the venue says it is unknown/closed (4xx), or past its
+                    # 600-s TTL; it may have filled, so taker exits wait ~100 s for the ledger, and the venue clamp holds.
+                    dead = now - mk["ts"] > 610                # past its 600-s TTL the venue has expired it
+                    if not dead and mk.get("id") is None and why:   # outcome unknown (no id to cancel) and an exit is due:
+                        try:                                        # clear the leg, then hold for the ledger and the clamp
+                            self.api.cancel_all(exchange_id=ex)
+                            dead = True
+                            self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = now
+                        except Exception as e:
+                            log.warning("shock maker cancel-all %s: %s (retrying)", ex, e)
+                    oo_ts, oo_ok = getattr(self, "open_orders_read", (0.0, False))
+                    if not dead and oo_ok and mk.get("id") is not None and oo_ts > mk["ts"] + 5:   # a read begun after it: if
+                        oo = (getattr(self, "open_orders_cache", None) or {}).get(ex, [])   # not listed, it is gone (filled,
+                        if not any(str(o.get("id")) == str(mk["id"]) for o in oo):        # or a global cancel-all)
+                            dead = True
+                            self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = now
+                    if not dead and mk.get("id") is not None:
+                        try:
+                            self.api.cancel_order(mk["id"])
+                            self.store.mark_orders([mk["id"]], "cancelled")
+                            dead = True
+                            self.shock_exit_sent[ex] = now          # it may have part-filled: fresh fills before the taker
+                        except ApiError as e:
+                            if int(getattr(e, "status", 0) or 0) == 404:
+                                dead = True              # not found: already filled or closed (any other error: retry;
+                                self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = now    # 429/401/409... do not prove it is gone; review 5)
+                            log.warning("shock maker cancel %s: %s (%s)", ex, e, "gone" if dead else "retrying")
+                        except Exception as e:
+                            log.warning("shock maker cancel %s: %s (retrying)", ex, e)
+                    if dead:
+                        c.pop("maker", None)              # re-placed below on a later tick if still wanted
+                        changed = True
+                    continue
+                if ex in resting or self.shock_hold.get(ex, 0.0) > now:
+                    continue
+                if not why:
+                    if maker_on and not mk and c:
+                        mx = sk.maker_exit(ex, q)
+                        n = venue_qty(ex, q) if mx else 0
+                        if mx and n is not None and n >= 1:
+                            mttl = (datetime.now(timezone.utc) + timedelta(seconds=600)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                            resp, unknown = None, False
+                            self.shock_exit_sent[ex] = now
+                            try:
+                                resp = self.api.place_order(ex, mx[0], "buy", n, mx[1], expiration=mttl, key=self.api.new_key("shm"))
+                            except ApiError as e:
+                                st_ = int(getattr(e, "status", 0) or 0)
+                                unknown = st_ >= 500 or st_ == 409                    # may have been accepted
+                                log.warning("shock maker exit %s: %s%s", ex, e, " (outcome unknown)" if unknown else "")
+                                if not unknown:
+                                    self.shock_hold[ex] = now + 60.0              # a clean reject: no retry storm
+                            except Exception as e:
+                                unknown = True
+                                log.error("SHOCK maker exit %s: outcome unknown (%s)", ex, e)
+                            if resp is not None:
+                                self.store.record_order(resp.get("orderId"), ex, None, mx[0], "buy", mx[1], n, "shock_exit", response=resp)
+                                unknown = not resp.get("orderId")
+                            if unknown and not (resp or {}).get("orderId"):
+                                self.shock_unknown.append((ex, now, "shock_exit"))
+                            if resp is not None or unknown:  # a live (or possibly live) maker: one per leg until it is gone
+                                c["maker"] = {"id": (resp or {}).get("orderId"), "ts": now, "qty": abs(q), "ex": ex}
+                                changed = True
+                                log.info("SHOCK maker exit %s %s x%d @%.3f rests at the 70%% price%s", ex, mx[0], n, mx[1],
+                                         " (outcome unknown)" if unknown else "")
+                    continue
+                bk = self.fresh_book(ex, 30.0)
+                if not bk:
+                    try:
+                        bk = self.get_book(ex, 5)
+                    except ApiError as e:
+                        log.warning("shock exit book %s: %s", ex, e)
+                        continue
+                bid = bk["bids"][0]["price"] if bk.get("bids") else None
+                ask = bk["asks"][0]["price"] if bk.get("asks") else None
+                if (q > 0 and bid is None) or (q < 0 and ask is None):
+                    log.warning("SHOCK exit %s waits: no %s in the book (%s)", ex, "bid" if q > 0 else "ask", why)
+                    continue
+                if self.shock_exit_sent.get(ex, -1e18) + 16.0 >= self.shock_ingest_ts:   # per leg: a pull for the other
+                    # leg while this leg's 15-s exit could still fill does not cover it (review 8)
+                    # an exit (or maker) went out on this leg since our last fills pull: its partial fill is not in the
+                    # ledger yet, and the venue clamp alone would then size the next exit into other sleeves' shares on
+                    # the same side (an arb set's NO; review 7). Pull fills and re-size from the fresh ledger.
+                    if not self.shock_ingest():
+                        continue
+                    self.shock_ingest_ts = now                # an exit sent later in this same tick (>=) pulls again
+                    q = self.shock_ledger()[1].get(ex, 0.0)
+                    if abs(q) < 1:
+                        continue
+                n = venue_qty(ex, q)
+                if n is None:
+                    continue                          # positions unknown: try again next tick, never net on a failed read
+                if n < 1:
+                    last = self.store.rows("SELECT MAX(placed_at) t FROM orders WHERE exchange_id=? AND purpose IN ('shock','shock_exit')", (ex,))
+                    t_last = (last[0]["t"] if last else None) or 0.0       # sqlite3.Row: index, no .get
+                    if now - float(t_last) > 180:
+                        # before calling a residual netted: pull our own fills and re-read the venue, so an exit that
+                        # filled but was not ingested yet is seen as a fill, not as other sleeves' inventory (review 3)
+                        if not self.shock_ingest():
+                            continue                         # the fills read failed: the ledger may still be stale
+                        q2 = self.shock_ledger()[1].get(ex, 0.0)
+                        self.shock_vpos = (0.0, {})
+                        n2 = venue_qty(ex, q2) if abs(q2) >= 1 else None
+                        if n2 is not None and n2 < 1 and abs(q2) >= 1:
+                            sk.netted[ex] = sk.netted.get(ex, 0.0) + q2   # the venue holds nothing on our side: other
+                            changed = True                                # sleeves' inventory netted it; stop closing it
+                            log.warning("SHOCK %s: %+.0f ledger shares netted at the venue by other inventory; dropped", ex, q2)
+                    continue                          # the venue shows it closed already: wait for the ledger
+                walk = SHK.FLATTEN_WALK_TICKS if now >= SHK.FLATTEN_AT else SHK.EXIT_WALK_TICKS
+                if q > 0:
+                    side, px = "no", round(min(0.995, 1 - bid + walk * SHK.TICK), 3)
+                else:
+                    side, px = "yes", round(min(0.995, ask + walk * SHK.TICK), 3)
+                self.shock_exit_sent[ex] = now
+                try:
+                    resp = self.api.place_order(ex, side, "buy", n, px, expiration=xttl, key=self.api.new_key("shx"))
+                    self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, n, "shock_exit", response=resp)
+                    log.info("SHOCK exit %s %s x%d @%.3f (%s)", ex, side, n, px, why)
+                except ApiError as e:
+                    st_ = int(getattr(e, "status", 0) or 0)
+                    log.warning("shock exit %s: %s", ex, e)
+                    self.shock_hold[ex] = now + (20.0 if st_ >= 500 or st_ == 409 else 60.0)   # unknown: 20 s; reject: 60 s
+                    if st_ >= 500 or st_ == 409:
+                        self.shock_unknown.append((ex, now, "shock_exit"))
+                except Exception as e:               # unknown outcome: its fills are claimed for shock (shock_claim)
+                    log.error("SHOCK exit %s: outcome unknown (%s)", ex, e)
+                    self.shock_hold[ex] = now + 20.0
+                    self.shock_unknown.append((ex, now, "shock_exit"))
+            for ex in list(sk.ctx):
+                if ex not in open_pos and ex not in resting and now - sk.ctx[ex].get("ts", now) > 300:
+                    sk.ctx.pop(ex)                   # flat and settled: forget the entry context
+                    changed = True
+            # ---- entries and pyramid adds
+            ok = (fresh and not sk.killed and rows and now >= self.killed_until and self.feed_ok()
+                  and not strategy_paused(self, "shock"))   # strategy monitor / kill file: new entries and adds only, exits go on
+            if ok:
+                held = {}                            # race -> entry notional SENT (filled or not) since the shock began: the
+                bx = self.universe.by_exchange       # caps bind on what we committed, never on a mark
+                for ex, c in sk.ctx.items():
+                    if c.get("race"):
+                        held[c["race"]] = held.get(c["race"], 0.0) + float(c.get("spent", 0.0))
+                for ex, q in open_pos.items():       # a position without context (closing) still blocks its race's budget
+                    if ex not in sk.ctx and ex in bx:
+                        held[bx[ex][0]] = held.get(bx[ex][0], 0.0) + abs(q) * 0.5
+                open_races = {c.get("race") for c in sk.ctx.values()} | {bx[ex][0] for ex in open_pos if ex in bx}
+                todo = []
+                for ex, c in list(sk.ctx.items()):
+                    if ex in resting or ex not in open_pos:
+                        continue
+                    am = sk.add_move(ex, byex.get(ex), now)
+                    if am is not None:
+                        todo.append(("add", ex, c["race"], c["d"], am[1], {"full": am[0]}))
+                cf_held = cheapfav_races_of(self)    # cheap favourites hold to the call: the two ledgers never share a race
+                # nor a race the wind-down or the cash raise clipped in the last 30 min (shared exit lock): shock would buy
+                # what they just sold (and the wind-down exempts a shock race at once, so it would stop mid-race)
+                for sgl in [g for g in sk.signals(rows, now, open_races) if g["race"] not in cf_held
+                            and not Bot.exit_locked(self, g["race"], "shock", now=now)]:
+                    todo.append(("new", sgl["exchange_id"], sgl["race"], sgl["d"], min(abs(sgl["move"]), sgl["gap"]), sgl))
+                cleared = set()
+                cash_left = float(getattr(self, "cash", 0.0) or 0.0)   # free cash incl. the shock reserve (cash raise keeps
+                vnow = self.shock_venue_positions() if todo else {}   # >= shock_reserve free); one positions read per tick
+                for kind, ex, race, d, m, sgl in todo:
+                    if vnow is None:
+                        break                                # positions unknown: no entries or adds this tick
+                    vp = vnow.get(ex, 0.0)
+                    if (d > 0 and vp <= -1) or (d < 0 and vp >= 1):
+                        continue      # the venue holds the other side here (an arb set's NO, MM inventory): buying would net
+                                      # against it and the exit clamp would then break it (review 6)
+                    if ex in resting:
+                        continue
+                    if (kind == "new" and race not in cleared and race not in open_races
+                            and now - self.shock_cleared.get(race, -1e18) > SHK.EXIT_AFTER):
+                        self.shock_clear_race(race, now)     # once per shock, not on every retried entry
+                        self.shock_cleared[race] = now
+                        cleared.add(race)
+                    try:
+                        bk = self.get_book(ex, 20, max_age=10.0)   # feed if it moved in 10 s, else one REST read
+                    except ApiError as e:
+                        log.warning("shock book %s: %s", ex, e)
+                        continue
+                    if not bk or not bk.get("bids") or not bk.get("asks"):
+                        continue
+                    if bk["asks"][0]["price"] - bk["bids"][0]["price"] > SHK.SPREAD_MAX_TICKS * SHK.TICK + 1e-9:
+                        continue
+                    # re-check the lag on the authoritative book (review 4): a dropped feed topic can show SIG "lagging"
+                    # after it has already moved; never buy a touch that has copied the move
+                    fmid = (bk["asks"][0]["price"] + bk["bids"][0]["price"]) / 2
+                    if kind == "new":
+                        if (fmid - sgl["s_ref"]) * d >= SHK.SIG_FOLLOW_MAX * abs(sgl["move"]) or abs(fmid - sgl["mid"]) > 2 * SHK.TICK + 1e-9:
+                            log.info("SHOCK %s %s: SIG already at %.3f on the fresh book (feed said %.3f): no entry", race, ex, fmid, sgl["mid"])
+                            continue
+                        f_now = sgl["f_now"]
+                    else:
+                        if (fmid - sk.ctx[ex]["s_ref"]) * d >= SHK.ADD_STOP_COPY * m:
+                            continue
+                        r_ = byex.get(ex) or {}
+                        if r_.get("pm") is None or r_.get("kalshi") is None:
+                            continue
+                        f_now = (r_["pm"] + r_["kalshi"]) / 2
+                    fgap = (f_now - fmid) * d          # the gap still open on the authoritative book
+                    if fgap < SHK.GAP_MIN - 1e-9:
+                        continue
+                    m = min(m, fgap)                   # walk on the edge left
+                    full = abs(sgl["move"]) if kind == "new" else float(sgl["full"])
+                    s_ref_ = sgl["s_ref"] if kind == "new" else sk.ctx[ex]["s_ref"]
+                    conv = min(full, fgap + (fmid - s_ref_) * d)   # the most SIG can copy: up to the outside, not past it
+                    budget = min(sk.budget_left(race, held), max(0.0, cash_left - 50.0))   # never more than the free cash
+                    side, px, q = sk.plan(d, m, bk["asks"] if d > 0 else bk["bids"], budget)
+                    if not q:
+                        continue
+                    cost = q * max(px, SHK.SHARE_PRICE_FLOOR)   # spend counted on the same floor the shares were sized on
+                    resp, unknown = None, False
+                    try:
+                        resp = self.api.place_order(ex, side, "buy", q, px, expiration=ttl, key=self.api.new_key("shk"))
+                    except ApiError as e:
+                        st_ = int(getattr(e, "status", 0) or 0)
+                        unknown = st_ >= 500 or st_ == 409    # a 5xx / request-in-flight may have been accepted
+                        log.warning("shock %s %s: %s%s", kind, ex, e, " (outcome unknown)" if unknown else "")
+                        if not unknown:
+                            continue
+                    except Exception as e:           # timeout / connection: it may have been accepted, unrecorded
+                        unknown = True
+                        log.error("SHOCK %s %s: order outcome unknown (%s)", kind, ex, e)
+                    if resp is not None and not resp.get("orderId"):
+                        unknown = True                # accepted without an id: its fills cannot be attributed
+                        log.error("SHOCK %s %s: no orderId in the response", kind, ex)
+                    if resp is not None:
+                        self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, q, "shock", response=resp)
+                    if unknown:                       # count the budget as if it filled and stop trading the race
+                        log.error("SHOCK %s %s: race blocked, budget counted", kind, ex)
+                        cash_left -= q * px                  # ... and its cash as spent (review 12)
+                        self.cash = float(getattr(self, "cash", 0.0) or 0.0) - q * px
+                        if not (resp or {}).get("orderId"):
+                            self.shock_unknown.append((ex, now, "shock"))
+                        held[race] = held.get(race, 0.0) + cost
+                        sk.last_shock[race] = now
+                        if kind == "new":
+                            sk.ctx[ex] = {"ts": now, "race": race, "d": d, "f_ref": sgl["f_ref"], "s_ref": sgl["s_ref"],
+                                          "move": sgl["move"], "conv": conv, "spent": cost, "unknown": True}
+                        else:
+                            sk.ctx[ex]["spent"] = float(sk.ctx[ex].get("spent", 0.0)) + cost
+                            sk.ctx[ex]["unknown"] = True
+                        open_races.add(race)
+                        changed = True
+                        continue
+                    held[race] = held.get(race, 0.0) + cost
+                    cash_left -= q * px                  # what this order can spend, before the next order this tick
+                    self.cash = float(getattr(self, "cash", 0.0) or 0.0) - q * px   # and before the next cycle's refresh:
+                    # later ticks and the other sleeves (cheap favourites' floor) must not count the same cash (review 12)
+                    resting.add(ex)
+                    if kind == "new":
+                        sk.ctx[ex] = {"ts": now, "race": race, "d": d, "f_ref": sgl["f_ref"], "s_ref": sgl["s_ref"],
+                                      "move": sgl["move"], "conv": conv, "spent": cost}
+                        sk.last_shock[race] = now
+                        open_races.add(race)
+                    else:
+                        c = sk.ctx[ex]
+                        c["move"] = d * max(abs(c["move"]), full)   # the stored move only rises: the add gate and the
+                        c["conv"] = max(float(c.get("conv", 0.0)), conv)   # hoax exit never loosen (review 10)
+                        c["spent"] = float(c.get("spent", 0.0)) + cost
+                    changed = True
+                    log.warning("SHOCK %s %s %s %s x%d @%.3f: outside moved %+.1f pts, gap-limited edge %.1f, walk %d ticks",
+                                "enter" if kind == "new" else "add", race, ex, side, q, px, 100 * d * full, 100 * m, SHK.walk_ticks(m))
+            self.shock_publish_races()
+            if changed or sk.killed:
+                try:
+                    tmp = self.shock_state_path + ".tmp"
+                    with open(tmp, "w") as f:
+                        json.dump(sk.to_json(), f)
+                    os.replace(tmp, self.shock_state_path)
+                except OSError as e:
+                    log.warning("shock state: %s", e)
+
+    def shock_clear_race(self, race: str, now: float):
+        """Before the first sweep: cancel every resting order of ours on the race's legs (no self-trade, and our MM's stale
+        side would be picked off) and keep the MM out of the race until the shock's time stop has passed."""
+        r = self.universe.races.get(race)
+        if r is None:
+            return
+        for ex in r.exchange_ids:
+            try:
+                self.api.cancel_all(exchange_id=ex)
+                ids = [o["id"] for o in (getattr(self, "open_orders_cache", None) or {}).get(ex, []) if o.get("id")]
+                if ids:
+                    self.store.mark_orders(ids, "cancelled")
+            except ApiError as e:
+                log.warning("shock cancel-all %s: %s", ex, e)
+        try:
+            with self.store.lock:                    # one read-modify-write: the news sweeper and the MM write this key too
+                pause = dict(self.store.get_param("news_pause", {}) or {})
+                until = now + SHK.EXIT_AFTER + 300
+                for ex in r.exchange_ids:
+                    pause[ex] = max(float(pause.get(ex, 0.0)), until)
+                self.store.set_param("news_pause", pause)
+        except Exception as e:
+            log.warning("shock MM pause %s: %s", race, e)
+
 
     def volatile_cycle(self):
         """research_notes/volatile_moves.md: after a sweep of 5+ ticks, quotes on the retrace side lost about 1 tick over the
@@ -2894,9 +3478,26 @@ class Bot:
             # read by the scanner thread (free unwinds between cycles); set under the lock: set after it, a scanner unwind
             # (and its in-lock refresh) in between was overwritten by these older positions
             self.positions_snapshot = positions
+            # shock mode's own marked P&L, read in the same snapshot: left out of the kill switch's drawdown (thresholds
+            # unchanged) because walking 2-4 ticks into a 20k shock marks ~-600 at once and would trip the 400 drawdown
+            # kill on every entry; the sleeve has its own stop (shock_kill)
+            shock_pnl = 0.0
+            if self.shock is not None:
+                try:
+                    if self.shock.ctx or self.shock_open:
+                        self.ingest_fills()          # the venue snapshot already holds the shock's fills: match the ledger
+                    shock_pnl = self.shock_ledger(getattr(self, "venue_mark", None))[0]
+                    self.shock_pnl_last = shock_pnl
+                except Exception as e:                   # keep the last good value: 0 would jump equity by the sleeve's
+                    log.warning("shock ledger for health: %s", e)   # whole P&L and could trip the drawdown kill (review 6)
+                    shock_pnl = getattr(self, "shock_pnl_last", 0.0)
+        oo_t0 = time.time()
         open_orders = self.open_orders_map()
         self.open_orders_cache = open_orders
         self.open_orders_ts = time.time()
+        # (read START time, success), set with the cache: shock mode trusts an order's absence only from a successful
+        # read that began after the order was placed
+        self.open_orders_read = (oo_t0, bool(getattr(self, "open_orders_ok", True)))
         self.load_allocation()
         self.feed_watchdog()
         cycle_id = self.store.new_cycle(cycle_cash, pos_value, n_pos, sum(len(v) for v in open_orders.values()),
@@ -3014,7 +3615,7 @@ class Bot:
         self.update_bars(prices)
         self.mm.meanrev_pred = self.meanrev_predictions(self.mm.quoted)
         self.mm.prices = prices
-        hl = self.health(cycle_cash + pos_value + cycle_adj, cycle_id)
+        hl = self.health(cycle_cash + pos_value + cycle_adj - shock_pnl, cycle_id)
         self.wd_drawdown = float(hl.get("drawdown") or 0.0)       # the wind-down's budget past a fallback uses the kill headroom
         killed = time.time() < self.killed_until
         if not killed and (hl["drawdown"] > self.cfg.kill_drawdown or (hl["n_markout"] >= 20 and hl["markout30"] is not None and hl["markout30"] < self.cfg.kill_markout_ticks)):
@@ -3164,8 +3765,8 @@ class Bot:
             if self.arb.committed and time.time() - self.last_free_unwind > self.cfg.free_unwind_every_sec:
                 self.last_free_unwind = time.time()
                 held_books = {}
-                cf_races = cheapfav_races_of(self)       # a cheap-favourite NO next to another sleeve's NO is not a set
-                for rname in list(self.arb.committed):
+                cf_races = cheapfav_races_of(self) | shock_races_of(self)   # a cheap-favourite or shock position next to
+                for rname in list(self.arb.committed):                  # another sleeve's NO is not a set
                     if rname in cf_races:
                         continue
                     try:
@@ -3246,6 +3847,9 @@ class Bot:
             self.scanner = ArbScanner(self)
             self.scanner.start()
             log.info("arb scanner started: every %.1fs at +%.1fs offset", self.cfg.arb_scan_sec, self.cfg.arb_scan_offset)
+        if self.shock is not None and not self.dry_run and not once:
+            threading.Thread(target=self.shock_loop, name="shock", daemon=True).start()
+            log.info("shock mode thread started: every %.0fs", self.cfg.shock_poll_sec)
         while not self.stop:
             start = time.time()
             try:

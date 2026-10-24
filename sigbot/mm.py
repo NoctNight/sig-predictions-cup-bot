@@ -176,10 +176,11 @@ class MarketMaker:
         if self.store is None:
             return {}
         now = time.time()
-        raw = self.store.get_param("news_pause", {}) or {}
-        live = {ex: float(t) for ex, t in raw.items() if float(t) > now}
-        if len(live) != len(raw):
-            self.store.set_param("news_pause", live)
+        with self.store.lock:                        # read-modify-write shared with news and shock mode
+            raw = self.store.get_param("news_pause", {}) or {}
+            live = {ex: float(t) for ex, t in raw.items() if float(t) > now}
+            if len(live) != len(raw):
+                self.store.set_param("news_pause", live)
         return live
 
     def paused_sides(self, ex: str) -> set:

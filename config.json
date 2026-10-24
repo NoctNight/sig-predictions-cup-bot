@@ -147,5 +147,12 @@
     "Rhode Island Governor"
   ],
   "raise_ri_trim_sets": 4500.0,
-  "wind_down_enabled": true
+  "wind_down_enabled": true,
+  "shock_enabled": true,
+  "shock_per_shock": 40000.0,
+  "shock_total": 40000.0,
+  "shock_kill": -2500.0,
+  "shock_poll_sec": 5.0,
+  "shock_full_sec": 30.0,
+  "shock_exit_maker": true
 }

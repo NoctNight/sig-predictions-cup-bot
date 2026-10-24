@@ -739,10 +739,11 @@ class NewsSweeper:
 
     def pause_race(self, race: str):
         until = _now() + self.cfg.mm_pause_sec
-        cur = self.store.get_param("news_pause", {}) or {}
-        for leg in self.u.races[race].legs.values():
-            cur[leg.exchange_id] = max(float(cur.get(leg.exchange_id, 0)), until)
-        self.store.set_param("news_pause", cur)
+        with self.store.lock:                        # read-modify-write shared with the MM and shock mode
+            cur = self.store.get_param("news_pause", {}) or {}
+            for leg in self.u.races[race].legs.values():
+                cur[leg.exchange_id] = max(float(cur.get(leg.exchange_id, 0)), until)
+            self.store.set_param("news_pause", cur)
         log.info("news: market maker paused on %s until %s", race, _iso(until))
 
     def followups(self, prices: dict[str, dict]):

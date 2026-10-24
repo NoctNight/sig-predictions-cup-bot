@@ -245,6 +245,14 @@ class BotConfig:
     raise_ri_trim_gap_sec: float = 1800.0   # trailing 24-h median exit cost ("level 0") and at no realised loss
     shock_reserve: float = 15000.0       # with shock_enabled: free cash kept for shock mode only (every other sleeve's floor sits
                                          # on top of it); the cash raise refills it with tier 1 (Sizhe 24 Oct)
+    shock_enabled: bool = False          # shock mode (proposals/shock_mode.py): both-venue 5+ pt jumps, SIG lagging; exempt from
+    shock_poll_sec: float = 5.0          # the partisan cap (Sizhe 24 Oct). Its own thread: a batched Polymarket /midpoints check
+    shock_full_sec: float = 30.0         # every shock_poll_sec, a full two-venue poll every shock_full_sec or at once on a 3-pt move
+    shock_per_shock: float = 20000.0     # notional per shocked race (both legs), see research_notes/shock_mode.md
+    shock_total: float = 20000.0         # notional open across all shocks (one race at a time)
+    shock_kill: float = -1500.0          # sleeve P&L stop: entries off, open positions closed
+    shock_exit_maker: bool = False       # R3: rest the exit at the 70%-convergence price (the DMM's walk fills it) instead of
+                                         # taking the bid at convergence; any exit rule cancels it and takes. Off: see shock_mode.md
     election_per_race_cap: float = 5000.0
     election_total_cap: float = 90000.0
     election_poll_sec: float = 4.0
