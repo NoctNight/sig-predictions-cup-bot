@@ -48,10 +48,17 @@ from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
 from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
+from .proposals import cheap_favourites as CF
 from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround, big_holding,
                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
 from .proposals import election_night as EN
 from .proposals.own_book import OwnLevels
+
+
+def cheapfav_races_of(bot) -> set:
+    """Races the cheap-favourites sleeve holds (empty when the sleeve is not wired, e.g. on test stubs)."""
+    f = getattr(bot, "cheapfav_races", None)
+    return f() if callable(f) else set()
 
 
 class ExplainedDirection(DirectionTrader):
@@ -421,9 +428,10 @@ class ArbScanner(threading.Thread):
         if time.time() - b.last_free_unwind < b.cfg.free_unwind_scan_sec:
             return
         held = {}
+        cf_races = cheapfav_races_of(b)                  # a cheap-favourite NO next to another sleeve's NO is not a set
         for rname in list(b.arb.committed):
             race = b.universe.races.get(rname)
-            if race is None:
+            if race is None or rname in cf_races:
                 continue
             fb = {ex: b.fresh_book(ex, 30.0) for ex in race.exchange_ids}
             if all(v is not None for v in fb.values()):
@@ -507,6 +515,18 @@ class Bot:
                 log.info("catchup: %d stored quote rows loaded as history (%d legs)", len(boot), len({r["exchange_id"] for r in boot}))
             except Exception as e:
                 log.warning("catchup history load: %s", e)
+        self.cheapfav = None
+        if getattr(cfg, "cheapfav_enabled", False):
+            same = CF.same_terms_exchanges(os.path.join(HERE, "data", "research_contract_rules", "tc_mapping.json"))
+            if same is None:
+                log.warning("cheapfav: data/research_contract_rules/tc_mapping.json missing: sleeve stays off")
+            else:
+                self.cheapfav = CF.CheapFavourites(budget=cfg.cheapfav_budget, min_edge=cfg.cheapfav_min_edge, leg_cap=cfg.cheapfav_leg_cap,
+                                                   order_notional=cfg.cheapfav_order_notional, cash_floor=cfg.cheapfav_cash_floor,
+                                                   hold_limit=getattr(cfg, "churn_skip_holding", 4000.0) or 4000.0, same_terms=same,
+                                                   net_max=cfg.cheapfav_net_max, headroom=cfg.cheapfav_headroom)
+                log.warning("CHEAPFAV sleeve enabled: budget %.0f, min edge %.3f, %.0f per leg, %d same-terms legs",
+                            cfg.cheapfav_budget, cfg.cheapfav_min_edge, cfg.cheapfav_leg_cap, len(same))
         self.churn = (DevChurn(capital=cfg.churn_capital, cash_floor=cfg.churn_cash_floor, kill=cfg.churn_kill)
                       if getattr(cfg, "churn_enabled", False) else None)
         self.churn_state_path = os.path.join(HERE, "params", "churn_state.json")
@@ -532,6 +552,17 @@ class Bot:
         if self.churn is not None:
             self.arb.protected = lambda: {l["race"] for l in self.churn.lots}
             self.arb.no_buy = self.churn_no_buy
+        self.cheapfav_open: dict = {}
+        self.cheapfav_skip: dict = {}            # exchange -> until: an entry whose response had no orderId (ledger blind)
+        if self.cheapfav is not None:
+            # races holding cheap-favourite positions are never unwound by the recycler / free unwinds / offload: a cheapfav
+            # R-NO next to another sleeve's D-NO looks like an arb set to every set path (review 24 Oct)
+            _prot = self.arb.protected
+            self.arb.protected = lambda: set(_prot()) | self.cheapfav_races()
+            try:
+                self.cheapfav_refresh()
+            except Exception as e:
+                log.warning("cheapfav ledger at start-up: %s", e)
         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
         self.tilt = TiltHarvester(self.api, self.store, cfg.tilt, self.universe, cfg.starting_cash, dry_run)
@@ -1132,6 +1163,8 @@ class Bot:
                 race = self.universe.races.get(rname)
                 if race is None or len(race.exchange_ids) != 2 or rname in CHURN_EXCLUDE or ch.held(rname) > 0:
                     continue
+                if rname in cheapfav_races_of(self):
+                    continue                                   # cheap-favourite NO legs are not sets: held to the call
                 n = venue_sets(race)
                 if n <= 0:
                     continue
@@ -1150,6 +1183,8 @@ class Bot:
             for race in self.universe.races.values():
                 if not ch.eligible(race, now) or race.name in self.arb.hostile or self.arb.cooldown.get(race.name, 0) > now:
                     continue
+                if race.name in cheapfav_races_of(self):
+                    continue                                   # cheap-favourite race: the two ledgers stay apart
                 med = self.churn_med.get(race.name)
                 if med is None:
                     continue
@@ -1225,9 +1260,11 @@ class Bot:
         log.info("order books saved: %d markets -> data/books_latest.json", len(books))
 
     def mm_positions(self, positions: dict) -> dict:
-        """Positions the MM manages: the venue's, minus the catch-up sweep's own open positions (the MM used to count
-        them as inventory and skew to unload them before they converged; review 23 Oct)."""
-        cu = getattr(self, "catchup_open", None) or {}
+        """Positions the MM manages: the venue's, minus the catch-up sweep's and the cheap-favourites sleeve's own open
+        positions (the MM used to count them as inventory and skew to unload them before they converged; review 23 Oct)."""
+        cu = dict(getattr(self, "catchup_open", None) or {})
+        for ex, q in (getattr(self, "cheapfav_open", None) or {}).items():   # held to the call: not MM inventory either
+            cu[ex] = cu.get(ex, 0.0) + q
         if not cu:
             return positions
         return {ex: q - cu.get(ex, 0.0) for ex, q in positions.items()}
@@ -1340,6 +1377,157 @@ class Bot:
                 os.replace(tmp, self.catchup_state_path)
             except OSError as e:
                 log.warning("catchup state: %s", e)
+
+    def cheapfav_races(self) -> set:
+        """Races where the cheap-favourites sleeve holds a position (its ledger, rebuilt from fills)."""
+        bx = self.universe.by_exchange
+        return {bx[ex][0] for ex in (getattr(self, "cheapfav_open", None) or {}) if ex in bx}
+
+    def cheapfav_refresh(self):
+        race_of = {ex: (r[0], r[1]) for ex, r in self.universe.by_exchange.items()}
+        fills = [dict(r) for r in self.store.rows("SELECT order_id, exchange_id, quantity, price FROM fills WHERE purpose IN ('cheapfav','cheapfav_exit') "
+                                                  "AND price IS NOT NULL ORDER BY filled_at")]
+        open_pos, _cost, held, deployed = CF.ledger(fills, race_of)
+        self.cheapfav_open = dict(open_pos)          # the MM excludes these from its inventory; the set paths leave their races alone
+        return fills, race_of, open_pos, held, deployed
+
+    def cheapfav_cycle(self, dir_summary: dict, positions: dict, prices: dict, killed: bool):
+        """Cheap safe favourites (proposals/cheap_favourites.py): exits only on a reversed edge, then entries on a fresh
+        directional poll. The ledger is the fills table (purposes cheapfav / cheapfav_exit), so a restart cannot lose a
+        position. One order per exchange in flight (60 s TTL); at most 3 entries per poll."""
+        cf = self.cheapfav
+        if cf is None or self.dry_run or self.store is None:
+            return
+        now = time.time()
+        rows = getattr(self.direction, "rows", None) or []
+        byex = {str(r["exchange_id"]): r for r in rows if r.get("exchange_id")}
+        fills, race_of, open_pos, held, deployed = self.cheapfav_refresh()
+        # entry orders of the last 3 min (60 s TTL + ingest lag) not yet in the fills table count as held: a lagging fill
+        # ingest must not let the sleeve buy the same leg twice, and their notional counts on the partisan axis (review 24 Oct)
+        filled_by_order: dict = {}
+        for f in fills:
+            k = str(f.get("order_id"))
+            filled_by_order[k] = filled_by_order.get(k, 0.0) + abs(float(f["quantity"]))
+        recent = [dict(r) for r in self.store.rows("SELECT order_id, exchange_id, side, price, quantity FROM orders WHERE purpose='cheapfav' "
+                                                   "AND placed_at > ?", (now - 180,))]
+        pend, pend_total = CF.pending(recent, filled_by_order, race_of)
+        own_filled = sum(x if k[1] == "D" else -x for k, x in held.items())       # the sleeve's filled net D cost
+        for k, x in pend.items():
+            held[k] = held.get(k, 0.0) + x
+        deployed += pend_total
+        # partisan: pending counted one-sided (D only against D adds, R only against R adds; review 24 Oct)
+        cf_pend = (own_filled, sum(x for k, x in pend.items() if k[1] == "D"), sum(x for k, x in pend.items() if k[1] == "R"))
+        resting = {str(r["exchange_id"]) for r in self.store.rows(
+            "SELECT exchange_id FROM orders WHERE purpose IN ('cheapfav','cheapfav_exit') AND status='open' AND placed_at > ?", (now - 90,))}
+        cf_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose IN ('cheapfav','cheapfav_exit') AND placed_at > ?",
+                                                             (now - 6 * 3600,))}
+        for ex_o, lst in (self.open_orders_cache or {}).items():
+            if any(str(o.get("id")) in cf_ids for o in lst):
+                resting.add(str(ex_o))                 # the venue still shows one of our orders resting here
+        ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        lock = getattr(self, "trade_lock", None)
+        if lock is None:
+            self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary)
+            return
+        with lock:                                   # the scanner thread trades sets between cycles: read its snapshot here
+            self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary)
+
+    def _cheapfav_trade(self, cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary):
+        positions = getattr(self, "positions_snapshot", None) or positions
+        # one exit per leg per 5 min, filled or not: if the fill ingest fails after an exit filled, the ledger still shows
+        # the holding and a second exit would flip it (review 24 Oct); a reversed edge is not urgent
+        exited = {str(r["exchange_id"]) for r in self.store.rows(
+            "SELECT exchange_id FROM orders WHERE purpose='cheapfav_exit' AND placed_at > ?", (now - 300,))}
+        for ex, q in open_pos.items():
+            if ex in resting or ex in exited or ex not in race_of:
+                continue
+            why = cf.exit_reason(ex, q, byex.get(ex), race_of[ex][0], now)
+            if not why:
+                continue
+            bk = self.fresh_book(ex, 10.0)
+            if not bk:
+                continue                               # a reversed edge is not urgent: wait for a fresh book
+            # close exactly the sleeve's own holding (its fills ledger), not the venue's net position: other sleeves trade the
+            # same legs (the MM and lag-follow can be net short where this sleeve is long), every sleeve keeps its own ledger,
+            # and mm_positions subtracts this one's, so closing the ledger quantity keeps all books consistent. Clamping to
+            # the venue's net (sim cheapfav, 24 Oct: ledger +174 YES, venue -1,426 after a lag-follow short) blocks the exit.
+            n = int(abs(q))
+            if q > 0 and bk.get("bids") and n >= 1 and bk["bids"][0]["price"] - byex[ex]["fair"] >= CF.REVERSE - 1e-9:
+                side, px = "no", round(1 - bk["bids"][0]["price"], 3)
+            elif q < 0 and bk.get("asks") and n >= 1 and byex[ex]["fair"] - bk["asks"][0]["price"] >= CF.REVERSE - 1e-9:
+                side, px = "yes", round(bk["asks"][0]["price"], 3)
+            else:
+                continue
+            try:
+                resp = self.api.place_order(ex, side, "buy", n, px, expiration=ttl, key=self.api.new_key("cfx"))
+                self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, n, "cheapfav_exit", response=resp)
+                log.info("CHEAPFAV exit %s %s x%d @%.3f (%s)", ex, side, n, px, why)
+            except ApiError as e:
+                log.warning("cheapfav exit %s: %s", ex, e)
+        if killed or not dir_summary.get("polled") or now > cf.last_entry or not positions:
+            return                                   # no positions (read failed): every holding guard would be blind
+        race_legs = {r.name: list(r.exchange_ids) for r in self.universe.races.values()}
+        ch = getattr(self, "churn", None)               # races the high-frequency arb holds sets in: its ledger books what
+        skip = getattr(self, "cheapfav_skip", None) or {}
+        # the catch-up sweep has priority: never trade a race where it holds a position or an entry context
+        cu_ex = set(getattr(self, "catchup_open", None) or {}) | set(getattr(getattr(self, "catchup", None), "ctx", None) or {})
+        cu_races = {self.universe.by_exchange[e][0] for e in cu_ex if e in self.universe.by_exchange}
+        cands = [c for c in cf.candidates(rows, positions, race_legs) if c["exchange_id"] not in resting   # the venue shows,
+                 and not (ch is not None and ch.held(c["race"])) and skip.get(c["exchange_id"], 0) <= now   # keep them apart
+                 and c["race"] not in cu_races]
+        if not cands:
+            return
+        touch = {}
+        for c in cands:
+            bk = self.fresh_book(c["exchange_id"], 10.0)
+            if not bk:
+                continue
+            if c["side"] == "yes" and bk.get("asks"):
+                touch[c["exchange_id"]] = (bk["asks"][0]["price"], bk["asks"][0]["quantity"])
+            elif c["side"] == "no" and bk.get("bids"):
+                touch[c["exchange_id"]] = (round(1 - bk["bids"][0]["price"], 3), bk["bids"][0]["quantity"])
+        # the book's net D from a positions read made now, under the lock: the catch-up sweep, the direction sleeve and the
+        # scanner may have traded since the cycle started (review 24 Oct: a stale snapshot let the book pass 5,000)
+        fr = getattr(self, "fresh_positions", None)
+        if callable(fr):
+            fresh = fr()
+            if fresh is None:
+                return                                   # read failed: no entries this cycle
+            positions = fresh
+        expo = risk.exposure(self.universe, positions, prices)
+        # unfilled entry orders of the directional sleeves, one-sided like ours: placed in the last 330 s (the longest TTL,
+        # the inside quoter's 300 s) or still resting at the venue (tilt orders can rest for hours); review 24 Oct
+        resting_ids = {str(o.get("id")) for lst in (getattr(self, "open_orders_cache", None) or {}).values() for o in lst}
+        others = [dict(r) for r in self.store.rows("SELECT order_id, exchange_id, side, quantity, price, placed_at FROM orders WHERE purpose IN "
+                                                   "('catchup','direction','tilt','inside') AND (placed_at > ? OR status='open')", (now - 330,))]
+        others = [o for o in others if float(o.get("placed_at") or 0) > now - 330 or str(o.get("order_id")) in resting_ids]
+        o_filled: dict = {}
+        if others:
+            for f in self.store.rows("SELECT order_id, quantity FROM fills WHERE purpose IN ('catchup','direction','tilt','inside') "
+                                     "AND ingested_at > ?", (now - 6 * 3600,)):
+                o_filled[str(f["order_id"])] = o_filled.get(str(f["order_id"]), 0.0) + abs(float(f["quantity"]))
+        pend_d, pend_r = cf_pend[1], cf_pend[2]
+        for o in others:
+            left = float(o["quantity"]) - o_filled.get(str(o.get("order_id")), 0.0)
+            d = risk.adds(self.universe, str(o["exchange_id"]), o["side"])
+            if left >= 1 and d in ("D", "R"):
+                n = left * float(o["price"])
+                pend_d, pend_r = (pend_d + n, pend_r) if d == "D" else (pend_d, pend_r + n)
+        orders = cf.entries(cands, held, deployed, self.cash, now, touch, positions, expo.net_d_notional,
+                            cap=self.cfg.mm.portfolio_max_partisan_notional, pend=(pend_d, pend_r), own=cf_pend,
+                            blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()))   # the bot's block this cycle
+        for o in orders:
+            try:
+                resp = self.api.place_order(o["exchange_id"], o["side"], "buy", o["qty"], o["price"], expiration=ttl, key=self.api.new_key("cf"))
+                self.store.record_order(resp.get("orderId"), o["exchange_id"], None, o["side"], "buy", o["price"], o["qty"], "cheapfav", response=resp)
+                if resp.get("orderId") is None:          # its fill cannot be attributed: never buy this leg again blind
+                    self.cheapfav_skip = dict(getattr(self, "cheapfav_skip", None) or {}, **{o["exchange_id"]: now + 3600})
+                    log.error("CHEAPFAV entry %s: no orderId in the response; leg skipped for 1 h", o["exchange_id"])
+                self.cash -= o["notional"]
+                log.info("CHEAPFAV enter %s %s (%s %s) x%d @%.3f: fair %.3f, edge %.1fc", o["race"], o["win_party"], o["exchange_id"], o["side"],
+                         o["qty"], o["price"], o["p_win"], 100 * (o["p_win"] - o["price"]))
+            except ApiError as e:
+                log.warning("cheapfav entry %s: %s", o["exchange_id"], e)
 
     def volatile_cycle(self):
         """research_notes/volatile_moves.md: after a sweep of 5+ ticks, quotes on the retrace side lost about 1 tick over the
@@ -1886,6 +2074,13 @@ class Bot:
         self.mm.xv_fair = {r["exchange_id"]: (r.get("fair"), r.get("pm"), r.get("kalshi"), r.get("ts") or time.time())
                            for r in (getattr(self.direction, "rows", None) or []) if r.get("fair") is not None and r.get("exchange_id")}
 
+        # ---- cheap safe favourites: buy fast-count favourites SIG prices >= 2c under the outside fair, hold to the call
+        if self.cheapfav is not None:
+            try:
+                self.cheapfav_cycle(dir_summary, positions, prices, killed)
+            except Exception as e:                   # the sleeve must never kill the loop
+                log.exception("cheapfav cycle failed: %s", e)
+
         # ---- volatile moves: pause the MM's retrace side after a 5+ tick move (verified), paper-log the move trades
         if self.feed_ok():
             try:
@@ -1906,7 +2101,10 @@ class Bot:
             if self.arb.committed and time.time() - self.last_free_unwind > self.cfg.free_unwind_every_sec:
                 self.last_free_unwind = time.time()
                 held_books = {}
+                cf_races = cheapfav_races_of(self)       # a cheap-favourite NO next to another sleeve's NO is not a set
                 for rname in list(self.arb.committed):
+                    if rname in cf_races:
+                        continue
                     try:
                         held_books[rname] = {ex: self.get_book(ex, 50) for ex in self.universe.races[rname].exchange_ids}
                     except ApiError as e:

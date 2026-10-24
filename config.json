@@ -128,5 +128,13 @@
   "churn_capital": 4000.0,
   "churn_cash_floor": 3000.0,
   "churn_kill": -200.0,
-  "churn_skip_holding": 4000.0
+  "churn_skip_holding": 4000.0,
+  "cheapfav_enabled": true,
+  "cheapfav_budget": 15000.0,
+  "cheapfav_min_edge": 0.02,
+  "cheapfav_leg_cap": 2000.0,
+  "cheapfav_order_notional": 500.0,
+  "cheapfav_cash_floor": 1000.0,
+  "cheapfav_net_max": 2000.0,
+  "cheapfav_headroom": 1000.0
 }

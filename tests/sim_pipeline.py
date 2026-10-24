@@ -104,6 +104,10 @@ def make_sandbox() -> str:
         src = os.path.join(ROOT, "data", f)
         if os.path.exists(src):
             shutil.copyfile(src, os.path.join(sb, "data", f))   # copyfile: fresh mtime, so the volume cache counts as recent
+    tc = os.path.join(ROOT, "data", "research_contract_rules", "tc_mapping.json")
+    if os.path.exists(tc):                                        # the cheap-favourites sleeve trades same-terms legs only
+        os.makedirs(os.path.join(sb, "data", "research_contract_rules"))
+        shutil.copyfile(tc, os.path.join(sb, "data", "research_contract_rules", "tc_mapping.json"))
     return sb
 
 
@@ -805,6 +809,82 @@ class Catchup(Scenario):
             if abs(pos.get(ex, 0.0)) >= 1:
                 sim.chk.violation("catchup_noise_held", f"{ex}: catch-up position still open after the outside move reverted")
         self.summary = {"entries": len(entries), "exits": len(calls) - len(entries), "open_at_end": {e: q for e, q in pos.items() if abs(q) >= 1}}
+
+
+class CheapFav(Scenario):
+    name, cycles, seed = "cheapfav", 240, 31
+    cfg = {"cheapfav_enabled": True, "cheapfav_budget": 6000.0, "cheapfav_leg_cap": 1500.0}
+    doc = "cheap safe favourites: the outside fair de-compresses SIG's mids (favourites 2-5c cheap on SIG); buy fast-count favourites only (same terms, p >= 0.80, edge >= 2c, no punt or slow-count race), <= 6k in total and 1.5k per race outcome, never past 4,000 shares on a leg; at cycle 150 the outside fair of one held leg falls 4c under SIG: exit that leg only"
+
+    def before_cycle(self, sim, i):
+        v = sim.v
+        if i == 150:
+            held = getattr(sim.bot, "cheapfav_open", None) or {}
+            self.reversed = None
+            for ex, q in sorted(held.items()):
+                race = sim.universe.race_of(ex)
+                if race is None or len(race.legs) != 2:
+                    continue
+                other = [e for e in race.exchange_ids if e != ex][0]
+                if q > 0:                                       # held YES: fair falls 4c under SIG's bid
+                    v.outside[ex] = round(SV.P(v.bid_t[ex]) - 0.04, 4)
+                else:                                           # held NO: fair rises 4c over SIG's ask
+                    v.outside[ex] = round(SV.P(v.ask_t[ex]) + 0.04, 4)
+                v.outside[other] = round(1 - v.outside[ex], 4)
+                self.reversed, self.t_rev = ex, v.now
+                break
+
+    def final_checks(self, sim):
+        CF = sim.M["cheap_favourites"]
+        same = CF.same_terms_exchanges(os.path.join(sim.sb, "data", "research_contract_rules", "tc_mapping.json")) or set()
+        calls = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] in ("cf", "cfx")]
+        entries = [c for c in calls if c["prefix"] == "cf"]
+        exits = [c for c in calls if c["prefix"] == "cfx"]
+        if not entries:
+            sim.chk.violation("cheapfav_none", "no cheap-favourite entry although SIG's favourites sit 2-5c under the outside fair")
+        rev = getattr(self, "reversed", None)
+        for c in entries:
+            race = sim.universe.race_of(c["ex"])
+            st = CF.race_state(race.name) if race else None
+            if race is None or c["ex"] not in same or st not in CF.FAST_CLOSE_ET or race.name in CF.PUNT_RACES or "I" in race.legs:
+                sim.chk.violation("cheapfav_bad_leg", f"{c['key']} {c['ex']} ({race.name if race else '?'}): not a same-terms fast-count two-party race")
+                continue
+            if c["ex"] == rev and c["t"] >= self.t_rev:
+                sim.chk.violation("cheapfav_after_reversal", f"{c['key']} bought {c['ex']} after its edge reversed")
+            if c["ex"] != rev or c["t"] < self.t_rev:
+                f = sim.v.outside[c["ex"]] if c["ex"] != rev else None
+                if f is not None:
+                    p_win = f if c["side"] == "yes" else 1 - f
+                    if p_win < 0.80 - 1e-9 or p_win - c["price"] < 0.02 - 1e-9:
+                        sim.chk.violation("cheapfav_no_edge", f"{c['key']} {c['ex']} {c['side']} @{c['price']}: P(win) {p_win:.3f}, edge {p_win - c['price']:.3f}")
+            after = c["pos_before"] + (c["qty"] if c["side"] == "yes" else -c["qty"])
+            if abs(after) > 4000 + 1e-9:
+                sim.chk.violation("cheapfav_over_4000", f"{c['key']} {c['ex']}: leg position {after:+.0f} shares > 4,000")
+        fills = [dict(r) for r in sim.bot.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('cheapfav','cheapfav_exit') ORDER BY filled_at")]
+        race_of = {ex: r for ex, r in sim.universe.by_exchange.items()}
+        tot, per = 0.0, {}
+        for f in fills:
+            q, p = float(f["quantity"]), float(f["price"])
+            if any(e["ex"] == f["exchange_id"] for e in exits) and f["exchange_id"] == rev:
+                continue
+            paid = q * p if q > 0 else -q * (1 - p)
+            r = race_of.get(f["exchange_id"])
+            win = r[1] if q > 0 else ("R" if r[1] == "D" else "D")
+            per[(r[0], win)] = per.get((r[0], win), 0.0) + paid
+            tot += paid
+        if tot > 6000 + 1:
+            sim.chk.violation("cheapfav_budget", f"sleeve bought {tot:.0f} > budget 6,000")
+        for k, x in per.items():
+            if x > 1500 + 1:
+                sim.chk.violation("cheapfav_leg_cap", f"{k}: {x:.0f} > 1,500 per race outcome")
+        for c in exits:
+            if c["ex"] != rev:
+                sim.chk.violation("cheapfav_exit_unwanted", f"{c['key']} exited {c['ex']} although its edge never reversed")
+        if rev and not exits:
+            sim.chk.violation("cheapfav_no_exit", f"{rev}: edge reversed by 4c, held position not closed")
+        _op, _c, _h, dep = CF.ledger(fills, race_of)
+        self.summary = {"entries": len(entries), "exits": len(exits), "deployed": round(dep), "legs": len(_op), "reversed": rev,
+                        "per_outcome_max": round(max(per.values())) if per else 0}
 
 
 class DevChurnSim(Scenario):
@@ -1640,7 +1720,7 @@ class Day(Scenario):
                         "killed": ch.killed, "vol_paused": ch.vol_paused}
 
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
+SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
              ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
              Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
 
@@ -1652,6 +1732,7 @@ def import_sandbox(sb):
     names = ["config", "api", "universe", "store", "risk", "arb", "mm", "tilt", "direction", "allocator", "run"]
     mods = {n: importlib.import_module("sigbot." + n) for n in names}
     mods["xv_gate"] = importlib.import_module("sigbot.proposals.mm_upgrade").xv_gate
+    mods["cheap_favourites"] = importlib.import_module("sigbot.proposals.cheap_favourites")
     assert os.path.dirname(os.path.dirname(os.path.abspath(mods["run"].__file__))) == sb, "sigbot was not imported from the sandbox"
     return mods
 

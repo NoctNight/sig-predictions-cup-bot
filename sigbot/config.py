@@ -201,6 +201,14 @@ class BotConfig:
     churn_cash_floor: float = 3000.0
     churn_kill: float = -600.0
     churn_skip_holding: float = 4000.0   # no entries in races where we already hold > this many shares on a leg (0 = off)
+    cheapfav_enabled: bool = False       # cheap safe favourites (proposals/cheap_favourites): buy fast-count favourites SIG prices
+    cheapfav_budget: float = 15000.0     # >= cheapfav_min_edge under the outside fair, hold through the call; total cost cap,
+    cheapfav_min_edge: float = 0.02      # min edge at the touch (+1c on single-venue legs),
+    cheapfav_leg_cap: float = 2000.0     # cost per race outcome,
+    cheapfav_order_notional: float = 500.0   # per order (touch only, <= 80% of the touch),
+    cheapfav_cash_floor: float = 1000.0  # never spend cash below this
+    cheapfav_net_max: float = 2000.0     # the sleeve's own net D cost stays within +-this whatever the book
+    cheapfav_headroom: float = 1000.0    # an add that widens the book's |net D| keeps it this far under the partisan cap
     election_per_race_cap: float = 5000.0
     election_total_cap: float = 90000.0
     election_poll_sec: float = 4.0
