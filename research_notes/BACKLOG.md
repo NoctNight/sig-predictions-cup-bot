@@ -9,6 +9,9 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
 (guard test + tests/sim_pipeline.py + precheck + Fable review + 10-min post-deploy watch).
 
 ## Open
+0c. (added 24 Oct, kill-switch review O finding 1, pre-existing) zero-EV exits size on GROSS holdings: on 3 Nov they could
+   sell the punt's shares or set legs. Before the punt executor (0000) goes live, exclude punt/election purposes and set
+   legs from zero_ev_exits (and backfill fills.purpose, finding 5), under the usual gates.
 0a. (added 24 Oct) WEEKEND LAG decision, Mon 26 Oct: re-run research_notes/overnight_followups.md section 2 on all of
    24-25 Oct (both-venue moves; SIG copy share at 10/30 min vs weekday 29% / 44%). Act only if the weekend copy at 10 min
    is < 15% with n >= 10 (then raise catch-up size on weekends via the usual gates).

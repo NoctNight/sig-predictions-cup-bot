@@ -435,3 +435,11 @@
   watch passed (settlement 103,797 -> 103,762: the cash raise's selling costs). Reserve refill: cash 1.3k -> 11.6k in
   10 min (72 raise fills); 3.4k short with no tier-1 clip under 1% left for now (the RI trim and refreshed books fill
   the rest). Rollback: shock_enabled false + botctl deploy (also releases the reserve).
+
+- 2026-10-25 01:16 BST: Per-strategy stops ON (b5dda49, Sizhe 24 Oct): each strategy's loss stop pauses only that
+  strategy's new entries (exits keep running); unattributed losses > 2,000 pause the strategies trading the legs
+  involved, else all new entries; never a full shutdown for P&L; MM markout check pauses the MM only; zero-EV exits
+  capped so they never sell cheap-favourite, catch-up or shock shares. Tests: paired old-vs-new bug suite (new never
+  weaker), precheck 38/0, day 0 violations and no false pauses, live replay pauses only in the 22 Oct bad window; Opus
+  round 9 both SAFE TO DEPLOY. First deploy try at ~00:50 was cut off by an app relaunch (bot untouched); redeployed.
+  10-min watch passed. Rollback: strategy_stops_enabled false + botctl deploy.
