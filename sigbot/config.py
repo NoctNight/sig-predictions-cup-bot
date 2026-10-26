@@ -253,6 +253,13 @@ class BotConfig:
     shock_kill: float = -1500.0          # sleeve P&L stop: entries off, open positions closed
     shock_exit_maker: bool = False       # R3: rest the exit at the 70%-convergence price (the DMM's walk fills it) instead of
                                          # taking the bid at convergence; any exit rule cancels it and takes. Off: see shock_mode.md
+    punt_enabled: bool = False           # the 3 Nov punt executor (proposals/punt_executor.py). Only ever switched on by a session in
+                                         # which Sizhe approved the exact plan in chat; the plan file must hash to punt_plan_sha256
+    punt_plan_path: str = "params/punt_plan.json"
+    punt_plan_sha256: str = ""           # SHA-256 of the approved plan file; any other bytes are refused
+    punt_tick_sec: float = 10.0          # executor thread cadence (2 reads a tick while a step is in its window)
+    punt_max_budget: float = 150000.0    # hard ceiling on a plan's budget (cash brought in from outside the punt)
+    punt_cash_floor: float = 100.0       # free cash the executor never spends
     strategy_stops_enabled: bool = False     # strategy_stops.py: per-strategy P&L stops replace the bot-wide kill switch
     stop_limits: dict = field(default_factory=dict)   # {strategy: P&L floor since armed}; defaults in strategy_stops.DEFAULT_LIMITS
     unattributed_limit: float = 2000.0       # unexplained account loss that pauses the strategies on its legs (or all entries)

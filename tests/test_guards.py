@@ -3082,5 +3082,315 @@ check("sim wind_down: a clock jump re-arms the MM's restart wait (no quote on a 
       _g1 is False and _g2 is True and _gb.mm_need_xv is False
       and "                self.preload(sim)\n" in _sp and "sim.bot.mm_need_xv = True" in _sp, f"{_g1} {_g2}")
 
+# ---------------------------------------------------------------- punt executor (BACKLOG 0000 / 0c; research_notes/punt_plan.md)
+import json as _pj
+import tempfile as _ptf
+from sigbot.proposals import punt_executor as PE  # noqa: E402
+
+
+class _PuntFake:
+    """Fake venue for the executor: a fake clock, one book per leg, orders fill at once against the book up to their limit
+    (YES/NO netting pays 1 a pair), every order and cancel recorded; `fail` = statuses to raise on the next places."""
+    dry = False
+
+    def __init__(self, t, books, cash=100000.0):
+        self.t, self.books, self.c = t, _pj.loads(_pj.dumps(books)), cash
+        self.pos, self.sent, self.cancels, self.fail, self.out, self.stamp, self.lead = {}, [], [], [], {}, 0, None
+        self.abort = False
+
+    def now(self): return self.t
+    def positions(self): return dict(self.pos)
+    def book(self, ex): return self.books.get(str(ex))
+    def cash(self): return self.c
+    def outside(self, ex, side):
+        v = self.out.get(str(ex), (None, None))
+        return tuple(None if x is None else (x if side == "yes" else 1 - x) for x in v)
+    def outside_stamp(self, ex): return self.stamp
+    def leader(self): return self.lead
+    def known(self, ex): return str(ex) in self.books
+    def abort_requested(self): return self.abort
+    def fills_cost(self, ids): return None
+    def cancel_ours(self, ids): self.cancels.extend(ids)
+    def clear_others(self, ex, keep): pass
+
+    def place(self, ex, side, qty, price, key, expires_at, purpose="punt"):
+        self.calls = getattr(self, "calls", []) + [(key, ex, side, qty, price, expires_at)]
+        if self.fail:
+            st = self.fail.pop(0)
+            if st == "lost":                     # placed on the venue, response lost
+                self.fail.insert(0, 409) if False else None
+                self.placed_keys = getattr(self, "placed_keys", set()) | {key}
+            raise R.ApiError(502 if st == "lost" else st, "X", "fake %s" % st)
+        if key in getattr(self, "placed_keys", set()):
+            raise R.ApiError(409, "CONFLICT", "key used")
+        got = cost = 0.0
+        for px, q in PE.asks_for(self.books[str(ex)], side):
+            if px > price + 1e-9 or got >= qty:
+                break
+            n = min(q, qty - got)
+            got, cost = got + n, cost + n * px
+        held = self.pos.get(str(ex), 0.0)
+        pairs = min(got, max(0.0, -held if side == "yes" else held))
+        self.c += pairs - cost
+        self.pos[str(ex)] = held + (got if side == "yes" else -got)
+        self.sent.append(dict(ex=str(ex), side=side, qty=qty, price=price, key=key, got=got, cost=cost, purpose=purpose, t=self.t))
+        return "o%d" % len(self.sent)
+
+
+def _pbook(asks=(), bids=()):
+    return {"asks": [{"price": p, "quantity": q} for p, q in asks], "bids": [{"price": p, "quantity": q} for p, q in bids]}
+
+
+_T0 = PE.ts_of("2026-11-03T17:00:00-05:00")
+
+
+def _pplan(**over):
+    p = {"plan_id": "T", "budget": 20000, "cap_exempt": True, "steps": [
+        {"id": "s1", "kind": "buy", "exchange_id": "1007", "side": "yes", "max_price": 0.35, "max_cash": 20000, "chunk_cash": 5000,
+         "start": "2026-11-03T17:30:00-05:00", "stop": "2026-11-03T19:45:00-05:00", "min_gap_sec": 20, "abort_if_outside_below": 0.2},
+        {"id": "s1_sell", "kind": "sell", "of_step": "s1", "min_price": 0.85, "chunk_shares": 20000, "outside_min": 0.95,
+         "outside_polls": 3, "single_venue_min": 0.97, "start": "2026-11-03T19:45:00-05:00", "stop": "2026-11-04T04:00:00-05:00",
+         "min_gap_sec": 20},
+        {"id": "s2", "kind": "target_buy", "after_step": "s1_sell", "min_sold_frac": 0.7, "target_min": 300000,
+         "target_k_leader": 1.12, "target_fallback": 320000, "max_cash": 400000, "chunk_cash": 10000,
+         "candidates": [{"exchange_id": "2001", "side": "yes", "max_price": 0.30, "min_price": 0.08},
+                        {"exchange_id": "2002", "side": "yes", "max_price": 0.30, "min_price": 0.08}],
+         "start": "2026-11-03T22:00:00-05:00", "stop": "2026-11-04T04:00:00-05:00", "min_gap_sec": 20}]}
+    p.update(over)
+    return p
+
+
+def _pmk(plan, fake, sha=None, state=None):
+    d = _ptf.mkdtemp(prefix="punt_t_")
+    path = os.path.join(d, "plan.json")
+    open(path, "w").write(_pj.dumps(plan))
+    st = state or os.path.join(d, "state.json")
+    return PE.PuntExecutor(path, st, PE.sha256_file(path) if sha is None else sha, fake, max_budget=150000.0, cash_floor=100.0), path, st
+
+
+def _prun(ex, fake, until, step=10.0):
+    while fake.t < until:
+        ex.tick()
+        fake.t += step
+
+
+_books = {"1007": _pbook(asks=[(0.30, 20000), (0.32, 30000), (0.34, 40000), (0.40, 1e6)], bids=[(0.29, 1e5)]),
+          "2001": _pbook(asks=[(0.35, 1e6)]), "2002": _pbook(asks=[(0.10, 2e6), (0.12, 2e6)])}
+
+# refusals: hash mismatch, an invalid plan, a sell that starts before its buy stops
+_f = _PuntFake(_T0, _books)
+_e, _, _ = _pmk(_pplan(), _f, sha="0" * 64)
+_prun(_e, _f, _T0 + 3 * 3600)
+check("punt: a plan whose bytes do not hash to the approved SHA-256 is refused and sends nothing", bool(_e.refused) and not _f.sent, str(_e.refused))
+_bad = _pplan()
+_bad["steps"][0]["max_price"] = 1.2
+_bad["steps"][1]["start"] = "2026-11-03T19:00:00-05:00"
+_bad["steps"][2]["candidates"][0]["exchange_id"] = "9999"
+_f = _PuntFake(_T0, _books)
+_e, _, _ = _pmk(_bad, _f)
+_r = _e.refused or ""
+check("punt: validation refuses a max price above 0.99, a sell starting before its buy stops and an unknown exchange",
+      "max_price 1.2" in _r and "starts before s1 stops" in _r and "unknown exchange '9999'" in _r and not _f.sent, _r)
+_f = _PuntFake(_T0, _books)
+_e, _, _ = _pmk(_pplan(budget=500000), _f)
+check("punt: a budget above punt_max_budget is refused", bool(_e.refused) and "budget" in _e.refused, str(_e.refused))
+
+# the start / stop window on a fake clock; never above the max price; budget, max_cash and the cash floor
+_f = _PuntFake(_T0, _books, cash=15000.0)
+_e, _, _st = _pmk(_pplan(), _f)
+_prun(_e, _f, PE.ts_of("2026-11-03T17:30:00-05:00") - 1)
+check("punt: nothing is sent before the step's start (fake clock 17:00-17:29:59 ET)", not _f.sent, str(_f.sent[:1]))
+_prun(_e, _f, PE.ts_of("2026-11-03T19:45:00-05:00") + 600)
+_s1 = [o for o in _f.sent if o["key"].startswith("punt-T-s1-")]
+check("punt: buys start at the window and every limit is a capped tick <= max_price 0.35",
+      _s1 and min(o["t"] for o in _s1) >= PE.ts_of("2026-11-03T17:30:00-05:00") and all(o["price"] <= 0.35 for o in _s1), str(_s1[:2]))
+check("punt: no buy after the stop time", all(o["t"] <= PE.ts_of("2026-11-03T19:45:00-05:00") for o in _s1))
+check("punt: spend stays within free cash minus the 100 floor (15k account)", sum(o["cost"] for o in _s1) <= 15000 - 100 + 1e-6,
+      "%.0f" % sum(o["cost"] for o in _s1))
+check("punt: orders at least min_gap_sec and one TTL apart", all(b["t"] - a["t"] >= PE.ORDER_TTL for a, b in zip(_s1, _s1[1:])))
+check("punt: buy orders are recorded with purpose punt", all(o["purpose"] == "punt" for o in _s1))
+_f = _PuntFake(_T0, _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_prun(_e, _f, PE.ts_of("2026-11-03T19:50:00-05:00"))
+_cost = sum(o["cost"] for o in _f.sent)
+check("punt: total buy cost never exceeds the plan budget / max_cash (20k) with 1M of free cash", _cost <= 20000 + 1e-6 and _cost > 18000, "%.0f" % _cost)
+_f = _PuntFake(_T0, {"1007": _pbook(asks=[(0.40, 1e6)])} | {k: v for k, v in _books.items() if k != "1007"})
+_e, _, _ = _pmk(_pplan(), _f)
+_prun(_e, _f, PE.ts_of("2026-11-03T19:50:00-05:00"))
+check("punt: a touch above max_price is never chased (no order at all)", not _f.sent, str(_f.sent[:1]))
+
+# idempotency: a 502 keeps the key; a restart reuses the state and never repeats a key; 3 rejections abort the step
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _pp, _st = _pmk(_pplan(), _f)
+_f.fail = [502]
+_e.tick(); _f.t += 10; _e.tick()
+check("punt: after a 502 the same idempotency key AND the identical payload (qty, price, expiry) are resent next tick",
+      [o["key"].rsplit("-", 1)[0] for o in _f.sent] == ["punt-T-s1-0"] and len(_f.calls) == 2 and _f.calls[0] == _f.calls[1], str(_f.calls))
+for _ in range(12):
+    _f.t += 10; _e.tick()
+_e2 = PE.PuntExecutor(_pp, _st, PE.sha256_file(_pp), _f, max_budget=150000.0, cash_floor=100.0)   # restart
+for _ in range(12):
+    _f.t += 10; _e2.tick()
+_keys = [o["key"] for o in _f.sent]
+check("punt: a restart resumes from the state file with new keys only (no key sent twice)", len(_keys) == len(set(_keys)) and len(_keys) >= 3, str(_keys))
+check("punt: the previous chunk is cancelled before the next one is sent (review B4)",
+      all(("o%d" % k) in _f.cancels for k in range(1, len(_f.sent))), f"{_f.cancels} {len(_f.sent)}")
+# review B1: the response is lost but the order was placed; the resend under the same key gets 409: counted, key advances
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.fail = ["lost"]
+_e.tick(); _f.t += 10; _e.tick()
+_v = _e.state["steps"]["s1"]
+check("punt: a lost response + 409 on the resend is booked as placed (counted at its limit), the key advances, no abort",
+      _v["status"] == "active" and _v["n"] == 1 and _v["orders"][0]["id"] is None and _v["errors"] == 0 and not _v.get("pending"), str(_v))
+for _ in range(15):
+    _f.t += 10; _e.tick()
+check("punt: after the 409 the next chunk goes out under the next key", any(o["key"].startswith("punt-T-s1-1-") for o in _f.sent), str([o["key"] for o in _f.sent]))
+# a crash after the payload was saved: the restart resends exactly that payload
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _pp, _st = _pmk(_pplan(), _f)
+_e.st("s1")["status"] = "active"
+_e.st("s1")["base"] = 0.0
+_e.st("s1")["pending"] = {"key": "punt-T-s1-0-x", "ex": "1007", "side": "yes", "qty": 100, "price": 0.3, "exp": _f.t + 30, "purpose": "punt", "what": "BUY"}
+_e.save()
+_e2 = PE.PuntExecutor(_pp, _st, PE.sha256_file(_pp), _f, max_budget=150000.0, cash_floor=100.0)
+_f.t += 5; _e2.tick()
+check("punt: a restart resends the saved pending payload unchanged", getattr(_f, "calls", [])[:1] == [("punt-T-s1-0-x", "1007", "yes", 100, 0.3, _f.t - 5 + 30)],
+      str(getattr(_f, "calls", [])))
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.fail = [400, 403, 422]
+for _ in range(5):
+    _e.tick(); _f.t += 40
+check("punt: three rejected orders in a row abort that step and nothing more is sent",
+      _e.state["steps"]["s1"]["status"] == "aborted" and not _f.sent, str(_e.state["steps"]["s1"]))
+
+# outside called against stage 1: abort the buy; the sale waits for 3 distinct both-venue polls >= 0.95 and is capped
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.out = {"1007": (0.15, 0.12)}
+_e.tick()
+check("punt: a buy step aborts when the outside price falls below abort_if_outside_below", _e.state["steps"]["s1"]["status"] == "aborted" and not _f.sent)
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_prun(_e, _f, PE.ts_of("2026-11-03T19:46:00-05:00"))
+_held = _f.pos["1007"]
+_f.books["1007"] = _pbook(asks=[(0.92, 1e6)], bids=[(0.90, 1e6)])
+_f.out = {"1007": (0.97, 0.96)}
+for _ in range(6):                                       # same poll stamp: one poll however many ticks
+    _e.tick(); _f.t += 10
+check("punt: one outside poll seen on many ticks counts once (no sale before 3 polls)", not [o for o in _f.sent if "s1_sell" in o["key"]])
+for _ in range(2):
+    _f.stamp += 1; _e.tick(); _f.t += 10
+_sold0 = [o for o in _f.sent if "s1_sell" in o["key"]]
+check("punt: the sale needs 3 polls (2 so far: none)", not _sold0)
+_f.stamp += 1; _e.tick(); _f.t += 10
+_sl = [o for o in _f.sent if "s1_sell" in o["key"]]
+check("punt: the 3rd poll sells: buy NO at <= 0.15 (= sell YES at >= 0.85), purpose punt_exit",
+      len(_sl) == 1 and _sl[0]["side"] == "no" and abs(_sl[0]["price"] - 0.15) < 1e-9 and _sl[0]["purpose"] == "punt_exit", str(_sl))
+_f.pos["1007"] = 5000.0                                   # someone else's sale moved the position: never sell more than held
+for _ in range(20):
+    _f.stamp += 1; _e.tick(); _f.t += 40
+check("punt: never sells more than the venue position (no flip to short)", _f.pos["1007"] >= -1e-9, str(_f.pos["1007"]))
+
+# stage 2: target from the leaderboard; first candidate that reaches it (2002 at 0.10), not the first listed (2001 at 0.35)
+_f = _PuntFake(PE.ts_of("2026-11-03T22:00:00-05:00"), _books, cash=40000.0)
+_e, _, _ = _pmk(_pplan(), _f)
+_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=100000.0)
+_e.state["steps"]["s1_sell"] = dict(_e.st("s1_sell"), status="done", bought=100000.0, sold=100000.0)
+_f.lead = 250000.0
+_prun(_e, _f, PE.ts_of("2026-11-03T23:30:00-05:00"))
+_s2 = [o for o in _f.sent if "-s2-" in o["key"]]
+check("punt: stage 2 target = max(target_min, 1.12 x leader) and it buys the candidate that reaches it",
+      _e.state["steps"]["s2"]["target"] == 300000 and _s2 and all(o["ex"] == "2002" and o["price"] <= 0.30 for o in _s2), str(_e.state["steps"]["s2"].get("chosen")))
+_f = _PuntFake(PE.ts_of("2026-11-03T22:00:00-05:00"), _books, cash=20000.0)
+_e, _, _ = _pmk(_pplan(), _f)
+_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=1.0)
+_e.state["steps"]["s1_sell"] = dict(_e.st("s1_sell"), status="done", bought=1.0, sold=1.0)
+_prun(_e, _f, PE.ts_of("2026-11-04T04:10:00-05:00"))
+check("punt: no candidate reaches the target (20k cash): stage 2 keeps the cash and the step closes at its stop",
+      not _f.sent and _e.state["steps"]["s2"]["status"] == "done", str(_e.state["steps"]["s2"]))
+
+# review B2: a settled stage-1 market is never read as a sale; S6: a sale that sold nothing never opens stage 2
+_f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=60000.0)
+_f.pos["1007"] = 60000.0
+_f.settled = lambda: {"1007"}
+_f.pos.pop("1007")
+_prun(_e, _f, PE.ts_of("2026-11-04T04:10:00-05:00"))
+check("punt: a settled (lost) stage-1 leg aborts the sale and stage 2 sends nothing",
+      _e.state["steps"]["s1_sell"]["status"] == "aborted" and not _f.sent, str({k: v.get("status") for k, v in _e.state["steps"].items()}))
+_f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=60000.0)
+_f.pos["1007"] = 60000.0
+_prun(_e, _f, PE.ts_of("2026-11-04T04:10:00-05:00"))          # never called: nothing sold
+_f.pos["1007"] = 0.0                                          # and a position that vanished without our sells
+check("punt: a sale window that closes with nothing sold never opens stage 2", not _f.sent, str(_f.sent[:1]))
+
+# review R2-1: once stage 2 has chosen its leg, a sell step that aborts later (market settled) does not freeze it
+_f = _PuntFake(PE.ts_of("2026-11-03T22:00:00-05:00"), _books, cash=40000.0)
+_e, _, _ = _pmk(_pplan(), _f)
+_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=100000.0)
+_e.state["steps"]["s1_sell"] = dict(_e.st("s1_sell"), status="done", bought=100000.0, sold=100000.0)
+_f.lead = 250000.0
+for _ in range(6):
+    _e.tick(); _f.t += 10
+_n0 = len(_f.sent)
+_e.state["steps"]["s1_sell"]["status"] = "aborted"
+_prun(_e, _f, PE.ts_of("2026-11-03T23:30:00-05:00"))
+check("punt: stage 2 keeps buying after its sell step aborts once a candidate is chosen (review R2-1)", _n0 >= 1 and len(_f.sent) > _n0, f"{_n0} {len(_f.sent)}")
+
+# abort file: our resting orders cancelled, nothing more
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_e.tick(); _f.t += 5
+_f.abort = True
+_e.tick()
+_n = len(_f.sent)
+_f.abort = False
+_prun(_e, _f, PE.ts_of("2026-11-03T19:00:00-05:00"))
+check("punt: the abort file cancels our resting orders and stops the executor for good", "o1" in _f.cancels and len(_f.sent) == _n == 1,
+      f"{_f.cancels} {len(_f.sent)}")
+
+# 0c: zero-EV exits never sell punt / election legs or the shares of a held set
+_prow = {"exchange_id": "1068", "fair": 0.95, "sig_bid": 0.955, "sig_ask": 0.96, "pm": 0.95, "kalshi": 0.95}
+_psent = []
+class _PStore:
+    def rows(self, q, a=()):
+        if "purpose IN ('direction','tilt')" in q:
+            return [{"exchange_id": "1068", "side": "yes", "q": 1203.0}]
+        return []
+    def record_order(self, *a, **k): pass
+_prace = types.SimpleNamespace(name="Massachusetts Senate", exchange_ids=["1068", "1069"])
+_puni = types.SimpleNamespace(races={"Massachusetts Senate": _prace})
+_pbot = types.SimpleNamespace(cfg=types.SimpleNamespace(exit_band=0.01), store=_PStore(), dry_run=False, open_orders_cache={}, universe=_puni,
+                              api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: _psent.append((ex, side, q)) or {"orderId": 1},
+                                                        new_key=lambda k: k))
+R.Bot.zero_ev_exits(_pbot, {"1068": 1203.0, "1069": 1000.0}, [_prow])          # 1,000 buy-sets (YES on both legs) + 203 direction
+check("0c: a zero-EV exit leaves a held set's shares alone (1,203 YES of which 1,000 are buy-set legs: closes 203)",
+      _psent == [("1068", "no", 203)], str(_psent))
+_psent.clear()
+_pbot.punt_races = lambda: {"Massachusetts Senate"}
+R.Bot.zero_ev_exits(_pbot, {"1068": 1203.0, "1069": 0.0}, [_prow])
+check("0c: a zero-EV exit never trades a punt / election race", _psent == [], str(_psent))
+
+_rsp = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("punt: every set / exit / quote path excludes punt races (free unwinds x2, churn x2, cheap favourites, raise, wind-down, "
+      "arb.protected, MM, inside, zero-EV)",
+      _rsp.count("| punt_races_of(b)") == 1 and _rsp.count("| shock_races_of(self) | punt_races_of(self)") == 1
+      and _rsp.count("or rname in punt_races_of(self)") == 1 and _rsp.count("or race.name in punt_races_of(self)") == 1
+      and 'c["race"] not in punt_races_of(self)' in _rsp and "pr_now = punt_races_of(self)" in _rsp
+      and '"punt / election night" for r in punt_races_of(self)' in _rsp and "set(_prot3()) | punt_races_of(self)" in _rsp
+      and _rsp.count("Bot.punt_legs(self)") >= 4 and "ex in punt_ex" in _rsp)
+import sigbot.config as _pcfg  # noqa: E402
+_live = _pj.load(open(os.path.join(ROOT, "config.json")))
+check("punt: off by default in config.py and in config.json", _pcfg.BotConfig.__dataclass_fields__["punt_enabled"].default is False
+      and _live.get("punt_enabled") is False)
+from sigbot import strategy_stops as _pss  # noqa: E402
+check("punt: strategy stops attribute punt / punt_exit fills to 'punt' and give it no P&L stop (a punt loss pauses nothing)",
+      _pss.PURPOSE_LEDGER.get("punt") == "punt" and _pss.PURPOSE_LEDGER.get("punt_exit") == "punt" and "punt" not in _pss.DEFAULT_LIMITS)
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

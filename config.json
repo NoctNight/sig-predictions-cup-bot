@@ -155,5 +155,6 @@
   "shock_poll_sec": 5.0,
   "shock_full_sec": 30.0,
   "shock_exit_maker": true,
-  "strategy_stops_enabled": true
+  "strategy_stops_enabled": true,
+  "punt_enabled": false
 }

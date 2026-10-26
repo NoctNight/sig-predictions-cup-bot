@@ -5,6 +5,7 @@
     python3 tests/sim_pipeline.py --list          # scenario names
     python3 tests/sim_pipeline.py --churn         # high-frequency arb (churn_enabled) on in every scenario's sandbox, incl. day
     python3 tests/sim_pipeline.py --raise         # the cash raise, both tiers, on in every scenario's sandbox, incl. day
+    python3 tests/sim_pipeline.py --punt          # the punt executor on in every scenario's sandbox (3,000 stage-1 test plan)
     python3 tests/sim_pipeline.py -v              # also print per-scenario activity counts
     python3 tests/sim_pipeline.py --patch=fix.py  # exec fix.py (with `mods` = the sandbox sigbot modules) before running:
                                                   # try a candidate fix on the sandbox copy without touching sigbot/
@@ -48,6 +49,7 @@ replays logs in a thread), election night (off in config), thread interleaving b
 from __future__ import annotations
 
 import collections
+import hashlib
 import json
 import logging
 import math
@@ -94,12 +96,20 @@ def install_network_guard():
         os.environ.pop(k, None)
 
 
+LIVE_STATE = ("churn_state.json", "catchup_state.json", "wind_down_state.json", "strategy_kill.json", "strategy_stops_state.json",
+              "strategy_monitor_state.json", "shock_state.json", "raise_state.json", "cheapfav_state.json", "punt_state.json",
+              "punt_plan.json", "punt_abort")
+
+
 def make_sandbox() -> str:
     sb = tempfile.mkdtemp(prefix="sigbot-sim-")
     shutil.copytree(os.path.join(ROOT, "sigbot"), os.path.join(sb, "sigbot"),
                     ignore=shutil.ignore_patterns("__pycache__", "*.bak*", "*.sleeves_wip", "*.pyc", "hft_data"))
     shutil.copyfile(os.path.join(ROOT, "config.json"), os.path.join(sb, "config.json"))
-    shutil.copytree(os.path.join(ROOT, "params"), os.path.join(sb, "params_master"), ignore=shutil.ignore_patterns("*.bak*"))
+    # the live bot's runtime state is not copied: a scenario starts from its own premise, not from tonight's live churn lots,
+    # catch-up ledger, strategy pauses or punt state (25 Oct: the live strategy_stops_state.json paused arb in every sandbox,
+    # so recycle_* failed on an unchanged tree and botctl's precheck refused every deploy)
+    shutil.copytree(os.path.join(ROOT, "params"), os.path.join(sb, "params_master"), ignore=shutil.ignore_patterns("*.bak*", *LIVE_STATE))
     os.makedirs(os.path.join(sb, "data"))
     for f in ("markets.json", "volume_cache.json", "volume_cache.json.vol"):
         src = os.path.join(ROOT, "data", f)
@@ -213,6 +223,8 @@ class Sim:
         # (incl. the 24-h replay) runs the live config as deployed.
         overrides = dict(ARB_CODE_CFG) if sc.name in ARB_CODE_SCENARIOS else {}
         overrides.update(FORCE_CFG)
+        if PUNT_ALL and sc.name not in PUNT_SKIP:
+            overrides.update(punt_test_plan(self))
         overrides.update(sc.cfg)
         for k, val in overrides.items():
             obj = cfg
@@ -288,6 +300,9 @@ class Sim:
             self.chk.sub = name
             self.v.step = f"{self.chk.label} {name}"
             getattr(s, name)()
+        if getattr(self.bot, "punt", None) is not None and self.sc.name != "punt":   # the executor's thread (punt_loop), in sequence
+            self.chk.sub = "punt_tick"
+            self.bot.punt.tick()
         if getattr(self.bot, "shock", None) is not None:   # shock mode's own thread (shock_loop), run in sequence here
             self.chk.sub = "shock_tick"
             self.v.step = f"{self.chk.label} shock_tick"
@@ -402,7 +417,7 @@ def set_race_bids_sum(sim, race_name, total, spread_ticks=1):
 
 
 # ======================================================================================== invariants
-EXEMPT_ADD = {"exit", "offload", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct)
+EXEMPT_ADD = {"exit", "offload", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm", "punt"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct); punt: only with an approved plan's cap_exempt
 RATE_LIMITS = {
     # category: [(window_sec, max events per object), ...]   object = exchange or race
     "requote": [(60, 5)],            # MM/tilt/inside cancel-all per exchange: 1 per 30-s cycle + fast requotes (3/min total)
@@ -640,7 +655,7 @@ class Checker:
         # its direction; every other sleeve still sees the total (shock included) and must stay inside the rest
         sk_pos = {}                                     # the venue's own record of shk/shx fills (the bot's ledger lags a cycle)
         for m in v.fill_meta.values():
-            if m.get("prefix") in ("shk", "shx", "shm"):
+            if m.get("prefix") in ("shk", "shx", "shm", "punt"):     # (the punt scenario's plan is cap_exempt, as Sizhe's yes)
                 sk_pos[m["ex"]] = sk_pos.get(m["ex"], 0.0) + (m["qty"] if m["side"] == "yes" else -m["qty"])
         sk_pos = {ex: q for ex, q in sk_pos.items() if abs(q) >= 1}
         sk_nd = risk.exposure(self.sim.universe, sk_pos, prices).net_d_notional if sk_pos else 0.0
@@ -2339,6 +2354,144 @@ class ShockMakerPostOnly(ShockMaker):
     post_only_dmm = True
     doc = "R3 worst case: the DMM quotes post-only, so its walk stops one tick short of our resting exit and never fills it"
 
+# ---------------------------------------------------------------- 3 Nov punt executor (BACKLOG 0000, research_notes/punt_plan.md)
+class Punt(Scenario):
+    name, cycles, seed = "punt", 110, 53
+    doc = ("punt executor ON with the live config otherwise: a hash-matched plan buys stage 1 (17:30-17:45 ET) in capped chunks, "
+           "the clock jumps to 19:50 ET with the outside at 0.97 and SIG repriced so stage 1 is sold at >= 0.85 after 3 polls, then to "
+           "22:05 ET for stage 2; no punt order above its cap or outside its window, stage-1 cost <= budget, the sale never flips "
+           "the position, and no other sleeve sends an order on any punt race")
+
+    def venue_setup(self, sim):
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        CLOCK.t = WD.et_ts(2026, 11, 3, 17, 25)
+        mids = two_leg_mid_races(sim, 0.25, 0.75)
+        self.r1, self.r2 = mids[0], mids[1]
+        self.ex1 = min(sim.legs(self.r1), key=lambda e: sim.v.mid(e))      # the cheaper leg (~0.25-0.45)
+        self.ex2 = min(sim.legs(self.r2), key=lambda e: sim.v.mid(e))
+        self.cap1 = round(SV.P(sim.v.ask_t[self.ex1]) + 0.02, 3)
+        self.budget = 6000.0
+        plan = {"plan_id": "SIM", "budget": self.budget, "cap_exempt": True, "steps": [
+            {"id": "s1", "kind": "buy", "exchange_id": self.ex1, "side": "yes", "max_price": self.cap1, "max_cash": self.budget,
+             "chunk_cash": 1500, "start": "2026-11-03T17:30:00-05:00", "stop": "2026-11-03T17:45:00-05:00", "min_gap_sec": 20},
+            {"id": "s1_sell", "kind": "sell", "of_step": "s1", "min_price": 0.85, "chunk_shares": 5000, "outside_min": 0.95,
+             "outside_polls": 3, "single_venue_min": 0.97, "start": "2026-11-03T19:45:00-05:00", "stop": "2026-11-03T21:30:00-05:00",
+             "min_gap_sec": 20},
+            {"id": "s2", "kind": "target_buy", "after_step": "s1_sell", "min_sold_frac": 0.7, "target_min": 1.0, "target_k_leader": 0.0,
+             "target_fallback": 1.0, "max_cash": 3000, "chunk_cash": 1500,
+             "candidates": [{"exchange_id": self.ex2, "side": "yes", "max_price": 0.6, "min_price": 0.05}],
+             "start": "2026-11-03T22:00:00-05:00", "stop": "2026-11-03T23:00:00-05:00", "min_gap_sec": 20}]}
+        os.makedirs(os.path.join(sim.sb, "params"), exist_ok=True)
+        path = os.path.join(sim.sb, "params", "punt_plan.json")
+        open(path, "w").write(json.dumps(plan))
+        for f in ("punt_state.json", "punt_abort"):
+            try:
+                os.remove(os.path.join(sim.sb, "params", f))
+            except FileNotFoundError:
+                pass
+        self.plan = plan
+        self.cfg = {"punt_enabled": True, "punt_plan_path": "params/punt_plan.json",
+                    "punt_plan_sha256": hashlib.sha256(open(path, "rb").read()).hexdigest()}
+
+    def bot_setup(self, sim):
+        b = sim.bot
+        if b.punt is None or b.punt.refused:
+            sim.chk.violation("punt_not_enabled", str(getattr(b.punt, "refused", "no executor")))
+        self.legs = set(sim.legs(self.r1)) | set(sim.legs(self.r2))
+        self.t_start = CLOCK.t
+
+    def before_cycle(self, sim, i):
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        v = sim.v
+        if i == 40:                                  # stage 1 wins: the outside calls it, SIG reprices the leg to 0.90/0.91
+            CLOCK.t = max(CLOCK.t, WD.et_ts(2026, 11, 3, 19, 50))
+            v.outside[self.ex1] = 0.97
+            other = [e for e in sim.legs(self.r1) if e != self.ex1][0]
+            v.outside[other] = 0.03
+            v.set_touch(self.ex1, int(round(0.90 / SV.TICK)), int(round(0.91 / SV.TICK)))
+            v.set_touch(other, int(round(0.08 / SV.TICK)), int(round(0.09 / SV.TICK)))
+            sim.bot.mm_need_xv = True
+        if i == 75:
+            CLOCK.t = max(CLOCK.t, WD.et_ts(2026, 11, 3, 22, 5))
+            sim.bot.mm_need_xv = True
+
+    def on_tick(self, sim):
+        if sim.bot.punt is not None:
+            sim.step("punt tick", sim.bot.punt.tick)
+            q = sim.v.signed_positions().get(self.ex1, 0.0)
+            if q < -0.5 and not getattr(self, "flip", False):
+                self.flip = True
+                sim.chk.violation("punt_flip", f"stage-1 leg {self.ex1} went short ({q:+.0f}): the sale sold more than held")
+
+    def final_checks(self, sim):
+        v, st = sim.v, sim.bot.punt.state if sim.bot.punt else {}
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        win = {s["id"]: (WD_ts(s["start"]), WD_ts(s["stop"])) for s in self.plan["steps"]}
+        bad, other, cost1 = [], [], 0.0
+        for o in v.orders.values():
+            if o.ex not in self.legs:
+                continue
+            if o.prefix == "punt":
+                sid = o.key.split("-")[2]
+                lo, hi = win[sid]
+                if not lo <= o.t <= hi:
+                    bad.append(f"{o.key} at {o.t - lo:+.0f}s outside its window")
+                if sid == "s1":
+                    if o.limit > self.cap1 + 1e-9:
+                        bad.append(f"{o.key} limit {o.limit} > cap {self.cap1}")
+                    cost1 += o.filled * o.limit
+                if sid == "s1_sell" and not (o.side == "no" and o.limit <= 0.15 + 1e-9):
+                    bad.append(f"{o.key} sells below 0.85 ({o.side} @{o.limit})")
+            elif o.prefix != "seed" and o.t >= self.t_start:
+                other.append(f"{o.key} {o.ex} {o.side} @{o.limit}")
+        def V(kind, detail):
+            sim.chk.viol.append({"scenario": self.name, "step": "end", "t": CLOCK.t, "kind": kind, "detail": detail, "trace": ""})
+        if bad:
+            V("punt_order", "; ".join(bad[:4]))
+        if other:
+            V("punt_race_touched", f"{len(other)} non-punt orders on punt races: " + "; ".join(other[:4]))
+        if cost1 > self.budget + 1e-6:
+            V("punt_budget", f"stage 1 cost (at limits) {cost1:.0f} > budget {self.budget:.0f}")
+        steps = st.get("steps", {})
+        n = {}
+        for o in v.orders.values():
+            if o.prefix == "punt":
+                k = o.key.split("-")[2]
+                n[k] = (n.get(k, (0, 0))[0] + 1, n.get(k, (0, 0))[1] + o.filled)
+        sim.chk.notes.append("punt orders (count, filled) " + json.dumps(n) + "; stage-1 cost at limits %.0f of %.0f" % (cost1, self.budget))
+        if not (steps.get("s1", {}).get("filled", 0) > 0 and steps.get("s1_sell", {}).get("sold", 0) > 0 and steps.get("s2", {}).get("filled", 0) > 0):
+            V("punt_incomplete", json.dumps({k: {kk: steps[k].get(kk) for kk in ("status", "filled", "sold", "why")} for k in steps}))
+
+
+PUNT_ALL = False          # --punt: the executor ON in every scenario's sandbox with a small test plan (stage 1 only)
+# --punt leaves out the scenarios built on a cash shortfall (the test plan's 3,000 buy changes their premise, the same reason
+# shock mode is off in them) and the punt scenario itself (it has its own plan)
+PUNT_SKIP = {"punt", "churn_many_lowcash", "cash_raise", "cash_raise_sets", "cash_raise_cheapfav", "recycle_oversize", "shock_reserve"}
+
+
+def punt_test_plan(sim) -> dict:
+    """--punt: a 3,000 stage-1 buy on the cheaper leg of a 0.25-0.75 race, from 60 s into the run for an hour, hash-matched."""
+    mids = two_leg_mid_races(sim, 0.25, 0.75)          # the last such race: scenarios build their premises on the first ones
+    ex = min(sim.legs(mids[-1]), key=lambda e: sim.v.mid(e))
+    iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
+    plan = {"plan_id": "SIMALL", "budget": 3000, "cap_exempt": True, "steps": [
+        {"id": "s1", "kind": "buy", "exchange_id": ex, "side": "yes", "max_price": round(SV.P(sim.v.ask_t[ex]) + 0.02, 3),
+         "max_cash": 3000, "chunk_cash": 1000, "start": iso(CLOCK.t + 60), "stop": iso(CLOCK.t + 3600), "min_gap_sec": 20}]}
+    path = os.path.join(sim.sb, "params", "punt_plan.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w").write(json.dumps(plan))
+    try:
+        os.remove(os.path.join(sim.sb, "params", "punt_state.json"))
+    except FileNotFoundError:
+        pass
+    return {"punt_enabled": True, "punt_plan_path": "params/punt_plan.json",
+            "punt_plan_sha256": hashlib.sha256(open(path, "rb").read()).hexdigest()}
+
+
+def WD_ts(s):
+    return datetime.fromisoformat(s).timestamp()
+
+
 # scenarios built on a cash shortfall: with the live config's shock_enabled true, the 15k shock reserve would take their
 # cash before their own premise (low cash) is reached; shock with the reserve has its own scenarios (shock*, shock_reserve)
 for _c in (ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, RecycleOversize):
@@ -2346,7 +2499,7 @@ for _c in (ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, Recycl
 
 SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, Shock, ShockMaker, ShockMakerPostOnly, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
              ChurnMany, ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, ShockReserve, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
-             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Day]
+             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Punt, Day]
 
 
 # ======================================================================================== main
@@ -2370,6 +2523,9 @@ def main(argv):
         FORCE_CFG["raise_sets_enabled"] = True
     if "--wind" in argv:                     # the wind-down on in every scenario's sandbox (it acts only from 31 Oct)
         FORCE_CFG["wind_down_enabled"] = True
+    if "--punt" in argv:                     # the punt executor on in every scenario's sandbox with a small test plan
+        global PUNT_ALL
+        PUNT_ALL = True
     names = [a for a in argv if not a.startswith("-")]
     if "--list" in argv:
         for s in SCENARIOS:

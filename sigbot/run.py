@@ -59,6 +59,7 @@ from .proposals.dev_churn import (DevChurn, overround_series, medians_from_serie
                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
 from .proposals import election_night as EN
 from .proposals import wind_down as WD
+from .proposals import punt_executor as PE
 from .proposals.own_book import OwnLevels
 from . import strategy_monitor as SMON
 from . import strategy_stops as STOPS
@@ -77,6 +78,120 @@ def shock_races_of(bot) -> set:
     sleeve's NO looks like an arb set."""
     g = getattr(bot, "shock_races", None)
     return g() if callable(g) else set()
+
+
+def punt_races_of(bot) -> set:
+    """Races the punt executor or the election-night sleeve trade (any fill or order of WD.HOLD_PURPOSES) plus every race
+    of an enabled punt plan (BACKLOG 0c / 0000). No other path sells, unwinds, quotes, clips or enters them (empty when
+    not wired, e.g. on test stubs)."""
+    g = getattr(bot, "punt_races", None)
+    return g() if callable(g) else set()
+
+
+class _PuntAdapter:
+    """The punt executor's I/O on the live bot (proposals/punt_executor.py). In the bot's dry-run mode orders are logged
+    and filled virtually at the walked feed book, so a dry run shows the whole sequence."""
+
+    def __init__(self, bot):
+        self.b = bot
+        self.vpos: dict = {}
+        self.vcash = 0.0
+
+    @property
+    def dry(self) -> bool:
+        return bool(self.b.dry_run)
+
+    def now(self) -> float:
+        return time.time()
+
+    def positions(self) -> dict:
+        p = self.b.api.positions(self.b.slug)           # raises on failure: the executor does nothing that tick
+        m = {str(x["exchangeId"]): float(x["quantity"]) for x in p.get("positions", []) if not x.get("settled")}
+        self._settled = {str(x["exchangeId"]) for x in p.get("positions", []) if x.get("settled")}
+        for ex, q in self.vpos.items():
+            m[ex] = m.get(ex, 0.0) + q
+        return m
+
+    def book(self, ex):
+        return self.b.fresh_book(str(ex), 30.0)
+
+    def cash(self) -> float:
+        try:
+            c = float(self.b.api.account().get("balance"))
+        except Exception as e:                          # unread: the cycle's figure (the venue rejects an overdraft anyway)
+            log.warning("PUNT account read: %s", e)
+            c = float(getattr(self.b, "cash", 0.0) or 0.0)
+        return c - self.vcash - shock_reserve(self.b)   # shock's reserve is not ours (0 once its last entry has passed, 3 Nov)
+
+    def _row(self, ex):
+        return next((r for r in (getattr(self.b.direction, "rows", None) or []) if str(r.get("exchange_id")) == str(ex)), None)
+
+    def outside(self, ex, side):
+        r = self._row(ex)
+        if not r:
+            return (None, None)
+        f = lambda x: None if x is None else (float(x) if side == "yes" else 1.0 - float(x))
+        return f(r.get("pm")), f(r.get("kalshi"))
+
+    def outside_stamp(self, ex):
+        r = self._row(ex)
+        return r.get("ts") if r else None
+
+    def leader(self):
+        r = self.b.api.get(f"/tournaments/{self.b.slug}/leaderboard", period="all", sort="pnl", limit=5, offset=0)
+        mine = r.get("myRank")
+        rows = [x for x in r.get("leaderboard") or [] if x.get("rank") != mine]
+        return 100000.0 + max(float(x["pnl"]) for x in rows) if rows else None
+
+    def known(self, ex) -> bool:
+        return str(ex) in self.b.universe.by_exchange
+
+    def abort_requested(self) -> bool:
+        return os.path.exists(os.path.join(HERE, "params", "punt_abort"))
+
+    def fills_cost(self, ids):
+        ids = [i for i in ids if i is not None and not str(i).startswith("dry-")]
+        if not ids or self.b.store is None:
+            return None
+        rows = self.b.store.rows(f"SELECT side, ABS(quantity) q, price FROM fills WHERE order_id IN ({','.join('?' * len(ids))})", ids)
+        if any(r["side"] != "yes" for r in rows):
+            return None                                 # NO-side fill prices are stored in YES terms: use the upper bound
+        return sum(r["q"] for r in rows), sum(r["q"] * r["price"] for r in rows)
+
+    def cancel_ours(self, ids):
+        for i in ids:
+            try:
+                self.b.api.cancel_order(i)
+            except ApiError as e:
+                log.warning("PUNT cancel %s: %s", i, e)
+
+    def clear_others(self, ex, keep):
+        for o in self.b.api.open_orders(exchange_id=str(ex)) or []:
+            if o.get("id") not in keep:
+                self.b.api.cancel_order(o["id"])
+                log.warning("PUNT cancelled our other order %s on %s before trading it", o.get("id"), ex)
+
+    def settled(self) -> set:
+        return set(getattr(self, "_settled", set()))
+
+    def place(self, ex, side, qty, price, key, expires_at, purpose="punt"):
+        if self.dry:
+            got, cost = 0.0, 0.0
+            for px, q in PE.asks_for(self.book(ex) or {}, side):
+                if px > price + 1e-9 or got >= qty:
+                    break
+                n = min(q, qty - got)
+                got, cost = got + n, cost + n * px
+            held = self.positions().get(str(ex), 0.0)
+            pairs = min(got, max(0.0, -held if side == "yes" else held))
+            self.vcash += cost - pairs
+            self.vpos[str(ex)] = self.vpos.get(str(ex), 0.0) + (got if side == "yes" else -got)
+            return f"dry-{key}"
+        exp = datetime.fromtimestamp(expires_at, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")   # fixed per payload (review B1)
+        with self.b.trade_lock:
+            resp = self.b.api.place_order(str(ex), side, "buy", int(qty), price, expiration=exp, key=key)
+            self.b.store.record_order(resp.get("orderId"), str(ex), None, side, "buy", price, int(qty), purpose, response=resp)
+        return resp.get("orderId")
 
 
 class ExplainedDirection(DirectionTrader):
@@ -504,7 +619,7 @@ class ArbScanner(threading.Thread):
         if time.time() - b.last_free_unwind < b.cfg.free_unwind_scan_sec:
             return
         held = {}
-        cf_races = cheapfav_races_of(b) | shock_races_of(b)   # a cheap-favourite or shock position next to another
+        cf_races = cheapfav_races_of(b) | shock_races_of(b) | punt_races_of(b)   # a cheap-favourite / shock / punt position next to another
         for rname in list(b.arb.committed):                  # sleeve's NO is not a set
             race = b.universe.races.get(rname)
             if race is None or rname in cf_races:
@@ -719,6 +834,20 @@ class Bot:
                 self.shock_ledger()
             except Exception as e:
                 log.warning("shock ledger at start-up: %s", e)
+        self.punt = None
+        if getattr(cfg, "punt_enabled", False):
+            try:
+                self.punt = PE.PuntExecutor(os.path.join(HERE, cfg.punt_plan_path), os.path.join(HERE, "params", "punt_state.json"),
+                                            cfg.punt_plan_sha256, _PuntAdapter(self), max_budget=cfg.punt_max_budget,
+                                            cash_floor=cfg.punt_cash_floor)
+                log.warning("PUNT executor enabled: plan %s, %s", cfg.punt_plan_path,
+                            "REFUSED: " + self.punt.refused if self.punt.refused else "hash matches, %d steps" % len(self.punt.plan["steps"]))
+            except Exception as e:
+                log.warning("punt executor disabled: %s", e)
+                self.punt = None
+        # punt / election-night races are never touched by the set paths (recycler, free unwinds, offload, churn)
+        _prot3 = self.arb.protected
+        self.arb.protected = lambda: set(_prot3()) | punt_races_of(self)
         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
         self.cash_needs: dict = {}             # sleeve -> (cash short this cycle, why): what the cash raise may sell for
@@ -889,10 +1018,22 @@ class Bot:
                     held_side = "no" if o.get("side") == "yes" else "yes"   # an exit buying YES closes held NO
                     rem = float(o.get("quantity") or 0) - float(o.get("quantityFilled") or o.get("filledQuantity") or 0)
                     resting_exit[(str(ex_o), held_side)] = resting_exit.get((str(ex_o), held_side), 0.0) + max(0.0, rem)
+        # BACKLOG 0c: `held` sums fills GROSS, so it can exceed what the sleeves still hold. Never close punt / election legs
+        # (whole races), and never the shares that make up a held set (a set's legs all on one side: min |position|)
+        punt_ex = Bot.punt_legs(self) if getattr(self, "universe", None) is not None else set()
+        set_sh: dict = {}
+        for race in (getattr(getattr(self, "universe", None), "races", None) or {}).values():
+            qs = [positions.get(e, 0.0) for e in race.exchange_ids]
+            if len(qs) >= 2 and all(q < 0 for q in qs):
+                for e in race.exchange_ids:
+                    set_sh[(e, "no")] = min(-q for q in qs)
+            elif len(qs) >= 2 and all(q > 0 for q in qs):
+                for e in race.exchange_ids:
+                    set_sh[(e, "yes")] = min(qs)
         done = 0
         ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
         for (ex, side), q in held.items():
-            if done >= write_budget or q < 1 or ex not in fair or ex in recent_exit:
+            if done >= write_budget or q < 1 or ex not in fair or ex in recent_exit or ex in punt_ex:
                 continue
             # catch-up / cheap favourites / shock keep their own: what they hold on this side is not ours to close. One-sided,
             # so never more than the venue position alone allows (their ledgers and the positions read are taken at
@@ -900,6 +1041,7 @@ class Bot:
             sleeves = [(getattr(self, a, None) or {}).get(ex, 0.0) for a in ("catchup_open", "cheapfav_open", "shock_open")]
             pos = positions.get(ex, 0.0)
             cap = -pos - sum(max(0.0, -v) for v in sleeves) if side == "no" else pos - sum(max(0.0, v) for v in sleeves)
+            cap -= set_sh.get((ex, side), 0.0)            # set legs are the set paths' (0c)
             q = int(min(q, cap) - resting_exit.get((ex, side), 0.0))   # never close more than held, net of resting exits
             if q < 1:
                 continue
@@ -1136,6 +1278,9 @@ class Bot:
             sk_now = shock_races_of(self)
             busy_races |= sk_now
             excl_races |= sk_now
+            pr_now = punt_races_of(self)             # punt / election races: never the raise's to sell
+            busy_races |= pr_now
+            excl_races |= pr_now
             if set(needs) == {"shock_reserve"} and bool(getattr(self, "shock_active", lambda: False)()):
                 return
             # a clip of ours that may still rest anywhere: pulled before positions are read (review 3: a rested clip filling
@@ -1574,7 +1719,7 @@ class Bot:
             if now - t > self.cfg.inside_ttl_sec - 45:
                 self.inside.last.pop(ex, None)
         books = {ex: b for ex, b in self.feed.books().items() if ex not in self.mm.quoted}
-        orders = self.inside.cycle(books, positions, exclude=set(self.mm.quoted), blocked=blocked, prices=prices)
+        orders = self.inside.cycle(books, positions, exclude=set(self.mm.quoted) | Bot.punt_legs(self), blocked=blocked, prices=prices)
         by_ex: dict = {}
         for o in orders:
             by_ex.setdefault(str(o["exchangeId"]), []).append(o)
@@ -1912,7 +2057,7 @@ class Bot:
                 race = self.universe.races.get(rname)
                 if race is None or len(race.exchange_ids) != 2 or rname in CHURN_EXCLUDE or ch.held(rname) > 0:
                     continue
-                if rname in cheapfav_races_of(self) or rname in shock_races_of(self):
+                if rname in cheapfav_races_of(self) or rname in shock_races_of(self) or rname in punt_races_of(self):
                     continue                                   # cheap-favourite NO legs (held to the call) and shock positions are not sets
                 n = venue_sets(race)
                 if n <= 0:
@@ -1933,7 +2078,7 @@ class Bot:
             for race in self.universe.races.values():
                 if not ch.eligible(race, now) or race.name in self.arb.hostile or self.arb.cooldown.get(race.name, 0) > now:
                     continue
-                if race.name in cheapfav_races_of(self) or race.name in shock_races_of(self):
+                if race.name in cheapfav_races_of(self) or race.name in shock_races_of(self) or race.name in punt_races_of(self):
                     continue                                   # a cheap-favourite or shock race: the ledgers stay apart
                 med = self.churn_med.get(race.name)
                 if med is None:
@@ -2022,6 +2167,7 @@ class Bot:
         ({"races": [...], "exchanges": [...]}, written by hand or by the punt executor; read every call)."""
         races = {r: "cheap favourites" for r in cheapfav_races_of(self)}
         races.update({r: "shock mode" for r in shock_races_of(self)})   # shock closes its own (flat by 12:00 ET 3 Nov)
+        races.update({r: "punt / election night" for r in punt_races_of(self)})   # whole races, not just the traded leg
         if self.churn is not None:
             races.update({l["race"]: "high-frequency arb" for l in self.churn.lots})
         legs = {str(e): "catch-up sweep" for e, q in (getattr(self, "catchup_open", None) or {}).items() if q}
@@ -2710,7 +2856,8 @@ class Bot:
         cu_races = {self.universe.by_exchange[e][0] for e in cu_ex if e in self.universe.by_exchange}
         cands = [c for c in cf.candidates(rows, positions, race_legs) if c["exchange_id"] not in resting   # the venue shows,
                  and not (ch is not None and ch.held(c["race"])) and skip.get(c["exchange_id"], 0) <= now   # keep them apart
-                 and c["race"] not in cu_races and c["race"] not in shock_races_of(self)]   # nor shock's races
+                 and c["race"] not in cu_races and c["race"] not in shock_races_of(self)   # nor shock's races
+                 and c["race"] not in punt_races_of(self)]                                # nor the punt's
         if not cands:
             return
         touch = {}
@@ -2772,6 +2919,48 @@ class Bot:
             except ApiError as e:
                 log.warning("cheapfav entry %s: %s", o["exchange_id"], e)
     # ------------------------------------------------------------------ shock mode (proposals/shock_mode.py)
+    # --------------------------------------------------------------- punt executor (BACKLOG 0000, research_notes/punt_plan.md)
+    def punt_races(self) -> set:
+        """Races of every leg with a punt / election fill or order (WD.HOLD_PURPOSES), plus the enabled plan's legs; read at
+        most every 30 s. A failed read keeps the last answer."""
+        now = time.time()
+        c = getattr(self, "_punt_races_c", None)
+        if c is not None and now - c[0] < 30.0:
+            return c[1]
+        ex = set()
+        if getattr(self, "store", None) is not None:
+            ph = ",".join("?" * len(WD.HOLD_PURPOSES))
+            try:
+                ex = {str(r["exchange_id"]) for r in self.store.rows(
+                    f"SELECT DISTINCT exchange_id FROM fills WHERE purpose IN ({ph}) UNION "
+                    f"SELECT DISTINCT exchange_id FROM orders WHERE purpose IN ({ph})", WD.HOLD_PURPOSES * 2)}
+            except Exception as e:
+                log.warning("punt races: %s", e)
+                if c is not None:
+                    return c[1]
+        pe = getattr(self, "punt", None)
+        if pe is not None:
+            ex |= pe.legs()
+        ro = getattr(getattr(self, "universe", None), "race_of", None)
+        races = {r.name for r in (ro(e) for e in ex) if r is not None} if ro is not None else set()
+        self._punt_races_c = (now, races)
+        return races
+
+    def punt_legs(self) -> set:
+        u = getattr(self, "universe", None)
+        races = punt_races_of(self)
+        return {e for r in races for e in (u.races[r].exchange_ids if u is not None and r in u.races else ())}
+
+    def punt_loop(self):
+        """Thread: one executor tick every punt_tick_sec; never dies."""
+        while not self.stop:
+            t0 = time.time()
+            try:
+                self.punt.tick()
+            except Exception as e:
+                log.exception("punt tick failed: %s", e)
+            time.sleep(max(1.0, self.cfg.punt_tick_sec - (time.time() - t0)))
+
     def shock_races(self) -> set:
         """Races where shock mode holds a position or has an entry in flight (its ledger plus entry contexts)."""
         return set(getattr(self, "shock_races_cache", None) or ())   # published by shock_ledger / shock_tick under the lock
@@ -3332,8 +3521,13 @@ class Bot:
                 time.sleep(self.cfg.election_poll_sec)
                 continue
             ttl = (datetime.now(timezone.utc) + timedelta(seconds=en.cfg.ttl_sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            pe = getattr(self, "punt", None)            # review B3: never trade a race of the enabled punt plan
+            pl = {e for x in (pe.legs() if pe is not None else ()) for r in [self.universe.race_of(x)] if r is not None for e in r.exchange_ids}
             for o in orders:
                 log.info("ELECTION %s %s %s x%s at %s: %s", o.get("kind"), o.get("exchangeId"), o.get("side"), o.get("quantity"), o.get("price"), o.get("reason"))
+                if str(o.get("exchangeId")) in pl:
+                    log.warning("ELECTION skips %s: a punt plan race", o.get("exchangeId"))
+                    continue
                 if self.dry_run:
                     continue
                 if o.get("kind") != "exit" and strategy_paused(self, "election"):
@@ -3481,13 +3675,17 @@ class Bot:
             try:
                 ranked = self.tracker.rank(n, price_band=(self.cfg.mm.min_price, self.cfg.mm.max_price))
                 exs = [ex for ex, _ in ranked if (prices.get(ex) or {}).get("bestBid") is not None and (prices.get(ex) or {}).get("bestAsk") is not None]
+                pl = Bot.punt_legs(self)
+                exs = [ex for ex in exs if ex not in pl]          # never quote a punt / election leg (self-trade, nets the punt)
                 if len(exs) >= max(4, n // 2):
                     self.mm.quoted = exs[:n]
                     log.info("mm markets by tracker edge: %d chosen (top %s)", len(self.mm.quoted), [(e, round(sc, 2)) for e, sc in ranked[:5]])
                     return self.mm.quoted
             except Exception as e:
                 log.warning("tracker rank: %s", e)
-        return self.mm.select_markets(prices, self.volume)
+        pl = Bot.punt_legs(self)
+        self.mm.quoted = [ex for ex in self.mm.select_markets(prices, self.volume) if ex not in pl]   # select_markets sets quoted itself
+        return self.mm.quoted
 
     # --------------------------------------------------------------- realtime feed
     def mm_gate_ready(self, killed: bool, now: Optional[float] = None) -> bool:
@@ -3925,7 +4123,7 @@ class Bot:
                     and not strategy_paused(self, "exit:unwinds")):
                 self.last_free_unwind = time.time()
                 held_books = {}
-                cf_races = cheapfav_races_of(self) | shock_races_of(self)   # a cheap-favourite or shock position next to
+                cf_races = cheapfav_races_of(self) | shock_races_of(self) | punt_races_of(self)   # a cheap-favourite / shock / punt position next to
                 for rname in list(self.arb.committed):                  # another sleeve's NO is not a set
                     if rname in cf_races:
                         continue
@@ -4011,6 +4209,9 @@ class Bot:
             self.scanner = ArbScanner(self)
             self.scanner.start()
             log.info("arb scanner started: every %.1fs at +%.1fs offset", self.cfg.arb_scan_sec, self.cfg.arb_scan_offset)
+        if getattr(self, "punt", None) is not None and not once:
+            threading.Thread(target=self.punt_loop, name="punt", daemon=True).start()
+            log.warning("PUNT executor thread started (%s): every %.0fs", "DRY" if self.dry_run else "LIVE", self.cfg.punt_tick_sec)
         if self.shock is not None and not self.dry_run and not once:
             threading.Thread(target=self.shock_loop, name="shock", daemon=True).start()
             log.info("shock mode thread started: every %.0fs", self.cfg.shock_poll_sec)
