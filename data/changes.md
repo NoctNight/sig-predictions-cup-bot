@@ -443,3 +443,8 @@
   weaker), precheck 38/0, day 0 violations and no false pauses, live replay pauses only in the 22 Oct bad window; Opus
   round 9 both SAFE TO DEPLOY. First deploy try at ~00:50 was cut off by an app relaunch (bot untouched); redeployed.
   10-min watch passed. Rollback: strategy_stops_enabled false + botctl deploy.
+
+- 2026-10-26 00:32 BST: Punt executor deployed OFF (97ee2d3; punt_enabled false): walks an approved plan file in chunks,
+  never above max price, abort conditions, dry-run; every exit path now leaves punt/election/set shares alone (backlog
+  0c); the sim harness drops live state files. Opus review 2 SAFE TO DEPLOY switched off; before switch-on: the fixes
+  listed in punt-plan-handover.md. Punt plan: research_notes/punt_plan.md (two-stage roll, P(top 3) ~1.85%).
