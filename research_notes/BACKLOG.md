@@ -182,6 +182,7 @@ impact, beats the ~3%-to-settlement return of capital left in arb sets, fits eve
   by selling late-call sets at cheap moments.
 
 ## Done
+- 27 Oct: GAP TRADES (rank legs by SIG vs outside gap, sell before the punt): DROP. Gap-closing edge +1c net in sample (t 4-5) flips to -0.3 to -0.9c out of sample (t down to -4.9). Held-through-call version untestable on SIG history; cheap favourites already covers it live. Note: gap-trades-handover.md.
 - 23 Oct: Directional trades sized by market impact / 6+ tick gap held 12 h: NEGATIVE. New day out of sample -0.49
   ticks/share (t -1.1, n 100); pooled out of sample -0.48 (t -3.7, n 2,184); no variant positive with t > 2. The 21-22 Oct
   night was one good night. Not built. (research_notes/directional_impact.md, "Re-test 2026-10-23")
