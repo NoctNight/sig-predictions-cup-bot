@@ -3110,31 +3110,79 @@ class _PuntFake:
     def known(self, ex): return str(ex) in self.books
     def abort_requested(self): return self.abort
     def fills_cost(self, ids): return None
-    def cancel_ours(self, ids): self.cancels.extend(ids)
     def clear_others(self, ex, keep): pass
+
+    # venue semantics (reviews R2): an identical payload under a used key REPLAYS the stored response; a changed payload under
+    # a used key is 409 CONFLICT; "lost" = placed, response lost; `down` = every place is a 503 that places nothing;
+    # `terminal` = TERMINAL_ENGINE_SCOPE; `rest` = half of each order fills at once, the rest rests until its expiry + `lag`
+    stored, recorded, live, overlap, down, terminal, rest, lag, cancel_fail = None, None, None, 0, False, False, False, 5.0, []
+    fq_on, fq_lag, noop = False, 0.0, False
+    def cancel_ours(self, ids):
+        self.cancels.extend(ids)
+        if self.cancel_fail:
+            raise R.ApiError(self.cancel_fail.pop(0), "X", "fake cancel failure")
+        self.live = [o for o in (self.live or []) if o not in ids]
+    def fills_qty(self, ids):
+        if not self.fq_on:
+            return None
+        return sum(o["fq"] for o in self.sent if o["oid"] in ids and o["t"] <= self.t - self.fq_lag)   # the store lags the venue
+    def recover_order(self, ex, side, qty, price, exp, purpose):
+        for o in self.sent:
+            if (o["ex"], o["side"], o["qty"], o["price"], int(o["exp"])) == (str(ex), side, qty, price, int(exp)):
+                self.recorded = dict(self.recorded or {}, **{o["oid"]: purpose})
+                return o["oid"]
+        return None
 
     def place(self, ex, side, qty, price, key, expires_at, purpose="punt"):
         self.calls = getattr(self, "calls", []) + [(key, ex, side, qty, price, expires_at)]
+        if self.terminal:
+            raise R.ApiError(409, "TERMINAL_ENGINE_SCOPE", "exchange settled")
+        if self.noop:
+            return None                              # 200 with orderId null: the venue's no-op
+        if self.down:
+            raise R.ApiError(503, "X", "fake down")
+        payload = (str(ex), side, qty, price, int(expires_at))
+        self.stored = self.stored or {}
+        if key in self.stored:
+            if self.stored[key][0] == payload:
+                return self.stored[key][1]            # the real venue replays the exact stored response
+            raise R.ApiError(409, "CONFLICT", "key used with another payload")
+        lost = False
         if self.fail:
             st = self.fail.pop(0)
-            if st == "lost":                     # placed on the venue, response lost
-                self.fail.insert(0, 409) if False else None
-                self.placed_keys = getattr(self, "placed_keys", set()) | {key}
-            raise R.ApiError(502 if st == "lost" else st, "X", "fake %s" % st)
-        if key in getattr(self, "placed_keys", set()):
-            raise R.ApiError(409, "CONFLICT", "key used")
+            if st != "lost":
+                raise R.ApiError(*(st if isinstance(st, tuple) else (st, "X")), "fake %s" % (st,))
+            lost = True                              # placed on the venue, response lost
+        oid = self._fill(ex, side, qty, price, key, purpose, expires_at)
+        self.stored[key] = (payload, oid)
+        if lost:
+            raise R.ApiError(502, "X", "fake lost response")
+        return oid
+
+    def _fill(self, ex, side, qty, price, key, purpose, expires_at):
+        lx = getattr(self, "_live_exp", {})
+        self.live = [o for o in (self.live or []) if lx.get(o, 0) > self.t]
+        if self.live:
+            self.overlap += 1                        # review B4: two live orders at once
         got = cost = 0.0
         for px, q in PE.asks_for(self.books[str(ex)], side):
             if px > price + 1e-9 or got >= qty:
                 break
             n = min(q, qty - got)
             got, cost = got + n, cost + n * px
+        if self.rest and got > 1:                    # half fills at once, the rest rests (and fills nothing)
+            cost, got = cost / 2, float(int(got) // 2)
         held = self.pos.get(str(ex), 0.0)
         pairs = min(got, max(0.0, -held if side == "yes" else held))
         self.c += pairs - cost
         self.pos[str(ex)] = held + (got if side == "yes" else -got)
-        self.sent.append(dict(ex=str(ex), side=side, qty=qty, price=price, key=key, got=got, cost=cost, purpose=purpose, t=self.t))
-        return "o%d" % len(self.sent)
+        oid = "o%d" % (len(self.sent) + 1)
+        if self.rest:
+            self._live_exp = dict(getattr(self, "_live_exp", {}), **{oid: expires_at + self.lag})
+            self.live = (self.live or []) + [oid]
+        self.sent.append(dict(ex=str(ex), side=side, qty=qty, price=price, key=key, got=got, cost=cost, purpose=purpose, t=self.t,
+                              oid=oid, exp=expires_at, fq=got))
+        return oid
 
 
 def _pbook(asks=(), bids=()):
@@ -3235,17 +3283,89 @@ _keys = [o["key"] for o in _f.sent]
 check("punt: a restart resumes from the state file with new keys only (no key sent twice)", len(_keys) == len(set(_keys)) and len(_keys) >= 3, str(_keys))
 check("punt: the previous chunk is cancelled before the next one is sent (review B4)",
       all(("o%d" % k) in _f.cancels for k in range(1, len(_f.sent))), f"{_f.cancels} {len(_f.sent)}")
+# review B4 + R2-4: with resting remainders and a sweep lag the previous chunk is cancelled before each new one, never two live
+# orders, and the cancel does not cost a tick: chunks go out TTL+2 apart (not twice that)
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_f.rest = True
+_e, _, _ = _pmk(_pplan(), _f)
+_prun(_e, _f, PE.ts_of("2026-11-03T17:30:00-05:00") + 400)
+_gaps = [b["t"] - a["t"] for a, b in zip(_f.sent, _f.sent[1:])]
+check("punt: resting remainders + a 5 s sweep lag: never two live orders at once (review B4)", len(_f.sent) >= 5 and _f.overlap == 0,
+      f"{len(_f.sent)} overlap {_f.overlap}")
+check("punt: cancel + fresh positions + send in one tick: chunks are TTL+2 apart (<= 40 s), not ~64 s (review R2-4)",
+      _gaps and max(_gaps) <= PE.ORDER_TTL + 12 and min(_gaps) >= PE.ORDER_TTL, str(_gaps))
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_f.rest = True
+_e, _, _ = _pmk(_pplan(), _f)
+_f.cancel_fail = [503, 503, 503, 503, 503, 503, 503, 503]
+_prun(_e, _f, PE.ts_of("2026-11-03T17:30:00-05:00") + 70)
+check("punt: while the cancel of the previous chunk keeps failing (5xx) nothing new is sent", len(_f.sent) == 1 and _f.overlap == 0, f"{len(_f.sent)} {_f.overlap}")
 # review B1: the response is lost but the order was placed; the resend under the same key gets 409: counted, key advances
 _f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
 _e, _, _ = _pmk(_pplan(), _f)
 _f.fail = ["lost"]
 _e.tick(); _f.t += 10; _e.tick()
 _v = _e.state["steps"]["s1"]
-check("punt: a lost response + 409 on the resend is booked as placed (counted at its limit), the key advances, no abort",
-      _v["status"] == "active" and _v["n"] == 1 and _v["orders"][0]["id"] is None and _v["errors"] == 0 and not _v.get("pending"), str(_v))
+check("punt: a lost response + the resend of the identical payload under the used key (the venue REPLAYS it): the real order id is booked "
+      "once, the key advances, no second order, no abort (review N2)",
+      _v["status"] == "active" and _v["n"] == 1 and _v["orders"][0]["id"] == "o1" and _v["errors"] == 0 and not _v.get("pending")
+      and len(_f.sent) == 1 and len(_f.calls) == 2, str(_v))
 for _ in range(15):
     _f.t += 10; _e.tick()
-check("punt: after the 409 the next chunk goes out under the next key", any(o["key"].startswith("punt-T-s1-1-") for o in _f.sent), str([o["key"] for o in _f.sent]))
+check("punt: after the replay the next chunk goes out under the next key", any(o["key"].startswith("punt-T-s1-1-") for o in _f.sent), str([o["key"] for o in _f.sent]))
+# review R2-6: a changed payload under a used key is a 409 CONFLICT: booked as placed (a placeholder), never a second order
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_e.tick()
+_pe = _e.state["steps"]["s1"]["orders"][0]
+_f.stored[_pe["key"]] = (("1007", "yes", 1, 0.3, 0), "oX")          # the key is already used by another payload
+_e.state["steps"]["s1"]["n"] = 0; _e.state["steps"]["s1"]["orders"] = []; _e.state["steps"]["s1"]["last"] = 0.0
+_f.t += 40; _e.tick()
+_v = _e.state["steps"]["s1"]
+check("punt: 409 CONFLICT (key used by another payload) is booked as a placeholder, no abort, no error counted",
+      _v["status"] == "active" and _v["orders"] and _v["orders"][0]["id"] is None and _v["errors"] == 0, str(_v))
+# review R2-2: a placeholder (id None) is looked up once expired and recorded with its purpose, so its fills are attributed
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.fail = ["lost"]
+_f.down = False
+_e.tick()                                            # placed, response lost
+_f.down = True
+for _ in range(3):                                   # venue down: the pending payload expires unresent
+    _f.t += 10; _e.tick()
+_v = _e.state["steps"]["s1"]
+_ph = [o for o in _v["orders"] if o["id"] is None]
+check("punt: a pending payload that expires unresent is booked as a placeholder (id None)", len(_ph) == 1 and not _v.get("pending"), str(_v))
+_f.down = False
+check("punt: no lookup before the placeholder's expiry + 10 s", not _f.recorded)
+for _ in range(3):
+    _f.t += 10; _e.tick()
+check("punt: the placeholder is found by exchange, side, qty, limit and expiry, recorded with purpose punt and given its id (review R2-2)",
+      _f.recorded == {"o1": "punt"} and _v["orders"][0]["id"] == "o1", f"{_f.recorded} {_v['orders']}")
+_f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=1e6)         # a sell placeholder is recorded as punt_exit
+_e, _, _ = _pmk(_pplan(), _f)
+_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=60000.0)
+_f.pos["1007"] = 60000.0
+_f.books["1007"] = _pbook(asks=[(0.92, 1e6)], bids=[(0.90, 1e6)])
+_f.out = {"1007": (0.97, 0.96)}
+_f.fail = ["lost"]
+while not getattr(_f, "calls", None):
+    _f.stamp += 1; _f.t += 10; _e.tick()
+_f.down = True
+for _ in range(4):
+    _f.t += 10; _e.tick()
+_f.down = False
+for _ in range(3):
+    _f.t += 10; _e.tick()
+check("punt: a placeholder SELL is recorded with purpose punt_exit", _f.recorded == {"o1": "punt_exit"}, str(_f.recorded))
+# review R2-6: TERMINAL_ENGINE_SCOPE (the market settled) aborts the step; it is not booked as placed
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.terminal = True
+_prun(_e, _f, _f.t + 300)
+_v = _e.state["steps"]["s1"]
+check("punt: a TERMINAL_ENGINE_SCOPE 409 aborts the step at once: one call, no placeholder, no resend",
+      _v["status"] == "aborted" and not _v["orders"] and len(_f.calls) == 1 and "terminal" in (_v.get("why") or ""), str(_v))
 # a crash after the payload was saved: the restart resends exactly that payload
 _f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
 _e, _pp, _st = _pmk(_pplan(), _f)
@@ -3325,9 +3445,12 @@ _f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=1e6)
 _e, _, _ = _pmk(_pplan(), _f)
 _e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=60000.0)
 _f.pos["1007"] = 60000.0
-_prun(_e, _f, PE.ts_of("2026-11-04T04:10:00-05:00"))          # never called: nothing sold
-_f.pos["1007"] = 0.0                                          # and a position that vanished without our sells
+_prun(_e, _f, PE.ts_of("2026-11-03T19:50:00-05:00"))          # the sale step starts: base 60,000, never called
+_f.pos["1007"] = 0.0                                          # the leg vanishes from /positions without our sells (review N3)
+_prun(_e, _f, PE.ts_of("2026-11-04T04:10:00-05:00"))
 check("punt: a sale window that closes with nothing sold never opens stage 2", not _f.sent, str(_f.sent[:1]))
+check("punt: a stage-1 leg that vanishes from /positions without a settled flag or fills of ours is not a sale (sold 0, stage 2 shut)",
+      _e.state["steps"]["s1_sell"].get("sold", 0) == 0 and not _e.state["steps"]["s2"].get("chosen"), str(_e.state["steps"]["s1_sell"]))
 
 # review R2-1: once stage 2 has chosen its leg, a sell step that aborts later (market settled) does not freeze it
 _f = _PuntFake(PE.ts_of("2026-11-03T22:00:00-05:00"), _books, cash=40000.0)
@@ -3341,6 +3464,242 @@ _n0 = len(_f.sent)
 _e.state["steps"]["s1_sell"]["status"] = "aborted"
 _prun(_e, _f, PE.ts_of("2026-11-03T23:30:00-05:00"))
 check("punt: stage 2 keeps buying after its sell step aborts once a candidate is chosen (review R2-1)", _n0 >= 1 and len(_f.sent) > _n0, f"{_n0} {len(_f.sent)}")
+
+# review R2-3: the sale is what OUR punt_exit orders filled. Nothing filled (bid 0.50 < the 0.85 floor) while the whole leg drops
+# out of /positions (someone else's sale, a settlement without a flag): not a sale, stage 2 stays shut
+def _sale_setup(bid):
+    f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=1e6)
+    f.fq_on = True
+    e, _, _ = _pmk(_pplan(), f)
+    e.state["steps"]["s1"] = dict(e.st("s1"), status="done", filled=60000.0)
+    f.pos["1007"] = 60000.0
+    f.books["1007"] = _pbook(asks=[(0.92, 1e6)], bids=[(bid, 1e6)])
+    f.out = {"1007": (0.97, 0.96)}
+    return f, e
+_f, _e = _sale_setup(0.50)
+for _ in range(8):
+    _f.stamp += 1; _e.tick(); _f.t += 40
+_f.pos["1007"] = 0.0
+for _ in range(10):
+    _f.stamp += 1; _e.tick(); _f.t += 40
+_v = _e.state["steps"]["s1_sell"]
+check("punt: sell orders that fill nothing while the leg vanishes from positions: sold 0 (not the quantity sent), stage 2 shut",
+      _v.get("sold", 0) == 0 and sum(o["qty"] for o in _v["orders"]) > 0 and not _e.state["steps"]["s2"].get("chosen") and not _e.state["steps"]["s2"]["orders"],
+      str(_v))
+_f, _e = _sale_setup(0.90)
+for _ in range(8):
+    _f.stamp += 1; _e.tick(); _f.t += 40
+_v = _e.state["steps"]["s1_sell"]
+check("punt: the sold quantity is the fills of the punt_exit orders (20,000 a chunk) and stage 2 opens only past 70% of it",
+      abs(_v["sold"] - sum(o["fq"] for o in _f.sent if o["purpose"] == "punt_exit")) < 1 and _v["sold"] >= 40000, str(_v))
+
+# review S7: a dry run never uses (or writes) params/punt_state.json
+class _DryFake(_PuntFake):
+    dry = True
+_f = _DryFake(_T0, _books)
+_d = _ptf.mkdtemp(prefix="punt_t_")
+_pp = os.path.join(_d, "plan.json"); open(_pp, "w").write(_pj.dumps(_pplan()))
+_e = PE.PuntExecutor(_pp, os.path.join(_d, "punt_state.json"), PE.sha256_file(_pp), _f, max_budget=150000.0)
+check("punt: an executor in dry mode refuses the live state file name", bool(_e.refused) and "state file" in _e.refused, str(_e.refused))
+_live_state = os.path.join(ROOT, "params", "punt_state.json")
+_before = (os.path.exists(_live_state), os.path.getmtime(_live_state) if os.path.exists(_live_state) else None)
+_ppl = os.path.join(_d, "p2.json"); open(_ppl, "w").write(_pj.dumps(_pplan()))
+_bk = os.path.join(_d, "books.json"); open(_bk, "w").write(_pj.dumps(_books))
+import io as _pio, contextlib as _pcl
+with _pcl.redirect_stdout(_pio.StringIO()):
+    _rc = PE.main(["--plan", _ppl, "--books", _bk, "--at", "2026-11-03T17:31:00-05:00", "--minutes", "10"])
+_after = (os.path.exists(_live_state), os.path.getmtime(_live_state) if os.path.exists(_live_state) else None)
+check("punt: the CLI dry run completes and never creates or touches params/punt_state.json", _rc == 0 and _before == _after, f"{_rc} {_before} {_after}")
+
+# B3 / R2-5: the election sleeve skips every leg of a punt plan race, logging once per leg
+_el_logs = []
+import logging  # noqa: E402
+class _H(logging.Handler):
+    def emit(self, r): _el_logs.append(r.getMessage())
+_h = _H(); logging.getLogger("sigbot").addHandler(_h)
+_erace = types.SimpleNamespace(name="Minnesota Senate", exchange_ids=["1007", "1008"])
+_ebot = types.SimpleNamespace(punt=types.SimpleNamespace(legs=lambda: {"1007"}), universe=types.SimpleNamespace(
+    race_of=lambda x: _erace if x in ("1007", "1008") else None))
+_eo = [{"exchangeId": "1008", "side": "yes"}, {"exchangeId": "1009", "side": "yes"}]
+_kept = [R.Bot.election_filter(_ebot, _eo) for _ in range(5)]
+logging.getLogger("sigbot").removeHandler(_h)
+check("election: orders on any leg of a punt plan race are dropped (other races pass), logged once per leg, not once per poll",
+      all(k == [_eo[1]] for k in _kept) and len([m for m in _el_logs if "ELECTION skips" in m]) == 1, str(_el_logs))
+_ebot.punt = None
+check("election: with no punt executor every order passes", R.Bot.election_filter(_ebot, _eo) == _eo)
+
+# S2b: past stop_quoting_at the MM's account-wide cancel-all is exchange by exchange when punt legs rest orders
+import sigbot.mm as _pmm  # noqa: E402
+_cc = []
+_mmb = types.SimpleNamespace(load_overrides=lambda: None, hours_to_end=lambda: -1.0, dry_run=False,
+                             api=types.SimpleNamespace(cancel_all=lambda exchange_id=None: _cc.append(exchange_id)),
+                             protected_fn=lambda: {"1007"})
+_pmm.MarketMaker.quote_cycle(_mmb, {}, {}, {}, {"1007": [{"id": 1}], "1500": [{"id": 2}], "1600": []}, {}, 0.0, 1, 10)
+check("MM past stop_quoting_at: the punt leg's resting order is not cancelled (per-exchange cancels of the others only)", _cc == ["1500"], str(_cc))
+_cc.clear()
+_mmb.protected_fn = lambda: set()
+_pmm.MarketMaker.quote_cycle(_mmb, {}, {}, {}, {"1007": [{"id": 1}], "1500": [{"id": 2}]}, {}, 0.0, 1, 10)
+check("MM past stop_quoting_at with no punt leg: one account-wide cancel-all as before", _cc == [None], str(_cc))
+
+# S4 (outside freshness) and S10 (single attempt) on the live adapter
+_ad = R._PuntAdapter(types.SimpleNamespace(direction=types.SimpleNamespace(rows=[
+    {"exchange_id": "1007", "pm": 0.97, "kalshi": 0.96, "ts": time.time() - 30},
+    {"exchange_id": "1008", "pm": 0.97, "kalshi": 0.96, "ts": time.time() - 900}]), dry_run=False))
+check("punt: a fresh outside row is used, one older than 5 minutes is no evidence (review S4)",
+      _ad.outside("1007", "yes") == (0.97, 0.96) and _ad.outside("1008", "yes") == (None, None))
+_pl = []
+_lk = threading.Lock()
+class _PApi:
+    def place_order(self, ex, side, act, q, px, expiration=None, key=None, retries=None):
+        _pl.append(retries); return {"orderId": 7}
+_ad = R._PuntAdapter(types.SimpleNamespace(dry_run=False, trade_lock=_lk, api=_PApi(), store=types.SimpleNamespace(record_order=lambda *a, **k: None),
+                                           book=None))
+_ad.place("1007", "yes", 10, 0.3, "k", time.time() + 30, "punt")
+check("punt: the live adapter places with retries=0 (one attempt; no client sleeps while the trade lock is held) (review S10)", _pl == [0], str(_pl))
+
+# review R3-1: the fill store lags the venue by 90 s; the sale is measured again until stage 2 has chosen, and a finished sale
+# waits for the fills to catch up, so stage 2 opens on the full proceeds (100,000 sold) instead of freezing a lagging 60-80k
+def _lag_plan():
+    p = _pplan()
+    p["steps"][2]["start"] = "2026-11-03T19:46:00-05:00"
+    return p
+_f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=200000.0)
+_f.fq_on, _f.fq_lag = True, 90.0
+_e, _, _ = _pmk(_lag_plan(), _f)
+_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=100000.0)
+_f.pos["1007"] = 100000.0
+_f.books["1007"] = _pbook(asks=[(0.92, 1e6)], bids=[(0.90, 1e6)])
+_f.out = {"1007": (0.97, 0.96)}
+_f.lead = 250000.0
+for _ in range(60):
+    _f.stamp += 1; _e.tick(); _f.t += 10
+_sv, _s2 = _e.state["steps"]["s1_sell"], _e.state["steps"]["s2"]
+check("punt: fills lagging 90 s: the finished sale ends measured at the full 100,000 (not frozen at 60-80k) and stage 2 opens on all of it",
+      _sv["status"] == "done" and abs(_sv["sold"] - 100000) < 1 and _s2.get("chosen") and abs(_s2["chosen"]["cash"] - (100000 * 0.85 + 20000)) < 1,
+      f"{_sv.get('sold')} {_sv['status']} {_s2.get('chosen')}")
+
+# review R3-2: the stage-1 leg settles / the sell step aborts BEFORE stage 2 chooses: the measured sale stays, stage 2 opens if
+# min_sold_frac was met, and stays shut when nothing was sold
+def _sale_then(after, nchunks):
+    f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=200000.0)
+    f.fq_on = True
+    p = _lag_plan(); p["steps"][2]["start"] = "2026-11-03T21:00:00-05:00"
+    e, _, _ = _pmk(p, f)
+    e.state["steps"]["s1"] = dict(e.st("s1"), status="done", filled=100000.0)
+    f.pos["1007"] = 100000.0
+    f.books["1007"] = _pbook(asks=[(0.92, 1e6)], bids=[(0.90, 1e6)])
+    f.out = {"1007": (0.97, 0.96)}
+    f.lead = 250000.0
+    while len([o for o in f.sent if "s1_sell" in o["key"]]) < nchunks:
+        f.stamp += 1; e.tick(); f.t += 10
+    after(f)
+    _prun(e, f, PE.ts_of("2026-11-03T21:30:00-05:00"))
+    return f, e
+def _settle(f):
+    f.settled = lambda: {"1007"}
+    f.pos.pop("1007", None)
+_f, _e = _sale_then(_settle, 4)
+_sv = _e.state["steps"]["s1_sell"]
+check("punt: the leg settles after 80,000 of 100,000 were sold, before stage 2 chose: the sale stays measured and stage 2 opens (review R3-2)",
+      _sv["status"] == "done" and abs(_sv["sold"] - 80000) < 1 and _e.state["steps"]["s2"].get("chosen"), f"{_sv.get('status')} {_sv.get('sold')} {_e.state['steps']['s2'].get('chosen')}")
+_f, _e = _sale_then(lambda f: setattr(f, "fail", [400, 403, 422]), 4)
+_sv = _e.state["steps"]["s1_sell"]
+check("punt: three rejected sells after 80,000 sold abort the sell step, but stage 2 still opens on the measured sale (review R3-2)",
+      _sv["status"] == "aborted" and abs(_sv["sold"] - 80000) < 1 and _e.state["steps"]["s2"].get("chosen"), f"{_sv.get('status')} {_sv.get('sold')}")
+_f, _e = _sale_then(_settle, 0)
+check("punt: the leg settles before anything was sold: stage 2 stays shut", _e.state["steps"]["s1_sell"]["status"] == "aborted"
+      and not _e.state["steps"]["s2"].get("chosen"), str(_e.state["steps"]["s1_sell"].get("status")))
+
+# review R3-4: answers meaning "nothing placed" never become placeholders
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.fail = [429] * 4
+_t0 = _f.t
+_prun(_e, _f, _t0 + 120)
+_v = _e.state["steps"]["s1"]
+check("punt: a burst of 429s (nothing placed): no placeholder, and the first real order goes out within 55 s of the first refusal (was ~130 s) (review R3-4)",
+      not [o for o in _v["orders"] if o["id"] is None] and _f.sent and _f.sent[0]["t"] - _t0 <= 55, f"{[o['id'] for o in _v['orders']]} {_f.sent[:1]}")
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.noop = True
+_prun(_e, _f, _f.t + 100)
+_f.noop = False
+_prun(_e, _f, _f.t + 100)
+_v = _e.state["steps"]["s1"]
+check("punt: a 200 with orderId null is a no-op: no placeholder, the next key follows, and trading resumes",
+      not [o for o in _v["orders"] if o["id"] is None] and _f.sent and _v["errors"] == 0, str(_v["orders"][:2]))
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.fail = [502, 503, 503, 503]
+_prun(_e, _f, _f.t + 45)
+check("punt: a 502 (maybe placed) followed by 503s still becomes a placeholder when the payload expires",
+      [o["id"] for o in _e.state["steps"]["s1"]["orders"]][:1] == [None] or bool(_f.sent), str(_e.state["steps"]["s1"]["orders"][:1]))
+
+# review R3b-2: a 503 is "the engine could not confirm the order" (ambiguous: placeholder at expiry); only TX_CONFLICT places nothing
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.fail = [(503, "TX_CONFLICT")] * 3
+_prun(_e, _f, _f.t + 35)
+check("punt: 503 TX_CONFLICT (not processed) is nothing placed: no placeholder when the payload expires",
+      not [o for o in _e.state["steps"]["s1"]["orders"] if o["id"] is None], str(_e.state["steps"]["s1"]["orders"]))
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.fail = [(503, "SERVICE_UNAVAILABLE")] * 3
+_prun(_e, _f, _f.t + 35)
+check("punt: a plain 503 SERVICE_UNAVAILABLE (engine could not confirm) is ambiguous: a placeholder when the payload expires",
+      [o["id"] for o in _e.state["steps"]["s1"]["orders"]][:1] == [None], str(_e.state["steps"]["s1"]["orders"]))
+
+# review R3-5: recovery also runs on early-return ticks (here: after an abort, every step closed)
+_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
+_e, _, _ = _pmk(_pplan(), _f)
+_f.fail = ["lost"]
+_e.tick()
+_f.down = True
+_prun(_e, _f, _f.t + 40)
+_f.down = False
+_f.abort = True
+_prun(_e, _f, _f.t + 40)
+check("punt: a placeholder is looked up and recorded even after the executor aborted (review R3-5)", _f.recorded == {"o1": "punt"}, str(_f.recorded))
+
+# review R3-3: the live adapter's lookup against rows in the documented Order schema, whatever order they come in
+class _Pager:
+    def __init__(self, rows): self.rows = rows
+    def get(self, path, **p):
+        i = int(p.get("cursor") or 0); n = int(p.get("limit") or 50)
+        part = self.rows[i:i + n]
+        more = i + n < len(self.rows)
+        return {"data": part, "pagination": {"hasMore": more, "nextCursor": str(i + n) if more else None}}
+def _iso(t): return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+def _lookup(newest_first, qty_back=None):
+    import sigbot.api as _api
+    now = 1_800_000_000.0
+    exp = now + 30
+    tgt = {"id": 4242, "exchangeId": "1007", "side": "yes", "action": "buy", "quantity": qty_back or 1000, "priceLimit": 0.3, "open": False,
+           "createdAt": _iso(now), "expirationDate": _iso(exp), "terminalReasonCode": "Expired", "quantityFilled": 500}
+    old = [dict(tgt, id=i, priceLimit=0.31, createdAt=_iso(now - 3600 - i)) for i in range(700)]       # MM requotes, older
+    rows = [tgt] + old if newest_first else old[::-1] + [tgt]
+    c = _api.SuperMarketClient(api_key="x", tournament_id="t")
+    c.get = _Pager(rows).get
+    rec = []
+    st = types.SimpleNamespace(record_order=lambda *a, **k: rec.append((a[0], a[7])))
+    ad = R._PuntAdapter(types.SimpleNamespace(api=c, store=st, dry_run=False))
+    return ad.recover_order("1007", "yes", 1000, 0.3, exp, "punt"), rec
+check("punt: the live adapter finds a placeholder newest-first (stops paging at older orders)", _lookup(True) == (4242, [(4242, "punt")]), str(_lookup(True)))
+check("punt: ... and oldest-first (700 older orders, 4 pages), recorded with its purpose", _lookup(False) == (4242, [(4242, "punt")]), str(_lookup(False)))
+check("punt: ... and when the venue shrank the order to the cash (quantity 600 of 1000)", _lookup(True, 600)[0] == 4242)
+
+# review R3-6: the cancel helper tries every id and raises the transient error at the end
+_cn = []
+def _cancel(i):
+    _cn.append(i)
+    if i == 1:
+        raise R.ApiError(503, "X", "down")
+_ad = R._PuntAdapter(types.SimpleNamespace(api=types.SimpleNamespace(cancel_order=_cancel), dry_run=False))
+try:
+    _ad.cancel_ours([1, 2, 3]); _raised = False
+except R.ApiError:
+    _raised = True
+check("punt: cancel_ours continues past a transient failure and reports it at the end", _cn == [1, 2, 3] and _raised, str(_cn))
 
 # abort file: our resting orders cancelled, nothing more
 _f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)

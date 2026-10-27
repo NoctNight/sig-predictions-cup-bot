@@ -60,6 +60,9 @@ MAX_STEPS = 8
 ORDER_TTL = 30.0                     # seconds a chunk order rests before it expires on the venue
 MIN_ORDER_CASH = 50.0
 MAX_ERRORS = 3
+RECOVER_AFTER = 10.0                 # review R2-2: look a placeholder order up this long after its expiry
+FILL_LAG_WAIT = 180.0                # review R3-1: a finished sale waits this long after its last order for the fill store to catch up
+RECOVER_GIVE_UP = 600.0              # ... and stop looking this long after it
 TRANSIENT = (0, 429, 500, 502, 503, 504)   # 0 = no response (timeout / connection): retry with the same key
 
 
@@ -186,7 +189,9 @@ class PuntExecutor:
       cash() -> free cash;  outside(ex, side) -> (polymarket p, kalshi p) of `side` winning, either may be None;
       leader() -> best rival balance or None;  place(ex, side, qty, price, key, expires_at_epoch, purpose) -> order id (raises with .status);
       cancel_ours(order_ids) -> None;  dry -> bool;  abort_requested() -> bool;  fills_cost(order_ids) -> (shares, cost) or None;
-      optional: known(ex) -> bool, outside_stamp(ex) -> poll time, clear_others(ex, keep_ids) -> None, settled() -> set of exchanges"""
+      optional: known(ex) -> bool, outside_stamp(ex) -> poll time, clear_others(ex, keep_ids) -> None, settled() -> set of exchanges,
+      recover_order(ex, side, qty, price, exp, purpose) -> order id or None (looks a placeholder up on the venue and records it,
+      review R2-2), fills_qty(order_ids) -> shares filled or None (review R2-3)"""
 
     def __init__(self, plan_path: str, state_path: str, expected_sha: str, adapter, max_budget: float, cash_floor: float = 0.0):
         self.a = adapter
@@ -194,10 +199,15 @@ class PuntExecutor:
         self.cash_floor = cash_floor
         self.refused = None
         self.plan: dict = {}
+        if getattr(adapter, "dry", False) and os.path.basename(state_path) == "punt_state.json":
+            # review S7: a dry run never touches the live state file (it would make the live run resume a virtual one)
+            self.refused = "dry run with the live state file params/punt_state.json: use a state file of its own"
         try:
             raw = open(plan_path, "rb").read()
             got = hashlib.sha256(raw).hexdigest()
-            if not expected_sha or got != expected_sha:
+            if self.refused:
+                pass
+            elif not expected_sha or got != expected_sha:
                 self.refused = f"plan hash {got[:12]} does not match the approved {str(expected_sha)[:12] or '(none)'}"
             else:
                 self.plan = json.loads(raw)
@@ -300,7 +310,10 @@ class PuntExecutor:
     # ---------------------------------------------------------------- tick
     def tick(self) -> Optional[str]:
         """Do at most one order. Returns a short description of what it did, or None."""
-        if self.refused or self.state.get("aborted"):
+        if self.refused:
+            return None
+        self._recover(self.a.now())                  # review R3-5: a read-only lookup, also on early-return ticks and after an abort
+        if self.state.get("aborted"):
             return None
         if self.a.abort_requested():
             self.abort_all("abort file present")
@@ -344,6 +357,67 @@ class PuntExecutor:
             except Exception as e:
                 self.note(f"cancel failed: {e}")
 
+    def _refresh(self, pos: dict) -> bool:
+        """Re-read the positions into `pos` in place (a cancelled remainder may have filled just before it died)."""
+        try:
+            new = self.a.positions()
+        except Exception as e:
+            log.warning("PUNT positions re-read failed (%s): next tick", e)
+            return False
+        pos.clear()
+        pos.update(new)
+        return True
+
+    def _close_last(self, s: dict, v: dict, pos: dict, now: float) -> bool:
+        """review B4 + R2-4: the step's previous chunk is cancelled (the venue's expiry sweep lags the TTL), then the positions
+        are re-read, all in the tick that sends the next chunk: at most one live order per step, no extra tick of delay.
+        True when nothing of ours rests any more and `pos` is fresh; False = do not send now."""
+        last = v["orders"][-1] if v.get("orders") else None
+        if last is None or last.get("closed"):
+            return True
+        if last["id"] is not None and not self.a.dry:
+            try:
+                self.a.cancel_ours([last["id"]])
+            except Exception as e:
+                # a 4xx (already filled, expired, cancelled) means it no longer rests; a 5xx or timeout leaves it unknown
+                if int(getattr(e, "status", 0) or 0) in TRANSIENT and now - last["t"] < ORDER_TTL + 60:
+                    self.note(f"{s['id']}: cancel of {last['id']} failed ({e}): retry next tick")
+                    return False
+        elif last["id"] is None and not self.a.dry and not last.get("lost") and now - last["t"] < ORDER_TTL + 60:
+            return False                             # a placeholder: _recover finds its id (then it is cancelled) or gives up
+        last["closed"] = True
+        self.save()
+        return self._refresh(pos)
+
+    def _recover(self, now: float):
+        """review R2-2: orders booked as placeholders (id None after a 409 or an expired pending payload) are looked up on the
+        venue once expired and recorded with their purpose, so their fills are attributed (else strategy stops see untagged
+        fills). One lookup per tick at most."""
+        fn = getattr(self.a, "recover_order", None)
+        if fn is None or self.a.dry:
+            return
+        for sid, v in self.state["steps"].items():
+            for o in v.get("orders", []):
+                if o.get("id") is not None or o.get("lost"):
+                    continue
+                exp = o.get("exp") or o["t"] + ORDER_TTL
+                if now < exp + RECOVER_AFTER or now - o.get("lk", 0.0) < 60.0:
+                    continue
+                o["lk"] = now
+                try:
+                    oid = fn(o["ex"], o["side"], o["qty"], o["price"], exp, o.get("purpose") or "punt")
+                except Exception as e:
+                    self.note(f"{sid}: lookup of placeholder {o['key']} failed ({e}): later")
+                    return
+                if oid is not None:
+                    o["id"] = oid
+                    self.note(f"{sid}: placeholder {o['key']} is order {oid}: recorded")
+                elif now > exp + RECOVER_GIVE_UP:
+                    o["lost"] = True
+                    self.note(f"{sid}: placeholder {o['key']} not found on the venue: treated as never placed")
+                self.save()
+                return
+
     def _send(self, s: dict, v: dict, ex: str, side: str, qty: int, price: float, what: str) -> Optional[str]:
         """Place one capped limit order with the step's next idempotency key. The exact payload (incl. its expiry) is saved
         BEFORE the send, so a lost response, a 5xx or a crash resends exactly that payload (the venue replays it; a changed
@@ -351,22 +425,7 @@ class PuntExecutor:
         now = self.a.now()
         last = v["orders"][-1] if v.get("orders") else None
         if last is not None and not last.get("closed"):
-            # review B4: the venue's expiry sweep lags the TTL, so the previous chunk may still rest: cancel it and size the
-            # next one on the next tick's position (an order of unknown id is waited out instead)
-            if last["id"] is not None and not self.a.dry:
-                try:
-                    self.a.cancel_ours([last["id"]])
-                except Exception as e:
-                    if int(getattr(e, "status", 0) or 0) in TRANSIENT:
-                        self.note(f"{s['id']}: cancel of {last['id']} failed ({e}): next tick")
-                        v["last"] = now
-                        return None                  # 4xx: already filled, expired or cancelled
-            elif last["id"] is None and now - last["t"] < ORDER_TTL + 60:
-                return None
-            last["closed"] = True
-            v["last"] = now
-            self.save()
-            return None
+            return None                              # review B4: the callers close the previous chunk first (_close_last)
         if ex not in (v.get("cleared") or []) and not self.a.dry:
             # the venue never matches us with ourselves: any other resting order of ours on this leg (MM, a sleeve) is
             # cancelled before the first punt order there
@@ -380,22 +439,51 @@ class PuntExecutor:
         # the plan hash is in the key: a revised plan reusing its plan_id never collides with the old keys (review R2-6)
         v["pending"] = {"key": f"punt-{self.plan['plan_id']}-{s['id']}-{v['n']}-{str(self.state.get('sha') or '')[:8]}", "ex": ex, "side": side, "qty": int(qty),
                         "price": round(price, 3), "exp": now + ORDER_TTL, "purpose": "punt_exit" if what == "SELL" else "punt",
-                        "what": what}
+                        "what": what, "maybe": True, "amb": False}
         self.save()
         return self._send_pending(s, v)
 
     def _send_pending(self, s: dict, v: dict) -> Optional[str]:
         p, now = v["pending"], self.a.now()
         if now > p["exp"] - 2:
+            if not p.get("maybe", True):
+                # review R3-4: every answer so far was "nothing placed" (429, a 503 refusal): no placeholder, no 90 s hold
+                v["pending"] = None
+                v["n"] += 1
+                self.note(f"{s['id']}: {p['what']} {p['ex']} x{p['qty']} never placed (refused until it expired): next key")
+                return None
             # never resend an expired payload; it may have been placed: count it at its limit and move to the next key
             return self._booked(s, v, None, "outcome unknown, payload expired: counted at its limit")
+        p["maybe"] = True                            # saved before the attempt: a crash during it leaves "maybe placed"
+        self.save()
         try:
             oid = self.a.place(p["ex"], p["side"], p["qty"], p["price"], p["key"], p["exp"], p["purpose"])
         except Exception as e:
             status = int(getattr(e, "status", 0) or 0)
-            if status == 409:                        # our own pending key was already used by this payload: it exists
-                return self._booked(s, v, None, f"409 on our pending key ({e}): counted at its limit")
-            if status in TRANSIENT:
+            code = str(getattr(e, "code", "") or "")
+            if status == 409 and code == "TERMINAL_ENGINE_SCOPE":
+                # review R2-6: the market is settled / closed: nothing was placed and nothing ever will be
+                v["pending"] = None
+                v["n"] += 1
+                v["status"] = "aborted"
+                v["why"] = f"exchange {p['ex']} is terminal (settled): {e}"
+                self.note(f"{s['id']}: ABORTED: {p['ex']} terminal ({e})")
+                self._cancel_step(v)
+                return None
+            if status == 409 and code == "IDEMPOTENCY_KEY_EXPIRED":
+                v["pending"] = None                  # nothing was placed: the next order takes a new key at once
+                v["n"] += 1
+                self.note(f"{s['id']}: key {p['key']} expired, nothing placed: next key")
+                return None
+            if status == 409 and code != "REQUEST_IN_FLIGHT":   # a reused key (CONFLICT; any unknown 409 too, R3-7): counted, then looked up
+                return self._booked(s, v, None, f"409 {code} on our pending key ({e}): counted at its limit")
+            if status in TRANSIENT or (status == 409 and code == "REQUEST_IN_FLIGHT"):
+                if status == 429 or (status == 503 and code == "TX_CONFLICT"):
+                    # review R3-4: a refusal places nothing (unless an earlier attempt was unclear). review R3b-2: any other 503 is
+                    # "the trading engine could not confirm the order" (openapi.json POST /orders): ambiguous, like a 502
+                    p["maybe"] = bool(p.get("amb"))
+                else:
+                    p["amb"] = p["maybe"] = True     # timeout / connection / 500 / 502 / 504 / in flight: may have been placed
                 self.note(f"{s['id']}: {p['what']} {p['ex']} {p['side']} x{p['qty']} @{p['price']} outcome unknown ({e}): "
                           "same payload next tick")
                 v["last"] = now
@@ -410,13 +498,21 @@ class PuntExecutor:
                 self.note(f"{s['id']}: ABORTED after {MAX_ERRORS} rejected orders")
             v["last"] = now
             return None
+        if oid is None:
+            # review R3-4: a 200 with orderId null is the venue's no-op (nothing placed or traded; a resend replays it)
+            v["pending"] = None
+            v["n"] += 1
+            v["last"] = now
+            self.note(f"{s['id']}: {p['what']} {p['ex']} x{p['qty']} accepted as a no-op (orderId null): nothing placed, next key")
+            return None
         self._booked(s, v, oid, "")
         return f"{s['id']} {p['what']}"
 
     def _booked(self, s: dict, v: dict, oid, why: str) -> None:
         p, now = v["pending"], self.a.now()
         v["pending"] = None
-        v["orders"].append({"id": oid, "key": p["key"], "ex": p["ex"], "side": p["side"], "qty": p["qty"], "price": p["price"], "t": now})
+        v["orders"].append({"id": oid, "key": p["key"], "ex": p["ex"], "side": p["side"], "qty": p["qty"], "price": p["price"], "t": now,
+                            "exp": p["exp"], "purpose": p.get("purpose")})
         v["n"] += 1
         v["errors"] = 0
         v["last"] = now
@@ -436,6 +532,10 @@ class PuntExecutor:
         v["filled"] = filled
         if self._waiting(s, v, now):
             return None                              # the last order may still rest: keep it counted at its limit
+        if not self._close_last(s, v, pos, now):
+            return None
+        filled = max(0.0, self.held(pos, ex, side) - v["base"])      # after the cancel, on a fresh read (review R2-4)
+        v["filled"] = filled
         used = self.spent(v, filled, cap)
         v["committed"] = used
         budget = self.budget_left() if s["kind"] == "buy" else float("inf")
@@ -469,6 +569,22 @@ class PuntExecutor:
                 return None
         return self._buy_into(s, v, pos, now, str(s["exchange_id"]), s["side"], float(s["max_price"]), float(s["max_cash"]))
 
+    def _sale_state(self, v: dict, pos: dict, ex: str, side: str, bought: float) -> tuple:
+        """(sold, left). review R2-3: `sold` is what OUR punt_exit orders filled (the venue's fills for their ids), never more than
+        the position fell; only when the fills cannot be read at all does the position fall, capped by the quantity of sell
+        orders sent, stand in. A leg that vanishes from /positions without fills of ours is therefore not a sale."""
+        have = self.held(pos, ex, side)
+        drop = max(0.0, v["base"] - have)
+        ids = [o["id"] for o in v.get("orders", []) if o.get("id") is not None]
+        fq = getattr(self.a, "fills_qty", lambda ids: None)(ids) if ids else 0.0
+        if fq is None:
+            sold = min(drop, float(sum(o["qty"] for o in v.get("orders", []))))
+        else:
+            sold = min(drop, float(fq))
+        sold = max(sold, float(v.get("sold") or 0.0))            # a measured sale never shrinks
+        v["sold"] = sold
+        return sold, min(v.get("bought", bought) - sold, have)   # never more than the venue position on that side
+
     def _sell(self, s, v, pos, now):
         src = next(x for x in self.plan["steps"] if x["id"] == s["of_step"])
         sv = self.st(src["id"])
@@ -479,9 +595,13 @@ class PuntExecutor:
             return None
         if ex in (getattr(self.a, "settled", lambda: set())() or set()):
             # review B2: a settled market drops out of the positions read; never read that as a sale (stage 2 stays shut)
-            v["status"] = "aborted"
-            v["why"] = "stage-1 market settled: no sale; stage 2 stays shut (by hand from here)"
-            self.note(f"{s['id']}: ABORTED: {ex} settled")
+            # review R3-2: what our fills sold stays measured; stage 2 opens if min_sold_frac was met, stays shut if nothing was sold
+            if v["base"] is not None:
+                self._sale_state(v, pos, ex, side, float(sv.get("filled") or 0.0))
+            sold = float(v.get("sold") or 0.0)
+            v["status"] = "done" if sold > 0 else "aborted"
+            v["why"] = f"stage-1 market settled after {sold:.0f} sold" + ("" if sold > 0 else ": no sale; stage 2 stays shut (by hand from here)")
+            self.note(f"{s['id']}: {v['status'].upper()}: {ex} settled ({v['why']})")
             return None
         bought = float(sv.get("filled") or 0.0)
         have = self.held(pos, ex, side)
@@ -491,9 +611,7 @@ class PuntExecutor:
             v["base"] = have
             v["bought"] = bought
             v["status"] = "active"
-        sold = min(max(0.0, v["base"] - have), float(sum(o["qty"] for o in v.get("orders", []))))   # only what our sells can explain
-        v["sold"] = sold
-        left = min(v.get("bought", bought) - sold, have)          # never more than the venue position on that side
+        sold, left = self._sale_state(v, pos, ex, side, bought)
         if left < 1:
             if sold > 0 or have < 1:
                 v["status"] = "done"
@@ -510,6 +628,9 @@ class PuntExecutor:
             v["polls"] = 0
         if v["polls"] < int(s.get("outside_polls", 3)) or self._waiting(s, v, now):
             return None
+        if not self._close_last(s, v, pos, now):
+            return None
+        sold, left = self._sale_state(v, pos, ex, side, bought)       # after the cancel, on a fresh read (review R2-4)
         q = int(min(left, float(s["chunk_shares"])))
         if q < 1:
             return None
@@ -523,9 +644,21 @@ class PuntExecutor:
             prev = self.st(s["after_step"])
             prev_s = next(x for x in self.plan["steps"] if x["id"] == s["after_step"])
             if prev_s["kind"] == "sell":
+                src = next(x for x in self.plan["steps"] if x["id"] == prev_s["of_step"])
+                sch = self.st(src["id"]).get("chosen") or {}
+                pex, pside = str(src.get("exchange_id") or sch.get("exchange_id") or ""), src.get("side") or sch.get("side")
+                if prev.get("base") is not None and pex and pside:
+                    # review R3-1: the fill store lags the venue by 30-90 s, so a sale that just finished is measured again on
+                    # every tick until stage 2 has chosen (never shrinking), and a finished sale is given FILL_LAG_WAIT after its
+                    # last order for the fills to catch up with the position fall before its proceeds are counted
+                    sold, _ = self._sale_state(prev, pos, pex, pside, float(prev.get("bought") or 0.0))
+                    drop = max(0.0, prev["base"] - self.held(pos, pex, pside))
+                    if prev["status"] in ("done", "aborted") and prev.get("orders") and sold < drop - 1 \
+                            and now < prev["orders"][-1]["t"] + FILL_LAG_WAIT:
+                        return None
                 frac = float(prev.get("sold") or 0.0) / max(1.0, float(prev.get("bought") or 0.0))
-                if prev["status"] == "aborted" or frac < float(s.get("min_sold_frac", 1.0)):
-                    return None                      # review S6: a sale that sold nothing never opens stage 2
+                if frac < float(s.get("min_sold_frac", 1.0)):
+                    return None                      # review S6: a sale that sold nothing never opens stage 2 (an aborted one that met the fraction does)
                 proceeds = float(prev.get("sold") or 0.0) * float(prev_s["min_price"])
             else:
                 if prev["status"] != "done":
@@ -608,6 +741,9 @@ class BookAdapter:
     def fills_cost(self, ids):
         rows = [r for r in self.sent if r[6] in set(ids)]
         return (sum(r[4] for r in rows), sum(r[5] for r in rows))
+
+    def fills_qty(self, ids):
+        return sum(r[4] for r in self.sent if r[6] in set(ids))
 
     def cancel_ours(self, ids):
         pass

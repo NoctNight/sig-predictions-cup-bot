@@ -126,9 +126,11 @@ class _PuntAdapter:
     def _row(self, ex):
         return next((r for r in (getattr(self.b.direction, "rows", None) or []) if str(r.get("exchange_id")) == str(ex)), None)
 
+    OUTSIDE_MAX_AGE = 300.0     # review S4: an outside row older than this (feed stalled) is no evidence for a sale or an abort
+
     def outside(self, ex, side):
         r = self._row(ex)
-        if not r:
+        if not r or time.time() - float(r.get("ts") or 0.0) > self.OUTSIDE_MAX_AGE:
             return (None, None)
         f = lambda x: None if x is None else (float(x) if side == "yes" else 1.0 - float(x))
         return f(r.get("pm")), f(r.get("kalshi"))
@@ -158,12 +160,52 @@ class _PuntAdapter:
             return None                                 # NO-side fill prices are stored in YES terms: use the upper bound
         return sum(r["q"] for r in rows), sum(r["q"] * r["price"] for r in rows)
 
+    def fills_qty(self, ids):
+        """Shares our orders `ids` filled (any side), per the ingested fills; None when unreadable (review R2-3)."""
+        ids = [i for i in ids if i is not None and not str(i).startswith("dry-")]
+        if not ids or self.b.store is None:
+            return None
+        try:
+            rows = self.b.store.rows(f"SELECT ABS(quantity) q FROM fills WHERE order_id IN ({','.join('?' * len(ids))})", ids)
+        except Exception as e:
+            log.warning("PUNT fills read: %s", e)
+            return None
+        return float(sum(r["q"] for r in rows))
+
     def cancel_ours(self, ids):
-        for i in ids:
+        err = None
+        for i in ids:                                    # every id is tried; a transient failure is raised at the end (review R3-6)
             try:
                 self.b.api.cancel_order(i)
             except ApiError as e:
                 log.warning("PUNT cancel %s: %s", i, e)
+                if e.status in PE.TRANSIENT:            # unknown whether it still rests: the executor decides (review B4 / R2-4)
+                    err = err or e
+        if err is not None:
+            raise err
+
+    def recover_order(self, ex, side, qty, price, exp, purpose):
+        """review R2-2: find a placeholder order on the venue (orders carry no idempotency key, so by exchange, side, buy,
+        limit, quantity and the expiry second) and record it with its purpose; None when it is not there."""
+        want = int(exp)
+        # GET /orders?status=all returns newest first (confirmed by a live read, 26 Oct 2026), so a page wholly older than the send
+        # time ends the paging; at most 5 pages whatever the order (review R3b-1)
+        for o in self.b.api.open_orders(exchange_id=str(ex), status="all", max_pages=5,
+                                        created_after=exp - PE.ORDER_TTL - 120.0) or []:
+            try:
+                if o.get("side") != side or o.get("action") != "buy" or o.get("priceLimit") is None \
+                        or abs(float(o["priceLimit"]) - price) > 1e-6 or not o.get("expirationDate"):
+                    continue
+                q = float(o.get("quantity") or 0.0)
+                if not 0 < q <= qty:                                        # the venue may shrink an order to the cash (R3-3)
+                    continue
+                got = datetime.fromisoformat(str(o["expirationDate"]).replace("Z", "+00:00")).timestamp()
+            except (TypeError, ValueError):
+                continue
+            if abs(got - want) <= 1.0:
+                self.b.store.record_order(o["id"], str(ex), None, side, "buy", price, int(qty), purpose, response=o)
+                return o["id"]
+        return None
 
     def clear_others(self, ex, keep):
         for o in self.b.api.open_orders(exchange_id=str(ex)) or []:
@@ -189,7 +231,8 @@ class _PuntAdapter:
             return f"dry-{key}"
         exp = datetime.fromtimestamp(expires_at, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")   # fixed per payload (review B1)
         with self.b.trade_lock:
-            resp = self.b.api.place_order(str(ex), side, "buy", int(qty), price, expiration=exp, key=key)
+            # review S10: one attempt, no internal retries while the trade lock is held; the executor resends the saved payload
+            resp = self.b.api.place_order(str(ex), side, "buy", int(qty), price, expiration=exp, key=key, retries=0)
             self.b.store.record_order(resp.get("orderId"), str(ex), None, side, "buy", price, int(qty), purpose, response=resp)
         return resp.get("orderId")
 
@@ -837,7 +880,8 @@ class Bot:
         self.punt = None
         if getattr(cfg, "punt_enabled", False):
             try:
-                self.punt = PE.PuntExecutor(os.path.join(HERE, cfg.punt_plan_path), os.path.join(HERE, "params", "punt_state.json"),
+                self.punt = PE.PuntExecutor(os.path.join(HERE, cfg.punt_plan_path),
+                                            os.path.join(HERE, "params", "punt_state_dry.json" if dry_run else "punt_state.json"),   # review S7
                                             cfg.punt_plan_sha256, _PuntAdapter(self), max_budget=cfg.punt_max_budget,
                                             cash_floor=cfg.punt_cash_floor)
                 log.warning("PUNT executor enabled: plan %s, %s", cfg.punt_plan_path,
@@ -850,6 +894,7 @@ class Bot:
         self.arb.protected = lambda: set(_prot3()) | punt_races_of(self)
         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
+        self.mm.protected_fn = lambda: Bot.punt_legs(self)    # review S2b: past stop_quoting_at the MM leaves punt legs' orders alone
         self.cash_needs: dict = {}             # sleeve -> (cash short this cycle, why): what the cash raise may sell for
         self.load_raise_pause()
         self.tilt = TiltHarvester(self.api, self.store, cfg.tilt, self.universe, cfg.starting_cash, dry_run)
@@ -2027,6 +2072,8 @@ class Bot:
             held = ch.held(rname)
             if held <= 0 or (held < min_qty and not sell_all) or books is None:
                 continue
+            if rname in punt_races_of(self):
+                continue                               # review S3: a set unwind there would sell the punt's shares (also at sell-all)
             uq = self.arb.unwind_quote(race, books, held) or quote_down(race, books, held, 1)[1]   # thin asks: what part fetches
             proceeds = uq["proceeds"] if uq else None
             lots = [l for l in ch.lots if l["race"] == rname]
@@ -3499,6 +3546,24 @@ class Bot:
                     f.write(json.dumps({"ts": now, "paper_order": o}, default=str) + "\n")
 
     # --------------------------------------------------------------- election night (research_notes/election_night.md)
+    def election_filter(self, orders: list) -> list:
+        """review B3: never trade a race of the enabled punt plan (every leg of it); logged once per leg, not once per poll (R2-5)."""
+        pe = getattr(self, "punt", None)
+        if pe is None:
+            return list(orders)
+        pl = {e for x in pe.legs() for r in [self.universe.race_of(x)] if r is not None for e in r.exchange_ids}
+        seen = self.__dict__.setdefault("_el_skip_logged", set())
+        out = []
+        for o in orders:
+            ex = str(o.get("exchangeId"))
+            if ex in pl:
+                if ex not in seen:
+                    seen.add(ex)
+                    log.warning("ELECTION skips %s: a punt plan race", ex)
+                continue
+            out.append(o)
+        return out
+
     def election_loop(self):
         """From 18:00 ET on election day: poll Polymarket/Kalshi every election_poll_sec for the races whose polls are
         closing, let ElectionNight decide calls and moves against the feed books, and send its orders (purpose
@@ -3521,13 +3586,8 @@ class Bot:
                 time.sleep(self.cfg.election_poll_sec)
                 continue
             ttl = (datetime.now(timezone.utc) + timedelta(seconds=en.cfg.ttl_sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            pe = getattr(self, "punt", None)            # review B3: never trade a race of the enabled punt plan
-            pl = {e for x in (pe.legs() if pe is not None else ()) for r in [self.universe.race_of(x)] if r is not None for e in r.exchange_ids}
-            for o in orders:
+            for o in Bot.election_filter(self, orders):
                 log.info("ELECTION %s %s %s x%s at %s: %s", o.get("kind"), o.get("exchangeId"), o.get("side"), o.get("quantity"), o.get("price"), o.get("reason"))
-                if str(o.get("exchangeId")) in pl:
-                    log.warning("ELECTION skips %s: a punt plan race", o.get("exchangeId"))
-                    continue
                 if self.dry_run:
                     continue
                 if o.get("kind") != "exit" and strategy_paused(self, "election"):

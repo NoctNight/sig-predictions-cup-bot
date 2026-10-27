@@ -33,6 +33,15 @@ class ApiError(Exception):
         self.status, self.code, self.message, self.details, self.retry_after = status, code, message, details, retry_after
 
 
+def _iso_ts(s) -> float:
+    """Epoch seconds of an ISO-8601 string (Z or offset); +inf when unreadable, so an unreadable row never ends a paging early."""
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return float("inf")
+
+
 class TokenBucket:
     """Simple per-minute budget. Blocks until a token is available."""
 
@@ -131,7 +140,9 @@ class SuperMarketClient:
         raise ConnectionError("unreachable")
 
     # ------------------------------------------------------------------ core
-    def _request(self, method: str, path: str, params: Optional[dict] = None, body: Optional[dict] = None) -> Any:
+    def _request(self, method: str, path: str, params: Optional[dict] = None, body: Optional[dict] = None,
+                 max_retries: Optional[int] = None) -> Any:
+        retries = self.max_retries if max_retries is None else max_retries     # review S10: the punt places with 0
         url = self.base_url + path
         if params:
             params = {k: v for k, v in params.items() if v is not None}
@@ -165,7 +176,7 @@ class SuperMarketClient:
                 retryable = e.code in (429, 502, 503) or code in ("REQUEST_IN_FLIGHT",)
                 if e.code == 207:
                     return payload
-                if retryable and attempt < self.max_retries:
+                if retryable and attempt < retries:
                     attempt += 1
                     self.stats["retries"] += 1
                     wait = retry_after if retry_after is not None else min(60, (2 ** attempt) + random.random())
@@ -178,7 +189,7 @@ class SuperMarketClient:
                 # batch endpoints return 207/422/429/503 with per-item results; surface payload
                 raise ApiError(e.code, code, msg, details if details is not None else payload, retry_after)
             except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
-                if attempt < self.max_retries:
+                if attempt < retries:
                     attempt += 1
                     self.stats["retries"] += 1
                     wait = min(60, (2 ** attempt) + random.random())
@@ -252,15 +263,23 @@ class SuperMarketClient:
     def fills(self, slug: str, limit: int = 200, cursor: Optional[str] = None) -> dict:
         return self.get(f"/tournaments/{slug}/portfolio/fills", limit=limit, cursor=cursor)
 
-    def open_orders(self, tournament_id: Optional[str] = None, exchange_id: Optional[str] = None) -> list:
+    def open_orders(self, tournament_id: Optional[str] = None, exchange_id: Optional[str] = None, status: str = "open",
+                    max_pages: int = 50, created_after: Optional[float] = None) -> list:
+        """created_after (epoch s): stop paging once a whole page is older than that AND the page itself runs newest
+        first; any other order (or a page we cannot tell) is read up to max_pages, review R3-3."""
         out, cursor = [], None
-        while True:
-            page = self.get("/orders", status="open", limit=200, cursor=cursor, tournamentId=self._tid(tournament_id),
+        for _ in range(max_pages):
+            page = self.get("/orders", status=status, limit=200, cursor=cursor, tournamentId=self._tid(tournament_id),
                             exchangeId=exchange_id)
             out.extend(page["data"])
             if not page["pagination"].get("hasMore"):
                 return out
+            d = page["data"]
+            if created_after is not None and len(d) > 1 and _iso_ts(d[0].get("createdAt")) > _iso_ts(d[-1].get("createdAt")) \
+                    and all(_iso_ts(o.get("createdAt")) < created_after for o in d):
+                return out                               # newest first (seen from the page itself) and already past the cutoff
             cursor = page["pagination"]["nextCursor"]
+        return out
 
     # ---------------------------------------------------------------- writes
     @staticmethod
@@ -268,14 +287,15 @@ class SuperMarketClient:
         return f"{prefix}-{uuid.uuid4()}"
 
     def place_order(self, exchange_id: str, side: str, action: str, quantity: int, price: Optional[float],
-                    expiration: Optional[str] = None, tournament_id: Optional[str] = None, key: Optional[str] = None) -> dict:
+                    expiration: Optional[str] = None, tournament_id: Optional[str] = None, key: Optional[str] = None,
+                    retries: Optional[int] = None) -> dict:
         body = {"idempotencyKey": key or self.new_key("ord"), "exchangeId": str(exchange_id), "side": side, "action": action,
                 "quantity": int(quantity), "tournamentId": self._tid(tournament_id)}
         if price is not None:
             body["price"] = round(price, 3)
         if expiration:
             body["expirationDate"] = expiration
-        return self.post("/orders", body)
+        return self._request("POST", "/orders", body=body, max_retries=retries)
 
     def place_batch(self, orders: list[dict], key: Optional[str] = None, max_rounds: int = 6) -> dict:
         """orders: dicts with exchangeId, side, action, quantity, price?, expirationDate?, tournamentId?

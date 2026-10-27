@@ -399,8 +399,17 @@ class MarketMaker:
         summary = {"requoted": [], "orders": 0, "writes": 0, "skipped_budget": 0}
         if self.hours_to_end() <= 0:
             if any(open_orders.values()) and not self.dry_run:
-                self.api.cancel_all()
-                summary["writes"] += 1
+                # review S2b: never an account-wide cancel while punt legs rest orders (the punt executor's chunks and the
+                # election-night sleeve's); then exchange by exchange, the protected legs skipped
+                prot = set(getattr(self, "protected_fn", None) and self.protected_fn() or ())
+                if prot & {ex for ex, lst in open_orders.items() if lst}:
+                    for ex, lst in open_orders.items():
+                        if lst and ex not in prot:
+                            self.api.cancel_all(exchange_id=ex)
+                            summary["writes"] += 1
+                else:
+                    self.api.cancel_all()
+                    summary["writes"] += 1
             log.info("past stop_quoting_at; not quoting")
             return summary
         budget_total = min(self.cfg.capital_frac * self.starting_cash, cash * 0.9)

@@ -360,7 +360,8 @@ class FakeApi:
             res.append({"index": i, "ok": True, "data": {"orderId": oid if oid is not None else -(self.venue.next_id + i), "open": oid is not None}})
         return {"results": res}
 
-    def place_order(self, exchange_id, side, action, quantity, price, expiration=None, tournament_id=None, key=None) -> dict:
+    def place_order(self, exchange_id, side, action, quantity, price, expiration=None, tournament_id=None, key=None,
+                    retries=None) -> dict:
         self.stats["writes"] += 1
         oid, filled = self._place(dict(exchangeId=exchange_id, side=side, price=price, quantity=quantity, expirationDate=expiration))
         return {"orderId": oid, "open": oid is not None}

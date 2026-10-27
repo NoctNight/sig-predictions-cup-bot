@@ -687,7 +687,8 @@ class FakeClient:
         return [o for o in rows if exchange_id is None or o["exchangeId"] == str(exchange_id)]
 
     # writes
-    def place_order(self, exchange_id, side, action, quantity, price, expiration=None, tournament_id=None, key=None) -> dict:
+    def place_order(self, exchange_id, side, action, quantity, price, expiration=None, tournament_id=None, key=None,
+                    retries=None) -> dict:
         self._w()
         return self.v.place(str(exchange_id), side, action, quantity, price, expiration, key or self.new_key("ord"))
 
