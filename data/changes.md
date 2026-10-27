@@ -448,3 +448,6 @@
   never above max price, abort conditions, dry-run; every exit path now leaves punt/election/set shares alone (backlog
   0c); the sim harness drops live state files. Opus review 2 SAFE TO DEPLOY switched off; before switch-on: the fixes
   listed in punt-plan-handover.md. Punt plan: research_notes/punt_plan.md (two-stage roll, P(top 3) ~1.85%).
+
+- 2026-10-27 00:0x BST: Punt executor switch-on fixes deployed (49b7a41), punt_enabled still false. Sonnet-coded, Opus
+  reviewed (rounds 3/3b SAFE TO DEPLOY off). Remaining low items: punt-plan-handover.md. Enabling stays Sizhe's call.
