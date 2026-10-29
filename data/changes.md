@@ -451,3 +451,11 @@
 
 - 2026-10-27 00:0x BST: Punt executor switch-on fixes deployed (49b7a41), punt_enabled still false. Sonnet-coded, Opus
   reviewed (rounds 3/3b SAFE TO DEPLOY off). Remaining low items: punt-plan-handover.md. Enabling stays Sizhe's call.
+
+## 2026-10-29 11:10 BST: deploy 9a61a39 + eb2f286 (precheck passed, every sim scenario 0 violations, catchup included)
+- Gap pilot at 150 (Sizhe, "Pilot at 150"): no proven edge, live evidence only; stops entering 29 Oct 20:00 UTC, hard exit
+  31 Oct 00:00 UTC. Kill: `gap` / `exit:gap` in params/strategy_kill.json. Revert: gap_enabled false.
+- Per-order 60 s expiry in six sleeves (cash raise, catch-up, cheap favourites, lag, election night, shock).
+- MM gate fix (eb2f286; research_notes/mm_gate_cancel.md, two Opus reviews): an empty ladder now pulls our resting quotes
+  instead of skipping the cancel, and a gate sweep right after the outside poll pulls quotes on a side the new fair closed.
+  This was the pre-existing `catchup` mm_filled_on_gated_side precheck failure that blocked every deploy. Revert: git revert eb2f286.
