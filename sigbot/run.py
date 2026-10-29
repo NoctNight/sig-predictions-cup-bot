@@ -50,6 +50,7 @@ from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
 from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
 from .proposals import cheap_favourites as CF
+from .proposals import gap_pilot as GP
 from .proposals import cash_raise as CR
 from .proposals import shock_mode as SHK
 from .venues.http import Http as _ShockHttp
@@ -72,6 +73,19 @@ def cheapfav_races_of(bot) -> set:
 
 
 LASTLOOK_MAX_AGE = 15.0     # seconds: the oldest REST touch the MM's last look accepts when the feed book is stale
+def _blind_rec(v) -> dict:
+    """A gap-pilot blind entry record: {"n": notional, "win": "D" / "R" / None}; old records were a bare notional."""
+    if isinstance(v, dict):
+        return {"n": float(v.get("n", 0.0) or 0.0), "win": v.get("win") if v.get("win") in ("D", "R") else None}
+    return {"n": float(v or 0.0), "win": None}
+
+
+def expiry_in(seconds: float) -> str:
+    """An order expiry `seconds` from NOW. Computed right before each order, never once for a batch: with slow writes each order of a
+    batch takes a few write latencies, and a batch-wide expiry makes every order after the first arrive expired (sim slow_writes)."""
+    return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def shock_races_of(bot) -> set:
     """Races where shock mode holds positions or has an entry in flight (empty when it is not wired, e.g. on test stubs).
     The set paths (recycler, free unwinds, offload, churn) leave these races alone: a single-leg position next to another
@@ -321,7 +335,7 @@ def spendable_cash(bot) -> float:
 # news are directional. "all" (KILL-ENTRIES, strategy_stops.py) pauses every entry path; exit paths ("exit:...") are
 # paused only by name (an exit that closed more than it held) and never by "all".
 PAUSE_ALIASES = {"recycle": ("arb",), "offload": ("arb",), "inside": ("mm",), "tilt": ("direction",), "lag": ("direction",),
-                 "news": ("direction",)}
+                 "news": ("direction",), "gap": ("cheapfav",), "exit:gap": ("exit:cheapfav",)}   # the pilot trades through the cheapfav ledger
 
 
 def strategy_paused(bot, name: str) -> bool:
@@ -761,6 +775,14 @@ class Bot:
                                                    net_max=cfg.cheapfav_net_max, headroom=cfg.cheapfav_headroom)
                 log.warning("CHEAPFAV sleeve enabled: budget %.0f, min edge %.3f, %.0f per leg, %d same-terms legs",
                             cfg.cheapfav_budget, cfg.cheapfav_min_edge, cfg.cheapfav_leg_cap, len(same))
+        self.gap = None
+        if getattr(cfg, "gap_enabled", False) and self.cheapfav is not None:   # the pilot trades through the cheap-favourites ledger
+            self.gap = GP.GapPilot(budget=cfg.gap_budget, min_edge=cfg.gap_min_edge, leg_cap=cfg.gap_leg_cap,
+                                   order_notional=cfg.gap_order_notional, net_max=cfg.gap_net_max, headroom=cfg.cheapfav_headroom,
+                                   max_hold_h=cfg.gap_hold_hours, stop=cfg.gap_stop, take_edge=cfg.gap_take_edge,
+                                   hold_limit=getattr(cfg, "churn_skip_holding", 4000.0) or 4000.0, same_terms=self.cheapfav.same_terms)
+            log.warning("GAP pilot enabled: budget %.0f, min edge %.3f, %.0f per leg, hold <= %.0f h", cfg.gap_budget, cfg.gap_min_edge,
+                        cfg.gap_leg_cap, cfg.gap_hold_hours)
         self.shock = (SHK.ShockMode(per_shock=cfg.shock_per_shock, total=cfg.shock_total, kill_pnl=cfg.shock_kill)
                       if getattr(cfg, "shock_enabled", False) else None)
         self.shock_state_path = os.path.join(HERE, "params", "shock_state.json")
@@ -1406,7 +1428,6 @@ class Bot:
                 if ids:
                     self.api.cancel_all(exchange_id=ex)
                     self.store.mark_orders(ids, "cancelled")
-            ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
             for c in clips:
                 ex = c["exchange_id"]
                 try:
@@ -1435,7 +1456,7 @@ class Bot:
                         continue
                     c = dict(c, qty=q, proceeds=q * c["pps"], net_d_after=d2)
                     try:
-                        resp = self.api.place_order(ex, c["side"], "buy", q, float(c["price"]), expiration=ttl, key=self.api.new_key("raise"))
+                        resp = self.api.place_order(ex, c["side"], "buy", q, float(c["price"]), expiration=expiry_in(60), key=self.api.new_key("raise"))
                     except OSError as e:                     # URLError / timeout / connection reset after the client's retries:
                         raise ApiError(0, "NETWORK", str(e))  # placement status unknown (review 5)
                     self.store.record_order(resp.get("orderId"), ex, None, c["side"], "buy", float(c["price"]), q, "raise", response=resp)
@@ -1731,7 +1752,6 @@ class Bot:
                 touch[ex] = min(fb["bids"][0]["quantity"], fb["asks"][0]["quantity"])
         orders = self.lag.cycle(time.time(), rows, touch)
         cap = float(getattr(self.direction.cfg, "per_market_cap", 300.0))
-        ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
         done = 0
         for o in orders:
             ex, side, px = str(o["exchangeId"]), o["side"], float(o["price"])
@@ -1747,7 +1767,7 @@ class Bot:
                 done += 1
                 continue
             try:
-                resp = self.api.place_order(ex, side, "buy", q, px, expiration=ttl, key=self.api.new_key("lag"))
+                resp = self.api.place_order(ex, side, "buy", q, px, expiration=expiry_in(60), key=self.api.new_key("lag"))
                 self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, q, "exit" if o.get("reason") == "exit" else "direction", response=resp)
                 done += 1
             except ApiError as e:
@@ -2728,7 +2748,6 @@ class Bot:
         for ex_o, lst in (self.open_orders_cache or {}).items():
             if any(str(o.get("id")) in cu_ids for o in lst):
                 resting.add(str(ex_o))                 # the venue still shows one of our catchup orders resting here
-        ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
         changed = False
         for ex, q in open_pos.items():
             if ex in resting:
@@ -2750,7 +2769,7 @@ class Bot:
                 continue
             side, px = ("no", round(1 - bid, 3)) if q > 0 else ("yes", round(ask, 3))
             try:
-                resp = self.api.place_order(ex, side, "buy", int(abs(q)), px, expiration=ttl, key=self.api.new_key("cux"))
+                resp = self.api.place_order(ex, side, "buy", int(abs(q)), px, expiration=expiry_in(60), key=self.api.new_key("cux"))
                 self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, int(abs(q)), "catchup_exit", response=resp)
                 log.info("CATCHUP exit %s %s x%d @%.3f (%s)", ex, side, int(abs(q)), px, why)
             except ApiError as e:
@@ -2784,7 +2803,7 @@ class Bot:
                     if shock_reserve(self) > 0 and spendable_cash(self) < q * px:
                         continue                               # the shock reserve is not catch-up's to spend
                     try:
-                        resp = self.api.place_order(ex, side, "buy", q, px, expiration=ttl, key=self.api.new_key("cu"))
+                        resp = self.api.place_order(ex, side, "buy", q, px, expiration=expiry_in(60), key=self.api.new_key("cu"))
                         self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, q, "catchup", response=resp)
                         self.cash = getattr(self, "cash", 0.0) - q * px   # the next entry this cycle sees it (shock reserve)
                     except ApiError as e:
@@ -2853,23 +2872,23 @@ class Bot:
         for ex_o, lst in (self.open_orders_cache or {}).items():
             if any(str(o.get("id")) in cf_ids for o in lst):
                 resting.add(str(ex_o))                 # the venue still shows one of our orders resting here
-        ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
         lock = getattr(self, "trade_lock", None)
         if lock is None:
-            self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary)
+            self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, positions, prices, killed, dir_summary)
             return
         with lock:                                   # the scanner thread trades sets between cycles: read its snapshot here
-            self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary)
+            self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, positions, prices, killed, dir_summary)
 
-    def _cheapfav_trade(self, cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary):
+    def _cheapfav_trade(self, cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, positions, prices, killed, dir_summary):
         positions = getattr(self, "positions_snapshot", None) or positions
         # one exit per leg per 5 min, filled or not: if the fill ingest fails after an exit filled, the ledger still shows
         # the holding and a second exit would flip it (review 24 Oct); a reversed edge is not urgent
         exited = {str(r["exchange_id"]) for r in self.store.rows(
             "SELECT exchange_id FROM orders WHERE purpose='cheapfav_exit' AND placed_at > ?", (now - 300,))}
+        gap_own = set((self.store.get_param("gap_legs", {}) or {}) if getattr(self, "gap", None) is not None else ())
         for ex, q in open_pos.items():
-            if ex in resting or ex in exited or ex not in race_of or strategy_paused(self, "exit:cheapfav"):
-                continue
+            if ex in resting or ex in exited or ex in gap_own or ex not in race_of or strategy_paused(self, "exit:cheapfav"):
+                continue                                 # (the pilot's legs: its own exits cover a closed / reversed gap; review 28 Oct)
             why = cf.exit_reason(ex, q, byex.get(ex), race_of[ex][0], now)
             if not why:
                 continue
@@ -2888,13 +2907,15 @@ class Bot:
             else:
                 continue
             try:
-                resp = self.api.place_order(ex, side, "buy", n, px, expiration=ttl, key=self.api.new_key("cfx"))
+                resp = self.api.place_order(ex, side, "buy", n, px, expiration=expiry_in(60), key=self.api.new_key("cfx"))
                 self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, n, "cheapfav_exit", response=resp)
                 log.info("CHEAPFAV exit %s %s x%d @%.3f (%s)", ex, side, n, px, why)
             except ApiError as e:
                 log.warning("cheapfav exit %s: %s", ex, e)
         if killed or not dir_summary.get("polled") or now > cf.last_entry or not positions or strategy_paused(self, "cheapfav"):
             return                                   # no positions (read failed): every holding guard would be blind
+        gap_legs = set((self.store.get_param("gap_legs", {}) or {}) if getattr(self, "gap", None) is not None else ())
+        gap_races = {self.universe.by_exchange[e][0] for e in gap_legs if e in self.universe.by_exchange}
         race_legs = {r.name: list(r.exchange_ids) for r in self.universe.races.values()}
         ch = getattr(self, "churn", None)               # races the high-frequency arb holds sets in: its ledger books what
         skip = getattr(self, "cheapfav_skip", None) or {}
@@ -2904,7 +2925,8 @@ class Bot:
         cands = [c for c in cf.candidates(rows, positions, race_legs) if c["exchange_id"] not in resting   # the venue shows,
                  and not (ch is not None and ch.held(c["race"])) and skip.get(c["exchange_id"], 0) <= now   # keep them apart
                  and c["race"] not in cu_races and c["race"] not in shock_races_of(self)   # nor shock's races
-                 and c["race"] not in punt_races_of(self)]                                # nor the punt's
+                 and c["race"] not in punt_races_of(self)                                 # nor the punt's
+                 and c["exchange_id"] not in gap_legs and c["race"] not in gap_races]     # nor the gap pilot's legs / races
         if not cands:
             return
         touch = {}
@@ -2955,7 +2977,7 @@ class Bot:
                 self.post_cash_need("cheapfav", want - max(0.0, spendable_cash(self) - cf.cash_floor), f"{len(free)} entries want {want:.0f}")
         for o in orders:
             try:
-                resp = self.api.place_order(o["exchange_id"], o["side"], "buy", o["qty"], o["price"], expiration=ttl, key=self.api.new_key("cf"))
+                resp = self.api.place_order(o["exchange_id"], o["side"], "buy", o["qty"], o["price"], expiration=expiry_in(60), key=self.api.new_key("cf"))
                 self.store.record_order(resp.get("orderId"), o["exchange_id"], None, o["side"], "buy", o["price"], o["qty"], "cheapfav", response=resp)
                 if resp.get("orderId") is None:          # its fill cannot be attributed: never buy this leg again blind
                     self.cheapfav_skip = dict(getattr(self, "cheapfav_skip", None) or {}, **{o["exchange_id"]: now + 3600})
@@ -2965,6 +2987,237 @@ class Bot:
                          o["qty"], o["price"], o["p_win"], 100 * (o["p_win"] - o["price"]))
             except ApiError as e:
                 log.warning("cheapfav entry %s: %s", o["exchange_id"], e)
+    # ------------------------------------------------------------------ gap-trade pilot (proposals/gap_pilot.py)
+    def gap_cycle(self, dir_summary: dict, positions: dict, prices: dict, killed: bool):
+        """Tiny gap-trade pilot: exits (gap closed, reversed, stop, time stop, hard exit) then entries on a fresh directional
+        poll. Orders carry the cheap-favourites purposes (cheapfav / cheapfav_exit), so the fills ledger, the race protections
+        and the wind-down exemption are the sleeve's own; the legs the pilot opened are listed in the param gap_legs."""
+        gp = self.gap
+        if gp is None or self.dry_run or self.store is None:
+            return
+        now = time.time()
+        rows = getattr(self.direction, "rows", None) or []
+        byex = {str(r["exchange_id"]): r for r in rows if r.get("exchange_id")}
+        lock = getattr(self, "trade_lock", None)
+        if lock is None:
+            self._gap_trade(gp, now, rows, byex, dir_summary, positions, prices, killed)
+            return
+        with lock:
+            self._gap_trade(gp, now, rows, byex, dir_summary, positions, prices, killed)
+
+    def _gap_trade(self, gp, now, rows, byex, dir_summary, positions, prices, killed):
+        positions = getattr(self, "positions_snapshot", None) or positions
+        fills, race_of, open_pos, held, deployed_all = self.cheapfav_refresh()
+        _op, cost_ex, _by, _tot = CF.ledger(fills, race_of)
+        legs = {str(k): float(v) for k, v in (self.store.get_param("gap_legs", {}) or {}).items()}
+        legs = {ex: ts for ex, ts in legs.items() if ex in open_pos or ts > now - 6 * 3600}   # a late fill ingest must not orphan a leg
+        filled_by_order: dict = {}
+        for f in fills:
+            filled_by_order[str(f.get("order_id"))] = filled_by_order.get(str(f.get("order_id")), 0.0) + abs(float(f["quantity"]))
+        recent = [dict(r) for r in self.store.rows("SELECT order_id, exchange_id, side, price, quantity, purpose FROM orders "
+                                                   "WHERE purpose IN ('cheapfav','cheapfav_exit') AND placed_at > ?", (now - 180,))]
+        busy = {str(o["exchange_id"]) for o in recent}                 # one order per leg in flight (60 s TTL + ingest lag)
+        cf_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose IN ('cheapfav','cheapfav_exit') "
+                                                              "AND placed_at > ?", (now - 6 * 3600,))}
+        resting_ids = {str(o.get("id")) for lst in (getattr(self, "open_orders_cache", None) or {}).values() for o in lst}
+        busy |= {str(ex_o) for ex_o, lst in (getattr(self, "open_orders_cache", None) or {}).items() if any(str(o.get("id")) in cf_ids for o in lst)}
+        exited_lately = {str(r["exchange_id"]) for r in self.store.rows("SELECT exchange_id FROM orders WHERE purpose='cheapfav_exit' "
+                                                                       "AND placed_at > ?", (now - 900,))}     # one exit per leg per 15 min, filled or not (fills ingest up to ~4.5 min late)
+        unknown_all = {str(k): float(v) for k, v in (self.store.get_param("gap_exit_unknown", {}) or {}).items()}
+        unknown_exit = {k: v for k, v in unknown_all.items() if k in open_pos}
+        if len(unknown_exit) < len(unknown_all):
+            self.store.set_param("gap_exit_unknown", unknown_exit)      # the ledger shows the leg closed: the block ends for good
+            # (failure-path test 5: a stale mark blocked the exit of the same leg bought again later)
+        tries = {str(k): float(v) for k, v in (self.store.get_param("gap_exit_try", {}) or {}).items() if float(v) > now - 900}
+        exited_lately |= set(tries)                                    # an attempt whose outcome we never saw (timeout) counts too
+        cool = {str(k): float(v) for k, v in (self.store.get_param("gap_exited", {}) or {}).items() if float(v) > now - 24 * 3600}
+        # the latest exit order per leg in the last 45 min (10x the usual fills-ingest lag) that has NO ingested fill yet:
+        # the venue position decides whether it filled (review 29 Oct: a 6 h wait on the venue sign alone stalled legs the
+        # market maker was short on)
+        recent_exit = {}
+        for r in self.store.rows("SELECT exchange_id, order_id, placed_at FROM orders WHERE purpose='cheapfav_exit' AND placed_at > ? "
+                                 "ORDER BY placed_at", (now - 2700,)):
+            recent_exit[str(r["exchange_id"])] = (float(r["placed_at"]), str(r["order_id"]))
+        recent_exit = {ex: t for ex, (t, oid) in recent_exit.items() if filled_by_order.get(oid, 0.0) < 1}
+        for r in self.store.rows("SELECT exchange_id, MAX(placed_at) AS t FROM orders WHERE purpose='cheapfav_exit' AND placed_at > ? "
+                                 "GROUP BY exchange_id", (now - 24 * 3600,)):          # the sleeve's own reversal exits of gap legs count too
+            if str(r["exchange_id"]) in legs:
+                cool[str(r["exchange_id"])] = max(cool.get(str(r["exchange_id"]), 0.0), float(r["t"]))
+        blind = {str(k): _blind_rec(v) for k, v in (self.store.get_param("gap_blind", {}) or {}).items()}   # fills nobody can attribute
+        cost = {ex: cost_ex.get(ex, 0.0) for ex in legs}
+        own_net, own_pd, own_pr = 0.0, 0.0, 0.0
+        for ex, b in blind.items():                                    # an entry whose outcome is unknown still counts against the caps
+            cost[ex] = cost.get(ex, 0.0) + b["n"]
+            if b["win"] == "D":
+                own_pd += b["n"]                                        # and against the own net-D band, one-sided like pending
+            elif b["win"] == "R":
+                own_pr += b["n"]
+            else:
+                own_pd += b["n"]                                        # direction unknown (old record): count it against both
+                own_pr += b["n"]
+        for ex, q in open_pos.items():
+            if ex in legs and ex in race_of:
+                win = race_of[ex][1] if q > 0 else ("R" if race_of[ex][1] == "D" else "D")
+                own_net += cost_ex.get(ex, 0.0) * (1 if win == "D" else -1)
+        for o in recent:                                               # unfilled entries count as held (cost and net D)
+            ex = str(o["exchange_id"])
+            if o["purpose"] != "cheapfav" or ex not in legs or ex not in race_of:
+                continue
+            left = float(o["quantity"]) - filled_by_order.get(str(o.get("order_id")), 0.0)
+            if left >= 1:
+                n = left * float(o["price"])
+                cost[ex] = cost.get(ex, 0.0) + n
+                win = race_of[ex][1] if o["side"] == "yes" else ("R" if race_of[ex][1] == "D" else "D")
+                if win == "D":
+                    own_pd += n                                         # one-sided, like cheapfav: an expired R order never makes room for D
+                else:
+                    own_pr += n
+        own = own_levels(self)
+        for ex, q in open_pos.items():                                 # ---- exits
+            if ex not in legs or ex in busy or ex in exited_lately or ex in unknown_exit or strategy_paused(self, "exit:gap"):
+                continue
+            bk = self.fresh_book(ex, 10.0)
+            bk = own.net(ex, bk) if bk else None                      # our own resting quotes are not the market
+            if not bk:
+                continue
+            n = int(abs(q))
+            if n < 1:
+                continue
+            vp = float((positions or {}).get(ex, 0.0))
+            if ex in recent_exit:
+                # an exit went out on this leg lately and none of its fills is ingested yet: if the venue no longer holds our
+                # side, it most likely filled and the ingest is behind, so a second exit would flip the leg through zero
+                # (failure-path test 10); if the venue still holds some, never sell more than it shows (a partial fill)
+                if (vp <= 0 if q > 0 else vp >= 0):
+                    if now - recent_exit[ex] < 90:          # once per exit order, not every cycle
+                        log.warning("GAP exit %s waits: ledger %+.0f, venue %+.0f, exit sent %.0f s ago, no fill ingested", ex, q, vp, now - recent_exit[ex])
+                    continue
+                n = min(n, int(abs(vp)))
+                if n < 1:
+                    continue
+            why = gp.exit_reason(ex, q, byex.get(ex), bk, cost_ex.get(ex, 0.0) / abs(q), legs[ex], now)
+            if not why:
+                continue
+            if q > 0 and bk.get("bids"):
+                side, px = "no", round(1 - bk["bids"][0]["price"], 3)
+            elif q < 0 and bk.get("asks"):
+                side, px = "yes", round(bk["asks"][0]["price"], 3)
+            else:
+                continue
+            tries[ex] = now
+            self.store.set_param("gap_exit_try", tries)                 # stamped before the call: a lost response must not be re-sent at once
+            busy.add(ex)
+            cool[ex] = now                                              # no re-entry on a leg the pilot is leaving (24 h)
+            self.store.set_param("gap_exited", cool)
+            if why.startswith("stop"):                                  # three stopped legs end the pilot's entries
+                self.store.set_param("gap_stops", sorted(set(self.store.get_param("gap_stops", []) or []) | {ex}))
+            try:
+                ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")   # fresh: writes can take 12 s each
+                resp = self.api.place_order(ex, side, "buy", n, px, expiration=ttl, key=self.api.new_key("gpx"))
+                self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, n, "cheapfav_exit", response=resp)
+                if resp.get("orderId") is None:
+                    raise RuntimeError("no orderId in the response")
+                log.info("GAP exit %s %s x%d @%.3f (%s)", ex, side, n, px, why)
+            except Exception as e:                                      # ApiError, or a timeout / connection error escaping the client
+                log.warning("gap exit %s: %s", ex, e)
+                if not (isinstance(e, ApiError) and 400 <= int(e.status) < 500 and int(e.status) not in (408, 409, 429)):
+                    # outcome unknown: the fill may sit in the fills table without a purpose, so the ledger cannot tell. Never
+                    # re-send by itself (a second exit would flip the leg through zero); the block clears once the ledger shows
+                    # the leg closed (review 28 Oct)
+                    unknown_exit[ex] = now
+                    self.store.set_param("gap_exit_unknown", unknown_exit)
+                    log.error("GAP exit %s: outcome unknown (%s); no automatic re-send, needs a look", ex, e)
+        self.store.set_param("gap_legs", legs)
+        if killed or not dir_summary.get("polled") or now > gp.last_entry or not positions or strategy_paused(self, "gap"):
+            return
+        if len(self.store.get_param("gap_stops", []) or []) >= 3:
+            return                                                      # three stop-outs: the pilot's own kill switch
+        if bool(getattr(self, "shock_active", lambda: False)()) or spendable_cash(self) < 0:
+            return                                                      # a shock is open, or the reserve is not whole: no new positions
+        # ---- entries
+        race_legs = {r.name: list(r.exchange_ids) for r in self.universe.races.values()}
+        ch = getattr(self, "churn", None)
+        cu_ex = set(getattr(self, "catchup_open", None) or {}) | set(getattr(getattr(self, "catchup", None), "ctx", None) or {})
+        cu_races = {self.universe.by_exchange[e][0] for e in cu_ex if e in self.universe.by_exchange}
+        avoid = {ex for ex in open_pos if ex not in legs}              # the cheap-favourites sleeve's own legs
+        avoid |= {str(o["exchange_id"]) for o in recent if o["purpose"] == "cheapfav" and str(o["exchange_id"]) not in legs}   # and its fresh entries
+        owned = Bot.wind_down_owned(self, now)
+        cands = [c for c in gp.candidates(rows, positions, race_legs, avoid, cooldown_ex=set(cool) | set(unknown_exit), own_ex=set(legs)) if c["exchange_id"] not in busy
+                 and c["race"] not in owned and not Bot.exit_locked(self, c["race"], "gap", now=now)
+                 and not (ch is not None and ch.held(c["race"])) and c["race"] not in cu_races
+                 and c["race"] not in shock_races_of(self) and c["race"] not in punt_races_of(self)]
+        if not cands:
+            return
+        levels = {}
+        for c in cands:
+            bk = self.fresh_book(c["exchange_id"], 10.0)
+            bk = own.net(c["exchange_id"], bk) if bk else None
+            if not bk:
+                continue
+            if c["side"] == "yes" and bk.get("asks"):
+                levels[c["exchange_id"]] = [(a["price"], a["quantity"]) for a in bk["asks"][:6]]
+            elif c["side"] == "no" and bk.get("bids"):
+                levels[c["exchange_id"]] = [(round(1 - b["price"], 3), b["quantity"]) for b in bk["bids"][:6]]
+        fr = getattr(self, "fresh_positions", None)
+        if callable(fr):
+            fresh = fr()
+            if fresh is None:
+                return
+            positions = fresh
+        expo = risk.exposure(self.universe, positions, prices)
+        # unfilled orders of every entry sleeve in the last 330 s, one-sided and counted whole (fills ignored: only tighter)
+        pend_d = pend_r = 0.0
+        for o in self.store.rows("SELECT order_id, exchange_id, side, quantity, price, placed_at FROM orders WHERE purpose IN "
+                                 "('cheapfav','catchup','direction','tilt','inside','shock') AND (placed_at > ? OR status='open')", (now - 330,)):
+            if float(o["placed_at"] or 0) <= now - 330 and str(o["order_id"]) not in resting_ids:
+                continue                                                # an old 'open' row the venue no longer shows
+            d = risk.adds(self.universe, str(o["exchange_id"]), o["side"])
+            n = float(o["quantity"]) * float(o["price"])
+            if d == "D":
+                pend_d += n
+            elif d == "R":
+                pend_r += n
+        pend_cf = sum(max(0.0, float(o["quantity"]) - filled_by_order.get(str(o.get("order_id")), 0.0)) * float(o["price"])
+                      for o in recent if o["purpose"] == "cheapfav")
+        room_all = self.cfg.cheapfav_budget - deployed_all - pend_cf        # the 15k stays shared across favourites and the pilot
+        orders = gp.entries(cands, levels, cost, sum(cost.values()), min(spendable_cash(self) - max(self.cfg.cheapfav_cash_floor, getattr(self.cfg, "churn_cash_floor", 0.0) or 0.0), room_all),
+                            now, positions, expo.net_d_notional, own_net, cap=self.cfg.mm.portfolio_max_partisan_notional,
+                            blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()), pend=(pend_d, pend_r),
+                            own_pend=(own_pd, own_pr))
+        for o in orders:
+            try:
+                legs.setdefault(o["exchange_id"], now)
+                self.store.set_param("gap_legs", legs)                  # the label first: a leg without it would be held to the call
+                ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")   # fresh: writes can take 12 s each
+                resp = self.api.place_order(o["exchange_id"], o["side"], "buy", o["qty"], o["price"], expiration=ttl, key=self.api.new_key("gp"))
+                self.store.record_order(resp.get("orderId"), o["exchange_id"], None, o["side"], "buy", o["price"], o["qty"], "cheapfav", response=resp)
+                if resp.get("orderId") is None:                         # its fill cannot be attributed: the leg is blind
+                    self._gap_blind(o, now, "no orderId in the response")
+                self.cash -= o["notional"]
+                log.info("GAP enter %s %s (%s %s) x%d limit %.3f avg %.3f: fair %.3f, edge %.1fc", o["race"], o["win_party"], o["exchange_id"],
+                         o["side"], o["qty"], o["price"], o["avg_price"], o["p_win"], 100 * (o["p_win"] - o["avg_price"]))
+            except Exception as e:                                      # ApiError, or a timeout / connection error escaping the client
+                log.warning("gap entry %s: %s", o["exchange_id"], e)
+                if isinstance(e, ApiError) and 400 <= int(e.status) < 500 and int(e.status) not in (408, 409, 429):
+                    cool2 = {str(k): float(v) for k, v in (self.store.get_param("gap_exited", {}) or {}).items()}
+                    cool2[str(o["exchange_id"])] = now                  # a definite reject: nothing filled, but no hammering the leg
+                    self.store.set_param("gap_exited", cool2)
+                else:
+                    self._gap_blind(o, now, f"outcome unknown ({e})")  # a timeout / 5xx may have filled: count it, no re-entry
+
+    def _gap_blind(self, o: dict, now: float, why: str):
+        """An entry whose fill the ledger may never see: its notional counts against the pilot's caps for good and the leg is on
+        the 24 h cooldown (review 28 Oct: otherwise the pilot re-buys the leg every few minutes past its caps)."""
+        ex = str(o["exchange_id"])
+        blind = {str(k): _blind_rec(v) for k, v in (self.store.get_param("gap_blind", {}) or {}).items()}
+        old = blind.get(ex, {"n": 0.0, "win": o.get("win_party")})
+        blind[ex] = {"n": old["n"] + float(o["notional"]), "win": old["win"] if old["win"] == o.get("win_party") else None}
+        self.store.set_param("gap_blind", blind)
+        cool = {str(k): float(v) for k, v in (self.store.get_param("gap_exited", {}) or {}).items()}
+        cool[ex] = now
+        self.store.set_param("gap_exited", cool)
+        log.error("GAP entry %s: %s; %.0f counted as deployed, leg on cooldown", ex, why, o["notional"])
+
     # ------------------------------------------------------------------ shock mode (proposals/shock_mode.py)
     # --------------------------------------------------------------- punt executor (BACKLOG 0000, research_notes/punt_plan.md)
     def punt_races(self) -> set:
@@ -3192,8 +3445,8 @@ class Bot:
             resting |= {str(r["exchange_id"]) for r in self.store.rows(
                 "SELECT exchange_id FROM orders WHERE purpose='shock_exit' AND status='open' AND placed_at > ?", (now - 20,))
                 if not any((c.get("maker") or {}).get("ex") == str(r["exchange_id"]) for c in sk.ctx.values())}
-            ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            xttl = (datetime.now(timezone.utc) + timedelta(seconds=15)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            # each shock order's expiry is set at its own write (expiry_in), never once per tick: with slow writes a
+            # batch-wide expiry expired every order after the first (sim slow_writes, 28 Oct)
 
             def venue_qty(ex: str, q: float) -> Optional[int]:
                 """Shares we may close: the ledger's q, never more than the venue shows held on that side (the fills
@@ -3224,7 +3477,7 @@ class Bot:
                         try:                                        # clear the leg, then hold for the ledger and the clamp
                             self.api.cancel_all(exchange_id=ex)
                             dead = True
-                            self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = now
+                            self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = time.time()   # one clock with shock_ingest_ts (review 29 Oct)
                         except Exception as e:
                             log.warning("shock maker cancel-all %s: %s (retrying)", ex, e)
                     oo_ts, oo_ok = getattr(self, "open_orders_read", (0.0, False))
@@ -3232,17 +3485,17 @@ class Bot:
                         oo = (getattr(self, "open_orders_cache", None) or {}).get(ex, [])   # not listed, it is gone (filled,
                         if not any(str(o.get("id")) == str(mk["id"]) for o in oo):        # or a global cancel-all)
                             dead = True
-                            self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = now
+                            self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = time.time()
                     if not dead and mk.get("id") is not None:
                         try:
                             self.api.cancel_order(mk["id"])
                             self.store.mark_orders([mk["id"]], "cancelled")
                             dead = True
-                            self.shock_exit_sent[ex] = now          # it may have part-filled: fresh fills before the taker
+                            self.shock_exit_sent[ex] = time.time()          # it may have part-filled: fresh fills before the taker
                         except ApiError as e:
                             if int(getattr(e, "status", 0) or 0) == 404:
                                 dead = True              # not found: already filled or closed (any other error: retry;
-                                self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = now    # 429/401/409... do not prove it is gone; review 5)
+                                self.shock_hold[ex] = now + 100.0; self.shock_exit_sent[ex] = time.time()    # 429/401/409... do not prove it is gone; review 5)
                             log.warning("shock maker cancel %s: %s (%s)", ex, e, "gone" if dead else "retrying")
                         except Exception as e:
                             log.warning("shock maker cancel %s: %s (retrying)", ex, e)
@@ -3259,7 +3512,7 @@ class Bot:
                         if mx and n is not None and n >= 1:
                             mttl = (datetime.now(timezone.utc) + timedelta(seconds=600)).strftime("%Y-%m-%dT%H:%M:%SZ")
                             resp, unknown = None, False
-                            self.shock_exit_sent[ex] = now
+                            self.shock_exit_sent[ex] = time.time()
                             try:
                                 resp = self.api.place_order(ex, mx[0], "buy", n, mx[1], expiration=mttl, key=self.api.new_key("shm"))
                             except ApiError as e:
@@ -3299,9 +3552,10 @@ class Bot:
                     # an exit (or maker) went out on this leg since our last fills pull: its partial fill is not in the
                     # ledger yet, and the venue clamp alone would then size the next exit into other sleeves' shares on
                     # the same side (an arb set's NO; review 7). Pull fills and re-size from the fresh ledger.
+                    t_pull = time.time()                      # taken before the pull: it covers exits sent before this instant
                     if not self.shock_ingest():
                         continue
-                    self.shock_ingest_ts = now                # an exit sent later in this same tick (>=) pulls again
+                    self.shock_ingest_ts = t_pull             # an exit sent later (its stamp is later) pulls again
                     q = self.shock_ledger()[1].get(ex, 0.0)
                     if abs(q) < 1:
                         continue
@@ -3329,20 +3583,21 @@ class Bot:
                     side, px = "no", round(min(0.995, 1 - bid + walk * SHK.TICK), 3)
                 else:
                     side, px = "yes", round(min(0.995, ask + walk * SHK.TICK), 3)
-                self.shock_exit_sent[ex] = now
+                t_send = time.time()                  # the exit lives 15 s from its send, not from the tick start (review 29 Oct)
+                self.shock_exit_sent[ex] = t_send
                 try:
-                    resp = self.api.place_order(ex, side, "buy", n, px, expiration=xttl, key=self.api.new_key("shx"))
+                    resp = self.api.place_order(ex, side, "buy", n, px, expiration=expiry_in(15), key=self.api.new_key("shx"))
                     self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, n, "shock_exit", response=resp)
                     log.info("SHOCK exit %s %s x%d @%.3f (%s)", ex, side, n, px, why)
                 except ApiError as e:
                     st_ = int(getattr(e, "status", 0) or 0)
                     log.warning("shock exit %s: %s", ex, e)
-                    self.shock_hold[ex] = now + (20.0 if st_ >= 500 or st_ == 409 else 60.0)   # unknown: 20 s; reject: 60 s
+                    self.shock_hold[ex] = t_send + (20.0 if st_ >= 500 or st_ == 409 else 60.0)   # unknown: 20 s; reject: 60 s
                     if st_ >= 500 or st_ == 409:
                         self.shock_unknown.append((ex, now, "shock_exit"))
                 except Exception as e:               # unknown outcome: its fills are claimed for shock (shock_claim)
                     log.error("SHOCK exit %s: outcome unknown (%s)", ex, e)
-                    self.shock_hold[ex] = now + 20.0
+                    self.shock_hold[ex] = t_send + 20.0
                     self.shock_unknown.append((ex, now, "shock_exit"))
             for ex in list(sk.ctx):
                 if ex not in open_pos and ex not in resting and now - sk.ctx[ex].get("ts", now) > 300:
@@ -3431,7 +3686,7 @@ class Bot:
                         break                                # paused / held while this tick ran (strategy stops)
                     resp, unknown = None, False
                     try:
-                        resp = self.api.place_order(ex, side, "buy", q, px, expiration=ttl, key=self.api.new_key("shk"))
+                        resp = self.api.place_order(ex, side, "buy", q, px, expiration=expiry_in(60), key=self.api.new_key("shk"))
                     except ApiError as e:
                         st_ = int(getattr(e, "status", 0) or 0)
                         unknown = st_ >= 500 or st_ == 409    # a 5xx / request-in-flight may have been accepted
@@ -3585,7 +3840,6 @@ class Bot:
                 log.warning("election cycle: %s", e)
                 time.sleep(self.cfg.election_poll_sec)
                 continue
-            ttl = (datetime.now(timezone.utc) + timedelta(seconds=en.cfg.ttl_sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
             for o in Bot.election_filter(self, orders):
                 log.info("ELECTION %s %s %s x%s at %s: %s", o.get("kind"), o.get("exchangeId"), o.get("side"), o.get("quantity"), o.get("price"), o.get("reason"))
                 if self.dry_run:
@@ -3595,7 +3849,7 @@ class Bot:
                 try:
                     with self.trade_lock:
                         resp = self.api.place_order(str(o["exchangeId"]), o["side"], "buy", int(o["quantity"]), float(o["price"]),
-                                                    expiration=ttl, key=self.api.new_key("elec"))
+                                                    expiration=expiry_in(en.cfg.ttl_sec), key=self.api.new_key("elec"))
                     oid = resp.get("orderId")
                     self.store.record_order(oid, str(o["exchangeId"]), None, o["side"], "buy", float(o["price"]), int(o["quantity"]), "election", response=resp)
                     if oid:
@@ -4155,6 +4409,11 @@ class Bot:
                 self.cheapfav_cycle(dir_summary, positions, prices, killed)
             except Exception as e:                   # the sleeve must never kill the loop
                 log.exception("cheapfav cycle failed: %s", e)
+        if getattr(self, "gap", None) is not None:
+            try:
+                self.gap_cycle(dir_summary, positions, prices, killed)
+            except Exception as e:                   # the pilot must never kill the loop
+                log.exception("gap pilot cycle failed: %s", e)
         # ---- strategy monitor (every 15 min): pause a sleeve whose own results show it is losing (strategy_monitor.py)
         try:
             self.monitor_cycle()

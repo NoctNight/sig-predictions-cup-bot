@@ -931,6 +931,79 @@ class CheapFav(Scenario):
                         "per_outcome_max": round(max(per.values())) if per else 0}
 
 
+class GapPilotSim(Scenario):
+    name, cycles, seed = "gappilot", 240, 33
+    cfg = {"cheapfav_enabled": True, "cheapfav_budget": 6000.0, "cheapfav_leg_cap": 1500.0, "gap_enabled": True, "gap_budget": 800.0,
+           "gap_leg_cap": 300.0, "gap_order_notional": 150.0, "gap_net_max": 400.0}
+    doc = "gap-trade pilot: buy the side SIG prices >= 3c under the outside fair on any same-terms two-party leg (not the chamber markets / punt races), walk the book, tiny caps; a leg whose gap closes is sold; positions ride the cheap-favourites ledger"
+
+    def before_cycle(self, sim, i):
+        v = sim.v
+        if i == 150:
+            legs = getattr(sim.bot.store, "get_param", lambda *a: {})("gap_legs", {}) or {}
+            held = getattr(sim.bot, "cheapfav_open", None) or {}
+            self.closed = None
+            for ex in sorted(legs):
+                q = held.get(ex)
+                race = sim.universe.race_of(ex)
+                if not q or race is None or len(race.legs) != 2:
+                    continue
+                other = [e for e in race.exchange_ids if e != ex][0]
+                v.outside[ex] = round(SV.P(v.bid_t[ex]) if q > 0 else SV.P(v.ask_t[ex]), 4)      # the gap closes: fair = SIG's touch
+                v.outside[other] = round(1 - v.outside[ex], 4)
+                self.closed, self.t_closed = ex, v.now
+                break
+
+    def final_checks(self, sim):
+        GP = sim.M["gap_pilot"]
+        CF = sim.M["cheap_favourites"]
+        same = CF.same_terms_exchanges(os.path.join(sim.sb, "data", "research_contract_rules", "tc_mapping.json")) or set()
+        calls = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] in ("gp", "gpx")]
+        entries = [c for c in calls if c["prefix"] == "gp"]
+        exits = [c for c in calls if c["prefix"] == "gpx"]
+        if not entries:
+            sim.chk.violation("gap_none", "no gap-pilot entry although SIG sits 3c+ under the outside fair on many legs")
+        closed = getattr(self, "closed", None)
+        per_leg = {}
+        for c in entries:
+            race = sim.universe.race_of(c["ex"])
+            if race is None or c["ex"] not in same or race.name in GP.CHAMBER_RACES or race.name in CF.PUNT_RACES or "I" in race.legs:
+                sim.chk.violation("gap_bad_leg", f"{c['key']} {c['ex']} ({race.name if race else '?'}): not a same-terms two-party non-chamber race")
+                continue
+            if c["ex"] == closed and c["t"] >= self.t_closed:
+                sim.chk.violation("gap_after_close", f"{c['key']} bought {c['ex']} after its gap closed")
+            elif c["ex"] != closed:
+                f = sim.v.outside[c["ex"]]
+                p_win = f if c["side"] == "yes" else 1 - f
+                if p_win - c["price"] < 0.03 - 1e-9:
+                    sim.chk.violation("gap_no_edge", f"{c['key']} {c['ex']} {c['side']} limit {c['price']}: P(win) {p_win:.3f}, edge {p_win - c['price']:.3f}")
+            after = c["pos_before"] + (c["qty"] if c["side"] == "yes" else -c["qty"])
+            if abs(after) > 4000 + 1e-9:
+                sim.chk.violation("gap_over_4000", f"{c['key']} {c['ex']}: leg position {after:+.0f} shares > 4,000")
+            per_leg[c["ex"]] = per_leg.get(c["ex"], 0.0) + c["qty"] * (c["price"] if c["side"] == "yes" else c["price"])
+        legs = sim.bot.store.get_param("gap_legs", {}) or {}
+        fills = [dict(r) for r in sim.bot.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('cheapfav','cheapfav_exit') ORDER BY filled_at")]
+        gap_ex = set(legs) | {c["ex"] for c in entries}
+        race_of = {ex: r for ex, r in sim.universe.by_exchange.items()}
+        gap_paid = 0.0                                          # peak open cost of the pilot's legs along its fills (the ledger's own measure)
+        for k in range(1, len(fills) + 1):
+            _o, cost_ex, _h, _t = CF.ledger([f for f in fills[:k] if f["exchange_id"] in gap_ex], race_of)
+            gap_paid = max(gap_paid, sum(cost_ex.values()))
+        if gap_paid > 800 + 150:
+            sim.chk.violation("gap_budget", f"pilot bought {gap_paid:.0f} > budget 800 (+ one order)")
+        for ex, x in per_leg.items():
+            if x > 300 + 150:
+                sim.chk.violation("gap_leg_cap", f"{ex}: {x:.0f} > leg cap 300 (+ one order)")
+        for c in exits:
+            if c["ex"] != closed and c["t"] < sim.v.now:
+                f = sim.v.outside[c["ex"]]
+                # an exit of an untouched leg needs a stop / time stop / gap-closed reason: the sim moves nothing else, so none expected
+                sim.chk.violation("gap_exit_unwanted", f"{c['key']} exited {c['ex']} although its gap never closed")
+        if closed and not exits:
+            sim.chk.violation("gap_no_exit", f"{closed}: gap closed (fair = SIG touch), held position not sold")
+        self.summary = {"entries": len(entries), "exits": len(exits), "gap_legs": len(legs), "paid": round(gap_paid), "closed": closed}
+
+
 class DevChurnSim(Scenario):
     name, cycles, seed = "churn", 200, 29
     cfg = {"churn_enabled": True}
@@ -2497,7 +2570,7 @@ def WD_ts(s):
 for _c in (ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, RecycleOversize):
     _c.cfg = {**(getattr(_c, "cfg", None) or {}), "shock_enabled": False}
 
-SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, Shock, ShockMaker, ShockMakerPostOnly, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
+SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, Shock, ShockMaker, ShockMakerPostOnly, CheapFav, GapPilotSim, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
              ChurnMany, ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, ShockReserve, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
              Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Punt, Day]
 
@@ -2510,6 +2583,7 @@ def import_sandbox(sb):
     mods = {n: importlib.import_module("sigbot." + n) for n in names}
     mods["xv_gate"] = importlib.import_module("sigbot.proposals.mm_upgrade").xv_gate
     mods["cheap_favourites"] = importlib.import_module("sigbot.proposals.cheap_favourites")
+    mods["gap_pilot"] = importlib.import_module("sigbot.proposals.gap_pilot")
     assert os.path.dirname(os.path.dirname(os.path.abspath(mods["run"].__file__))) == sb, "sigbot was not imported from the sandbox"
     return mods
 

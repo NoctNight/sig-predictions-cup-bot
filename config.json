@@ -156,5 +156,14 @@
   "shock_full_sec": 30.0,
   "shock_exit_maker": true,
   "strategy_stops_enabled": true,
-  "punt_enabled": false
+  "punt_enabled": false,
+  "gap_enabled": true,
+  "gap_budget": 900.0,
+  "gap_min_edge": 0.03,
+  "gap_leg_cap": 300.0,
+  "gap_order_notional": 150.0,
+  "gap_net_max": 500.0,
+  "gap_hold_hours": 72.0,
+  "gap_stop": 0.04,
+  "gap_take_edge": 0.005
 }

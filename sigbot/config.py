@@ -209,6 +209,15 @@ class BotConfig:
     cheapfav_cash_floor: float = 1000.0  # never spend cash below this
     cheapfav_net_max: float = 2000.0     # the sleeve's own net D cost stays within +-this whatever the book
     cheapfav_headroom: float = 1000.0    # an add that widens the book's |net D| keeps it this far under the partisan cap
+    gap_enabled: bool = False            # gap-trade pilot (proposals/gap_pilot; needs cheapfav_enabled): buy the side SIG prices >= gap_min_edge
+    gap_budget: float = 900.0           # under the outside fair on any same-terms leg; total cost cap (inside cheapfav_budget),
+    gap_min_edge: float = 0.03           # edge at the touch (+1c on single-venue legs), levels walked while each share keeps it,
+    gap_leg_cap: float = 300.0           # cost per leg,
+    gap_order_notional: float = 150.0    # per order,
+    gap_net_max: float = 500.0           # the pilot's own net D cost stays within +-this whatever the book,
+    gap_hold_hours: float = 72.0         # time stop after the leg's first entry (hard exit 30 Oct 20:00 ET, last entry 29 Oct 16:00 ET),
+    gap_stop: float = 0.04               # stop when the held side's exit price is this far under cost,
+    gap_take_edge: float = 0.005         # gap closed / reversed: sell when the exit price is within this of the fair
     wind_down_enabled: bool = False      # 31 Oct-3 Nov wind-down (proposals/wind_down, backlog 000): late-call sets, legs and MM
     wind_down_clip_sets: int = 1000      # inventory to cash by 18:00 ET 3 Nov; does nothing before 31 Oct 00:00 ET but the report.
     wind_down_gap_sec: float = 1800.0    # sets per clip, and at least this long between two clips in a race (or on a leg)

@@ -3751,5 +3751,240 @@ from sigbot import strategy_stops as _pss  # noqa: E402
 check("punt: strategy stops attribute punt / punt_exit fills to 'punt' and give it no P&L stop (a punt loss pauses nothing)",
       _pss.PURPOSE_LEDGER.get("punt") == "punt" and _pss.PURPOSE_LEDGER.get("punt_exit") == "punt" and "punt" not in _pss.DEFAULT_LIMITS)
 
+
+# ---- gap-trade pilot (proposals/gap_pilot.py, 27 Oct): tiny, 3c, any same-terms leg, sold before the punt
+from sigbot.proposals import gap_pilot as GP  # noqa: E402
+_gnow = datetime(2026, 10, 28, 15, 0, tzinfo=timezone.utc).timestamp()
+def _gr(race, party, ex, fair, bid, ask, pm=None, k=None):
+    return {"race": race, "party": party, "exchange_id": ex, "fair": fair, "sig_bid": bid, "sig_ask": ask,
+            "pm": fair if pm is None else pm, "kalshi": fair if k is None else k}
+_gsame = {"g1", "g2", "h1", "h2", "p1", "p2", "i1", "i2", "i3", "n1", "n2", "o1", "o2", "s1", "s2"}
+_gp = GP.GapPilot(same_terms=_gsame, last_entry=_gnow + 1e6, hard_exit_ts=_gnow + 1e7)
+_gpos = {"x": 0.0}
+_gc = lambda rows, pos=_gpos, **kw: _gp.candidates(rows, pos, **kw)
+# universe
+check("gap: a slow-count state is a candidate (not only fast-count favourites), p_win under 0.80 too",
+      [c["exchange_id"] for c in _gc([_gr("Arizona Governor", "D", "g1", 0.55, 0.50, 0.52), _gr("Arizona Governor", "R", "g2", 0.45, 0.47, 0.50)])] == ["g1"])
+check("gap: the U.S. House chamber market is excluded even with a 14c gap",
+      _gc([_gr("U.S. House", "D", "h1", 0.80, 0.64, 0.66), _gr("U.S. House", "R", "h2", 0.20, 0.34, 0.36)]) == [])
+check("gap: the punt's races are excluded", _gc([_gr("Vermont Governor", "D", "p1", 0.80, 0.70, 0.72), _gr("Vermont Governor", "R", "p2", 0.20, 0.28, 0.30)]) == [])
+check("gap: a leg outside the same-terms map is never traded; no map means no candidates",
+      _gc([_gr("Ohio Governor", "D", "zz", 0.60, 0.50, 0.52), _gr("Ohio Governor", "R", "zz2", 0.40, 0.48, 0.50)]) == []
+      and GP.GapPilot(same_terms=None).candidates([_gr("Ohio Governor", "D", "g1", 0.6, 0.5, 0.52)], {}) == [])
+check("gap: a race with an Independent leg is skipped",
+      _gc([_gr("Maine Senate", "D", "i1", 0.60, 0.50, 0.52), _gr("Maine Senate", "R", "i2", 0.30, 0.28, 0.30), _gr("Maine Senate", "I", "i3", 0.1, 0.1, 0.1)]) == [])
+check("gap: a leg held over 4,000 shares or held by the cheap-favourites sleeve blocks its race",
+      _gc([_gr("Ohio Governor", "D", "n1", 0.60, 0.50, 0.52), _gr("Ohio Governor", "R", "n2", 0.40, 0.48, 0.50)], {"n1": 4100.0}) == []
+      and _gc([_gr("Ohio Governor", "D", "n1", 0.60, 0.50, 0.52), _gr("Ohio Governor", "R", "n2", 0.40, 0.48, 0.50)], _gpos, avoid_ex={"n2"}) == [])
+# edge threshold
+_g1 = lambda ask, fair=0.60, **kw: _gc([_gr("Ohio Governor", "D", "n1", fair, ask - 0.02, ask, **kw), _gr("Ohio Governor", "R", "n2", 1 - fair, 1 - ask - 0.02, 1 - ask)])
+check("gap: edge 2.9c is rejected, 3.0c accepted (two venues)", _g1(0.571) == [] and len(_g1(0.570)) == 1)
+_sv = [dict(_gr("Ohio Governor", "D", "n1", 0.60, 0.55, 0.57), kalshi=None), _gr("Ohio Governor", "R", "n2", 0.40, 0.41, 0.43)]
+check("gap: single-venue fair needs +1c (3c edge rejected, 4c accepted)",
+      [c for c in _gc(_sv) if c["exchange_id"] == "n1"] == []
+      and len([c for c in _gc([dict(_sv[0], sig_ask=0.56, sig_bid=0.54), _sv[1]]) if c["exchange_id"] == "n1"]) == 1)
+check("gap: PM and Kalshi more than 4 pts apart are skipped", [c for c in _g1(0.50, pm=0.66, k=0.58) if c["exchange_id"] == "n1"] == [])
+_lg = _gc([_gr("Ohio Governor", "D", "n1", 0.10, 0.16, 0.18), _gr("Ohio Governor", "R", "n2", 0.90, 0.87, 0.89)])
+check("gap: an overpriced longshot is bought on the NO side (NO at 1 - bid) and the ranking is by edge",
+      [(c["side"], round(c["edge"], 3)) for c in _lg if c["exchange_id"] == "n1"] == [("no", 0.06)]
+      and [c["edge"] for c in _lg] == sorted([c["edge"] for c in _lg], reverse=True))
+check("gap: never against a holding on the leg, never a NO next to a NO in the race",
+      _gc([_gr("Ohio Governor", "D", "n1", 0.10, 0.16, 0.18), _gr("Ohio Governor", "R", "n2", 0.90, 0.80, 0.82)], {"n1": 100.0}) == []
+      or all(c["side"] != "no" for c in _gc([_gr("Ohio Governor", "D", "n1", 0.10, 0.16, 0.18), _gr("Ohio Governor", "R", "n2", 0.90, 0.80, 0.82)], {"n1": 100.0})))
+check("gap: no NO when the race's other leg already holds a NO",
+      all(c["exchange_id"] != "n1" or c["side"] != "no" for c in _gc([_gr("Ohio Governor", "D", "n1", 0.10, 0.16, 0.18), _gr("Ohio Governor", "R", "n2", 0.90, 0.80, 0.82)], {"n2": -50.0})))
+check("gap: one route per race outcome (D-YES and R-NO are the same bet): only the better of the two is a candidate",
+      (lambda c: len(c) == 1 and c[0]["exchange_id"] in ("n1", "n2"))(
+          _gc([_gr("Ohio Governor", "D", "n1", 0.60, 0.53, 0.55), _gr("Ohio Governor", "R", "n2", 0.40, 0.44, 0.47)])))
+check("gap: both outcomes of a race can be candidates when each is cheap (D-YES and R-YES) only if each side has its own edge",
+      all(len([x for x in _gc([_gr("Ohio Governor", "D", "n1", 0.60, 0.53, 0.55), _gr("Ohio Governor", "R", "n2", 0.40, 0.44, 0.47)]) if x["win_party"] == w]) <= 1 for w in "DR"))
+# the walk
+_wc = {"race": "Ohio Governor", "exchange_id": "n1", "side": "yes", "party": "D", "win_party": "D", "price": 0.50, "p_win": 0.55, "edge": 0.05, "need": 0.03, "fair": 0.55}
+_wp = GP.GapPilot(same_terms=_gsame, order_notional=500, leg_cap=500, budget=1500, last_entry=_gnow + 1e6)
+_wo = _wp.entries([_wc], {"n1": [(0.50, 100), (0.51, 100), (0.53, 1000)]}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0)
+check("gap: the walk takes levels while each marginal share keeps >= 3c (0.50, 0.51 yes; 0.53 no) at <= 80% of a level",
+      len(_wo) == 1 and _wo[0]["qty"] == 160 and abs(_wo[0]["price"] - 0.51) < 1e-9 and abs(_wo[0]["notional"] - 160 * 0.51) < 1e-6 and abs(_wo[0]["avg_price"] - (80 * 0.50 + 80 * 0.51) / 160) < 1e-9, str(_wo))
+check("gap: no order when the fresh book no longer offers the edge",
+      _wp.entries([_wc], {"n1": [(0.53, 1000)]}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0) == [])
+# budget, leg cap, partisan
+_bp = GP.GapPilot(same_terms=_gsame, order_notional=150, leg_cap=300, budget=1500, last_entry=_gnow + 1e6, net_max=500)
+_big = [(0.50, 100000)]
+_e1 = _bp.entries([_wc], {"n1": _big}, {"n1": 250.0}, 250.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0)
+check("gap: the leg cap (300) limits the order; the budget (1,500) limits the total",
+      len(_e1) == 1 and _e1[0]["notional"] <= 50.0 + 1e-6 and _bp.entries([_wc], {"n1": _big}, {}, 1500.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0) == [])
+check("gap: cash short of the order limits it, no cash means no order",
+      _bp.entries([_wc], {"n1": _big}, {}, 0.0, 0.0, _gnow, {"x": 0.0}, 0.0, 0.0) == []
+      and _bp.entries([_wc], {"n1": _big}, {}, 0.0, 60.0, _gnow, {"x": 0.0}, 0.0, 0.0)[0]["notional"] <= 60.0 + 1e-6)
+_wr = dict(_wc, win_party="R", party="R")
+check("gap: partisan: the pilot's own net D stays within +-500 (a D add past it is dropped, an R add that pulls back is sent)",
+      _bp.entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 480.0) == []
+      and len(_bp.entries([_wr], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 480.0)) == 1)
+check("gap: partisan: the book keeps 1,000 headroom to the 5,000 cap in the direction of each add (D at +3,900 blocked, R fine)",
+      _bp.entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 3900.0, 0.0) == []
+      and len(_bp.entries([_wr], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 3900.0, 0.0)) == 1
+      and _bp.entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0, pend=(3950.0, 0.0)) == [])
+check("gap: pairing: with both directions open, orders alternate within the own-net band (D 150 + R 150 leaves own net ~0)",
+      (lambda o: len(o) == 2 and abs(sum(x["notional"] * (1 if x["win_party"] == "D" else -1) for x in o)) < 1.0)(
+          _bp.entries([_wc, dict(_wr, exchange_id="n2", race="Texas Governor")], {"n1": _big, "n2": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0)))
+check("gap: a direction the bot blocked is never added to", _bp.entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0, blocked={"D"}) == [])
+check("gap: no entries after the last entry time (29 Oct 16:00 ET) or when the positions read failed",
+      GP.GapPilot(same_terms=_gsame).entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, GP.LAST_ENTRY + 60, {"x": 0.0}, 0.0, 0.0) == []
+      and _bp.entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {}, 0.0, 0.0) == [])
+check("gap: a leg is never taken past 4,000 shares", (lambda o: not o or o[0]["qty"] <= 100)(
+      _bp.entries([_wc], {"n1": [(0.50, 100000)]}, {}, 0.0, 5000.0, _gnow, {"n1": 3900.0}, 0.0, 0.0)))
+# exits
+_xp = GP.GapPilot(same_terms=_gsame, hard_exit_ts=_gnow + 10 * 86400)
+_xb = {"bids": [{"price": 0.52, "quantity": 500}], "asks": [{"price": 0.54, "quantity": 500}]}
+_xrow = {"fair": 0.58}
+_x = lambda q=100.0, row=_xrow, book=_xb, cost=0.50, ts=_gnow - 3600, now=_gnow: _xp.exit_reason("n1", q, row, book, cost, ts, now)
+check("gap: held 1 h with the gap still open: no exit", _x() is None)
+check("gap: time stop at 72 h", _x(ts=_gnow - 73 * 3600) is not None and _x(ts=_gnow - 71 * 3600) is None)
+check("gap: hard exit before the wind-down", GP.GapPilot(same_terms=_gsame, hard_exit_ts=_gnow - 1).exit_reason("n1", 100.0, _xrow, _xb, 0.50, _gnow - 60, _gnow) is not None)
+check("gap: stop when the exit price is 4c under cost", _x(book={"bids": [{"price": 0.45, "quantity": 500}], "asks": [{"price": 0.47, "quantity": 5}]}) is not None
+      and _x(book={"bids": [{"price": 0.47, "quantity": 500}], "asks": [{"price": 0.49, "quantity": 5}]}) is None)
+check("gap: gap closed or reversed (SIG within 0.5c of the fair, or above it) is sold; a NO holding reads the NO side",
+      _x(book={"bids": [{"price": 0.575, "quantity": 500}], "asks": [{"price": 0.59, "quantity": 5}]}) is not None
+      and _x(book={"bids": [{"price": 0.62, "quantity": 500}], "asks": [{"price": 0.64, "quantity": 5}]}) is not None
+      and _x(q=-100.0, row={"fair": 0.42}, cost=0.50, book={"bids": [{"price": 0.40, "quantity": 5}], "asks": [{"price": 0.425, "quantity": 500}]}) is not None
+      and _x(q=-100.0, row={"fair": 0.42}, cost=0.45, book={"bids": [{"price": 0.50, "quantity": 5}], "asks": [{"price": 0.52, "quantity": 500}]}) is None)
+check("gap: the time stop and the stop need no outside fair", _xp.exit_reason("n1", 100.0, None, _xb, 0.50, _gnow - 80 * 3600, _gnow) is not None)
+# wiring
+_grs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+_gm = _grs[_grs.index("    def _gap_trade("):_grs.index("    # ------------------------------------------------------------------ shock mode (proposals/shock_mode.py)")]
+check("gap: wiring: off by default in config.py, the launch config.json carries the pilot's keys, needs the cheap-favourites sleeve",
+      _pcfg.BotConfig.__dataclass_fields__["gap_enabled"].default is False and _live.get("gap_budget") == 900.0 and _live.get("gap_min_edge") == 0.03
+      and 'getattr(cfg, "gap_enabled", False) and self.cheapfav is not None' in _grs)
+check("gap: wiring: orders carry the cheapfav purposes (ledger, race protections, wind-down exemption); cheapfav skips the pilot's legs",
+      '"cheapfav", response=resp' in _gm and '"cheapfav_exit", response=resp' in _gm and 'c["exchange_id"] not in gap_legs' in _grs)
+check("gap: funding: no cash raise for the pilot (no cash need posted, no leg sold to fund it); the shock reserve stays out of reach because the cash it spends is spendable_cash",
+      "post_cash_need" not in _gm and "cash_needs" not in _gm and "raise_cycle" not in _gm and "CR." not in _gm and "spendable_cash(self)" in _gm)
+check("gap: wiring: strategy kill file pauses entries (gap) and exits (exit:gap); fresh positions, trade lock and partisan cap are used",
+      'strategy_paused(self, "gap")' in _gm and 'strategy_paused(self, "exit:gap")' in _gm and "fresh_positions" in _gm
+      and "portfolio_max_partisan_notional" in _gm and "with lock:" in _grs[_grs.index("    def gap_cycle("):_grs.index("    def _gap_trade(")])
+
+# ---- review fixes (Opus, 28 Oct)
+check("gap: review: a cheapfav pause pauses the pilot (entries and exits) so it can never trip the strategy stops' bypass rule",
+      R.PAUSE_ALIASES.get("gap") == ("cheapfav",) and R.PAUSE_ALIASES.get("exit:gap") == ("exit:cheapfav",))
+check("gap: review: the U.S. Senate chamber market is excluded like the House",
+      _gc([_gr("U.S. Senate", "D", "s1", 0.80, 0.64, 0.66), _gr("U.S. Senate", "R", "s2", 0.20, 0.34, 0.36)]) == [])
+check("gap: review: a spread of 4c or more (the stop's size) is never entered; 3c is",
+      _gc([_gr("Ohio Governor", "D", "n1", 0.60, 0.52, 0.56), _gr("Ohio Governor", "R", "n2", 0.40, 0.44, 0.48)]) == []
+      and len(_gc([_gr("Ohio Governor", "D", "n1", 0.60, 0.53, 0.56), _gr("Ohio Governor", "R", "n2", 0.40, 0.44, 0.47)])) == 1)
+check("gap: review: a leg the pilot exited lately is on cooldown (its race is skipped)",
+      _gc([_gr("Ohio Governor", "D", "n1", 0.60, 0.53, 0.55), _gr("Ohio Governor", "R", "n2", 0.40, 0.44, 0.47)], _gpos, cooldown_ex={"n1"}) == [])
+check("gap: review: the stop reads the mid: a stray low bid in a thin book does not stop a leg out, a real 4c fall does",
+      _x(book={"bids": [{"price": 0.20, "quantity": 5}], "asks": [{"price": 0.54, "quantity": 500}]}, cost=0.50, row=None) is None
+      and _x(book={"bids": [{"price": 0.45, "quantity": 500}], "asks": [{"price": 0.47, "quantity": 5}]}, cost=0.50, row=None) is not None)
+_wl = _bp.entries([_wc], {"n1": [(0.50, 100), (0.51, 100)]}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0)
+check("gap: review: the order's limit is the worst level actually walked, and cash/caps count qty x limit",
+      len(_wl) == 1 and abs(_wl[0]["price"] - 0.51) < 1e-9 and abs(_wl[0]["notional"] - _wl[0]["qty"] * 0.51) < 1e-6
+      and _bp.entries([_wc], {"n1": [(None, 100), (0.50, 100)]}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0) == [])
+check("gap: review: own pending is one-sided (pending R never makes room for D; pending D counts against D)",
+      _bp.entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0, own_pend=(0.0, 450.0)) != []
+      and _bp.entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 400.0, own_pend=(0.0, 450.0)) == []
+      and _bp.entries([_wc], {"n1": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0, own_pend=(480.0, 0.0)) == [])
+check("gap: review: wiring: label written before the order, legs kept 6 h, exits wait 300 s and resting orders, 24 h cooldown, three stops end entries, wind-down and exit locks filter races, cheapfav skips the pilot's races",
+      _gm.index('self.store.set_param("gap_legs", legs)                  # the label first') < _gm.index('self.api.place_order(o["exchange_id"]')
+      and "6 * 3600" in _gm and "exited_lately" in _gm and "open_orders_cache" in _gm and 'gap_exited' in _gm and 'gap_stops' in _gm and ">= 3" in _gm
+      and "Bot.wind_down_owned(self, now)" in _gm and 'Bot.exit_locked(self, c["race"], "gap", now=now)' in _gm
+      and 'c["race"] not in gap_races' in _grs and "status='open'" in _gm and "pend_cf" in _gm)
+
+check("gap: review 2: one order per race per cycle (no NO+NO / YES+YES pair before the fills show)",
+      len(_bp.entries([_wc, dict(_wc, exchange_id="n2", win_party="R", side="no")], {"n1": _big, "n2": _big}, {}, 0.0, 5000.0, _gnow, {"x": 0.0}, 0.0, 0.0)) == 1)
+check("gap: review 2: wiring: unknown outcome / no orderId counts the notional (gap_blind) and sets the cooldown; exits wait 900 s; own quotes netted from the books; stops counted per leg; the sleeve's own reversal exits set the cooldown",
+      "_gap_blind(o, now," in _gm and 'gap_blind' in _gm and "now - 900" in _gm and _gm.count("own.net(") == 2 and "set(self.store.get_param(\"gap_stops\"" in _gm
+      and "FROM orders WHERE purpose='cheapfav_exit' AND placed_at > ?" in _gm)
+
+_cl = lambda pos, **kw: _gc([_gr("Ohio Governor", "D", "n1", 0.60, 0.53, 0.55), _gr("Ohio Governor", "R", "n2", 0.40, 0.44, 0.47)], pos, **kw)
+check("gap: clean races only: another sleeve's inventory (> 100 shares on any leg) keeps the pilot out (netting, and the cash raise must keep those races); the pilot's own legs are exempt",
+      _cl({"n2": 150.0}) == [] and _cl({"n2": -150.0}) == [] and len(_cl({"n2": 50.0})) == 1 and len(_cl({"n1": 150.0}, own_ex={"n1"})) == 1)
+check("gap: clean races: wiring passes the pilot's own legs; no entries while a shock is open or the shock reserve is short",  "own_ex=set(legs)" in _gm and 'shock_active' in _gm and "spendable_cash(self) < 0" in _gm)
+
+check("gap: review 3: any exception (timeouts escape the API client as URLError / TimeoutError) on an entry counts it as blind; definite 4xx rejects do not; exits are stamped before the call and any exception is caught",
+      "except Exception as e:" in _gm and _gm.count("except Exception as e:") >= 2 and "gap_exit_try" in _gm
+      and _gm.index('self.store.set_param("gap_exit_try", tries)') < _gm.index('key=self.api.new_key("gpx")') and "(408, 409, 429)" in _gm)
+check("gap: review 3: the pilot avoids races where cheapfav has a fresh entry, and cheapfav's exit loop leaves the pilot's legs alone",
+      'o["purpose"] == "cheapfav" and str(o["exchange_id"]) not in legs' in _gm and "ex in gap_own" in _grs)
+
+check("gap: review 4: an exit with unknown outcome (exception other than a definite 4xx, or no orderId) is never re-sent by itself (gap_exit_unknown, cleared only when the ledger shows the leg closed); cooldown, busy and the stop count are set before the call; the 4xx entry path re-reads the cooldown",
+      "gap_exit_unknown" in _gm and "ex in unknown_exit" in _gm and "if k in open_pos" in _gm and "the block ends for good" in _gm and "outcome unknown (%s); no automatic re-send" in _gm
+      and _gm.index('cool[ex] = now                                              # no re-entry on a leg the pilot is leaving') < _gm.index('key=self.api.new_key("gpx")')
+      and "cool2 = " in _gm)
+
+check("gap: sim fixes: each order gets a fresh 60 s expiry (slow writes), and the pilot spends only cash above the larger of the cheapfav and the high-frequency arb's cash floors",
+      _gm.count('ttl = (datetime.now(timezone.utc) + timedelta(seconds=60))') >= 2 and 'getattr(self.cfg, "churn_cash_floor", 0.0)' in _gm)
+
+
+_exps = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("shock: each entry / exit order gets an expiry computed right before it (slow writes made a batch-wide expiry expire every order after the first)",
+      'expiration=expiry_in(60), key=self.api.new_key("shk")' in _exps and 'expiration=expiry_in(15), key=self.api.new_key("shx")' in _exps
+      and R.expiry_in(60) > datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") and R.expiry_in(15) < R.expiry_in(60))
+
+# ---------------------------------------------------------------- batch-wide order expiry (sim slow_writes audit, every place_order site)
+# An expiry computed ONCE before a batch of writes makes every order after the first few arrive expired when a write takes 12 s.
+# Each sleeve that sends several orders per call now computes expiry_in(seconds) inside the place_order call, with the seconds it had.
+import inspect as _insp  # noqa: E402
+
+
+def _per_order_expiry(fn, seconds, *keys):
+    """fn's source has no batch-wide `ttl` and every order key in `keys` takes expiry_in(seconds) inline in its own call."""
+    s = _insp.getsource(fn)
+    return ("expiration=ttl" not in s and "ttl = (datetime.now" not in s and "expiry_in(" in s
+            and all(f'expiration=expiry_in({seconds}), key=self.api.new_key("{k}")' in s for k in keys))
+
+
+check("expiry: cash raise: each clip's expiry is computed right before its own order (cancel writes sit between clips)",
+      _per_order_expiry(R.Bot.raise_cycle, 60, "raise"))
+check("expiry: catch-up: the exits and the entries each take expiry_in(60) right before their own order (one cycle sends several)",
+      _per_order_expiry(R.Bot.catchup_cycle, 60, "cux", "cu"))
+_cft = _insp.getsource(R.Bot._cheapfav_trade)
+check("expiry: cheap favourites: exits and entries take expiry_in(60) in their own call; no batch-wide ttl is computed before the trade lock or passed down",
+      _per_order_expiry(R.Bot._cheapfav_trade, 60, "cfx", "cf") and "ttl" not in _insp.getsource(R.Bot.cheapfav_cycle)
+      and "ttl" not in str(_insp.signature(R.Bot._cheapfav_trade)))
+_el = _insp.getsource(R.Bot.election_loop)
+check("expiry: election night: its 15 s TTL starts inside the trade lock, per order (one batch-wide TTL left every order after the first expired)",
+      _per_order_expiry(R.Bot.election_loop, "en.cfg.ttl_sec", "elec") and _el.index("with self.trade_lock:") < _el.index("expiry_in(en.cfg.ttl_sec)")
+      and __import__("sigbot.proposals.election_night", fromlist=["x"]).Config().ttl_sec == 15.0)
+
+
+def _lag_slow_writes(n_orders, write_s=12.0):
+    """lag_cycle with n_orders exits on a fake clock where every write takes write_s seconds before the order arrives; returns
+    (orders sent, orders that arrived with an expiry not after the arrival time). The expiry must come from R.expiry_in (the
+    patched clock): the old batch-wide string never does."""
+    clock, late, sent = [1000.0], [], []
+
+    def place_order(ex, side, act, q, px, expiration=None, key=None):
+        clock[0] += write_s
+        if not (isinstance(expiration, float) and expiration > clock[0]):
+            late.append(ex)
+        sent.append((ex, key))
+        return {"orderId": len(sent)}
+    ords = [{"exchangeId": f"x{i}", "side": "yes", "price": 0.5, "quantity": 20, "reason": "exit"} for i in range(n_orders)]
+    b = types.SimpleNamespace(dry_run=False, direction=types.SimpleNamespace(rows=[{"exchange_id": "x0"}], cfg=types.SimpleNamespace(per_market_cap=300.0)),
+                              fresh_book=lambda ex, age=None: None, lag=types.SimpleNamespace(cycle=lambda now, rows, touch: ords, open={}),
+                              api=types.SimpleNamespace(place_order=place_order, new_key=lambda p: p),
+                              store=types.SimpleNamespace(record_order=lambda *a, **k: None))
+    _orig_ei = R.expiry_in
+    R.expiry_in = lambda s: clock[0] + s
+    try:
+        R.Bot.lag_cycle(b, {}, set())
+    finally:
+        R.expiry_in = _orig_ei
+    return sent, late
+
+
+_lg_sent, _lg_late = _lag_slow_writes(10)
+check("expiry: lag follow: ten orders in one call with 12 s writes all arrive inside their 60 s expiry (a batch-wide expiry expired the fifth on)",
+      len(_lg_sent) == 10 and _lg_late == [] and all(k == "lag" for _, k in _lg_sent) and _per_order_expiry(R.Bot.lag_cycle, 60, "lag"),
+      f"sent {len(_lg_sent)}, late {_lg_late}")
+
+check("gap: failure-path fixes (29 Oct): blind entries keep their direction and count in the own net-D band; a cleared unknown-exit mark is written back and such legs are kept out of re-entry; an exit right after an exit waits when the venue is already flat or reversed",
+      "_blind_rec(v)" in _gm and 'own_pd += b["n"]' in _gm and "cooldown_ex=set(cool) | set(unknown_exit)" in _gm and "ex in recent_exit" in _gm and "now - 2700" in _gm and "filled_by_order.get(oid, 0.0) < 1" in _gm and "n = min(n, int(abs(vp)))" in _gm
+      and R._blind_rec(120.0) == {"n": 120.0, "win": None} and R._blind_rec({"n": 5, "win": "R"}) == {"n": 5.0, "win": "R"})
+_shk = _exps if "_exps" in dir() else open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("shock: every exit stamp (taker and maker paths) and the ingest stamp are on the wall clock (one clock: a maker exit after a late pull must still force a fills pull); no batch-wide ttl/xttl left in shock_tick",
+      "self.shock_exit_sent[ex] = t_send" in _shk and "self.shock_exit_sent[ex] = now" not in _shk and _shk.count("self.shock_exit_sent[ex] = time.time()") == 5 and "self.shock_hold[ex] = t_send + 20.0" in _shk and "self.shock_ingest_ts = t_pull" in _shk
+      and "xttl" not in _shk[_shk.index("    def shock_tick("):_shk.index("    def shock_tick(") + 40000])
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)
