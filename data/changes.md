@@ -459,3 +459,10 @@
 - MM gate fix (eb2f286; research_notes/mm_gate_cancel.md, two Opus reviews): an empty ladder now pulls our resting quotes
   instead of skipping the cancel, and a gate sweep right after the outside poll pulls quotes on a side the new fair closed.
   This was the pre-existing `catchup` mm_filled_on_gated_side precheck failure that blocked every deploy. Revert: git revert eb2f286.
+
+## 2026-10-29 12:01 BST: gap pilot budget 900 -> 150 (552d50e) + sim checker fix (82a6145)
+- 9a61a39 shipped gap_budget 900 (the study's launch value), not Sizhe's 150. The pilot placed no orders; it was paused by
+  hand in params/strategy_kill.json ("gap") 11:33-12:02 and the pause removed after this deploy.
+- The redeploy first failed sim churn_blowout (sets_left_at_sell_all, IA-02 75): a checker false positive (MM fills after
+  the sell-all were read as leftover sets; changed live data made it show). The check now reads the sell-all cycle only.
+  No bot code changed. Precheck 40/40, 0 violations.
