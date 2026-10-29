@@ -567,6 +567,12 @@ class ArbScanner(threading.Thread):
                 self.stats["fast_requotes"] = self.stats.get("fast_requotes", 0) + 1
                 log.info("fast requote %s: touch %.3f/%.3f -> %.3f/%.3f", ex, touch[0], touch[1], bb, ba)
             else:
+                if summ.get("pulled"):
+                    # the move closed the last quotable side (the xv gate is measured from the mid): the resting quotes were
+                    # pulled, a write that counts against the per-minute budget like a requote
+                    self.fast_log.append(time.time())
+                    self.stats["fast_pulls"] = self.stats.get("fast_pulls", 0) + 1
+                    log.info("fast pull %s: touch %.3f/%.3f -> %.3f/%.3f left no quotable side", ex, touch[0], touch[1], bb, ba)
                 st.last_touch = (bb, ba)       # reserve did not move enough to requote: do not re-check this move every second
             if len(self.fast_log) >= n_max:
                 break
@@ -4002,6 +4008,18 @@ class Bot:
         return self.mm.quoted
 
     # --------------------------------------------------------------- realtime feed
+    def mm_gate_sweep(self, books: dict, open_orders: dict, budget: int) -> dict:
+        """Right after the outside-fair poll: on quoted legs where the fresh fair closed a side that was open when their
+        quotes were built (this cycle's book mid, mm.gate_closed), our quotes on that side are pulled now, not at the next cycle.
+        The poll lands after the MM block, so until now a quote could rest a whole cycle on a side the new fair gates (sim
+        'catchup' 29 Oct: a bid hit 15 s after the poll). Nothing is posted here: the next cycle requotes the open side.
+        Under the trade lock, as a fast requote: the cancels and the store marks go together."""
+        with self.trade_lock:
+            out = self.mm.pull_closed(books, open_orders, budget)
+        if out.get("legs"):
+            log.info("MM gate sweep after the outside poll: %s", out)
+        return out if out.get("legs") else {}
+
     def mm_gate_ready(self, killed: bool, now: Optional[float] = None) -> bool:
         """May the MM quote this cycle? After a restart or a kill pause (no MM orders rest then) it waits for a fresh
         outside fair so the xv gate is known before the first quote, for at most 10 min (outside venues down). Mid-session
@@ -4143,6 +4161,7 @@ class Bot:
         open_orders = self.open_orders_map()
         self.open_orders_cache = open_orders
         self.open_orders_ts = time.time()
+        self.mm.open_orders_ts = self.open_orders_ts       # the MM's pull checks for orders other sleeves placed since the read
         # (read START time, success), set with the cache: shock mode trusts an order's absence only from a successful
         # read that began after the order was placed
         self.open_orders_read = (oo_t0, bool(getattr(self, "open_orders_ok", True)))
@@ -4284,7 +4303,7 @@ class Bot:
                  self.mm.wave, sum(1 for ex in self.mm.quoted if self.mm.hot_until.get(ex, 0) > time.time()), self.feed_summary())
 
         # ---- market making
-        mm_summary = {}
+        mm_summary, mm_books = {}, {}
         self.mm.xv_fair = {r["exchange_id"]: (r.get("fair"), r.get("pm"), r.get("kalshi"), r.get("ts") or time.time())
                            for r in (getattr(self.direction, "rows", None) or []) if r.get("fair") is not None and r.get("exchange_id")}
         gate_ready = self.mm_gate_ready(killed)
@@ -4349,6 +4368,7 @@ class Bot:
                     log.warning("book %s: %s", ex, e)
             write_budget = max(4, self.cfg.mm_write_budget - 4)   # leave room for the tilt sleeve
             mm_summary = self.mm.quote_cycle(books, self.mm_positions(positions), self.pressures(), open_orders, fills_count, max(0.0, spendable_cash(self)), cycle_id, write_budget)
+            mm_books = books
 
         # ---- inside-spread quoting where the DMM's spread is 3+ ticks (exploit 2.2), outside the MM's own markets
         inside_summary = {}
@@ -4402,6 +4422,17 @@ class Bot:
         # slow_writes / day: removing this let fast requotes post on gated sides for a whole cycle)
         self.mm.xv_fair = {r["exchange_id"]: (r.get("fair"), r.get("pm"), r.get("kalshi"), r.get("ts") or time.time())
                            for r in (getattr(self.direction, "rows", None) or []) if r.get("fair") is not None and r.get("exchange_id")}
+        # the poll can close the gate on a side the MM quoted earlier in this cycle: pull those quotes now (mm_gate_sweep),
+        # within what the MM's budget has left after the MM, inside and tilt blocks and the directional sleeve's 2 writes
+        if mm_books and dir_summary.get("polled") and not killed and gate_ready and not mm_paused:
+            try:
+                left = self.cfg.mm_write_budget - int(mm_summary.get("writes", 0) or 0) - int(inside_summary.get("writes", 0) or 0) \
+                    - int(tilt_summary.get("writes", 0) or 0) - 2
+                sw = self.mm_gate_sweep(mm_books, open_orders, max(0, min(8, left)))
+                if sw:
+                    mm_summary["gate_sweep"] = sw
+            except Exception as e:                   # the sweep must never skip the sleeves after it
+                log.exception("MM gate sweep: %s", e)
 
         # ---- cheap safe favourites: buy fast-count favourites SIG prices >= 2c under the outside fair, hold to the call
         if self.cheapfav is not None:

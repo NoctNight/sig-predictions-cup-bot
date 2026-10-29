@@ -3985,6 +3985,392 @@ _shk = _exps if "_exps" in dir() else open(os.path.join(ROOT, "sigbot", "run.py"
 check("shock: every exit stamp (taker and maker paths) and the ingest stamp are on the wall clock (one clock: a maker exit after a late pull must still force a fills pull); no batch-wide ttl/xttl left in shock_tick",
       "self.shock_exit_sent[ex] = t_send" in _shk and "self.shock_exit_sent[ex] = now" not in _shk and _shk.count("self.shock_exit_sent[ex] = time.time()") == 5 and "self.shock_hold[ex] = t_send + 20.0" in _shk and "self.shock_ingest_ts = t_pull" in _shk
       and "xttl" not in _shk[_shk.index("    def shock_tick("):_shk.index("    def shock_tick(") + 40000])
+# ---------------------------------------------------------------- MM: a gated ladder pulls its resting quotes (29 Oct hole)
+# sim 'day' 29 Oct, leg 872 (Nevada Governor R): the partisan block left bids only, then the outside-fair gate closed the bid
+# side; build_quotes returned nothing and quote_cycle skipped the leg before its cancel, so an 1,800-s bid rested 19 min on
+# the gated side and was swept (mm_filled_on_gated_side). Real build_quotes and store; the venue and the outside fairs stubbed.
+from sigbot.config import MMConfig as _MMCfg  # noqa: E402
+
+
+class _GVenue:
+    def __init__(self):
+        self.cancel_alls, self.cancels, self.batches, self.n, self.tournament_id = [], [], [], 100, "t"
+
+    def cancel_all(self, exchange_id=None, **k):
+        self.cancel_alls.append(exchange_id)
+        return {}
+
+    def cancel_order(self, order_id):
+        self.cancels.append(order_id)
+        return {}
+
+    def place_batch(self, orders, **k):
+        self.batches.append(list(orders))
+        res = []
+        for i, o in enumerate(orders):
+            self.n += 1
+            res.append({"index": i, "ok": True, "data": {"orderId": self.n, "open": True}})
+        return {"results": res}
+
+
+def _gmm(blocked=(), fair=None, dry_run=False):
+    m = _MM.__new__(_MM)
+    m.cfg = _MMCfg()
+    m.u, m.slug, m.starting_cash, m.dry_run, m.root = _U, "s", 100000.0, dry_run, "."
+    m.state, m.overrides, m.overrides_mtime, m.quoted = {}, {}, 0.0, ["872"]
+    m.vol, m.blocked, m.wave, m.prices, m.meanrev_pred, m.vol5m = {}, set(blocked), False, {}, {}, {}
+    m.hot_until, m.hot_anchor = {}, {}
+    m.load_overrides = lambda: None
+    m.hours_to_end = lambda: 100.0
+    m.api = _GVenue()
+    m.store = _Store(os.path.join(tempfile.mkdtemp(), "g.sqlite"))
+    m.xv_fair = {} if fair is None else {"872": (fair, fair, fair, time.time() - 30)}
+    return m
+
+
+def _gfair(m, fair):
+    m.xv_fair = {"872": (fair, fair, fair, time.time() - 30)}
+
+
+_gbook = {"872": _rbk(0.235, 0.24, 2000)}       # mid 0.2375; a fair of 0.213 sits 4.9 ticks below it: xv_gate closes the bid side
+_gstat = lambda m: {r["order_id"]: r["status"] for r in m.store.rows("SELECT order_id, status FROM orders")}
+# control: D blocked (buying NO on the R leg adds D) leaves bids only; the gate is open (fair at the mid)
+_m = _gmm(blocked={"D"}, fair=0.2375)
+_s1 = _MM.quote_cycle(_m, _gbook, {}, {}, {"872": []}, {}, 50000.0, 1, 10)
+_g1 = [o for b in _m.api.batches for o in b]
+check("mm gate-pull: control: with D blocked the R leg quotes bids only and the gate is open",
+      _s1["requoted"] == ["872"] and _g1 and all(o["side"] == "yes" for o in _g1) and _m.api.cancel_alls == [] and _m.state["872"].last_gate == (True, True),
+      f"{_s1} {_g1}")
+# (a) the outside fair drifts 4.9 ticks under the mid: the gate closes the bid side, the only side the partisan block allows
+_oo = {"872": [{"id": i} for i in _gstat(_m)]}
+_gfair(_m, 0.213)
+_nb = len(_m.api.batches)
+_s2 = _MM.quote_cycle(_m, _gbook, {}, {}, _oo, {}, 50000.0, 2, 10)
+check("mm gate-pull (a): the gate closes the only quotable side: the resting bids are pulled with one cancel-all, nothing is posted, "
+      "one write, the closed gate and the touch are recorded, a quotes row is written",
+      _m.api.cancel_alls == ["872"] and len(_m.api.batches) == _nb and _s2.get("pulled") == ["872"] and _s2["requoted"] == [] and _s2["writes"] == 1
+      and _m.state["872"].last_gate == (False, True) and _m.state["872"].last_touch == (0.235, 0.24)
+      and set(_gstat(_m).values()) == {"cancelled"} and _m.store.last_quote("872")["cycle_id"] == 2,
+      f"{_s2} {_m.api.cancel_alls} {_gstat(_m)} {_m.state['872']}")
+# (e) the fast path's open-orders cache still lists the pulled orders until the next cycle's read: no second cancel
+_m.force_cancel = True                                   # the fast path and the gate sweep: a list that may predate the cancel
+_s3 = _MM.quote_cycle(_m, _gbook, {}, {}, _oo, {}, 50000.0, 3, 10)
+_m.force_cancel = False
+check("mm gate-pull (e): a stale open-orders list (the fast path's cache, the gate sweep: force_cancel set) does not repeat the cancel",
+      _m.api.cancel_alls == ["872"] and not _s3.get("pulled") and _s3["writes"] == 0 and len(_m.api.batches) == _nb, f"{_s3} {_m.api.cancel_alls}")
+_m5b = _gmm(blocked={"D"}, fair=0.213)
+_m5b.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_MM.quote_cycle(_m5b, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}]}, {}, 50000.0, 3, 10)
+_s3b = _MM.quote_cycle(_m5b, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}]}, {}, 50000.0, 4, 10)
+check("mm gate-pull (e): a fresh venue list that still shows the order (a cancel-all that answered OK but left it resting) is trusted: pulled again",
+      _m5b.api.cancel_alls == ["872", "872"] and _s3b.get("pulled") == ["872"], f"{_s3b} {_m5b.api.cancel_alls}")
+# (c) the gate re-opens: a gate change needs_requote acts on by itself (orders complete, reserve unchanged), and the bids come back
+_rs = _m.state["872"].last_reserve
+check("mm gate-pull (c): the recorded closed gate makes the re-open a requote trigger on its own",
+      _m.needs_requote("872", {"reserve": _rs, "gate": (True, True)}, 0, 5, 5) is True
+      and _m.needs_requote("872", {"reserve": _rs, "gate": (False, True)}, 0, 5, 5) is False)
+_gfair(_m, 0.2375)
+_s4 = _MM.quote_cycle(_m, _gbook, {}, {}, {"872": []}, {}, 50000.0, 4, 10)
+_g4 = _m.api.batches[-1] if len(_m.api.batches) > _nb else []
+check("mm gate-pull (c): the gate re-opens: the bids are posted again at once, no cancel (nothing rests)",
+      _s4["requoted"] == ["872"] and len(_m.api.batches) == _nb + 1 and _g4 and all(o["side"] == "yes" for o in _g4)
+      and _m.api.cancel_alls == ["872"] and _m.state["872"].last_gate == (True, True), f"{_s4} {_g4}")
+# (b) book unknown (a side missing, or no book at all): never cancel blind, nothing recorded
+_m2 = _gmm(blocked={"D"}, fair=0.213)
+_m2.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_m2.state["872"] = QuoteState("872", last_reserve=0.23, last_quote_ts=time.time(), fills_seen=0, last_gate=(True, True))
+_s5 = _MM.quote_cycle(_m2, {"872": {"bids": [], "asks": [{"price": 0.24, "quantity": 2000}]}}, {}, {}, {"872": [{"id": 11}]}, {}, 50000.0, 5, 10)
+_s6 = _MM.quote_cycle(_m2, {}, {}, {}, {"872": [{"id": 11}]}, {}, 50000.0, 6, 10)
+check("mm gate-pull (b): an unknown book (a side missing, or none) never cancels: the bid rests, the state is untouched, no quotes row",
+      _m2.api.cancel_alls == [] and _m2.api.cancels == [] and not _s5.get("pulled") and not _s6.get("pulled") and _s5["writes"] == _s6["writes"] == 0
+      and _gstat(_m2) == {11: "open"} and _m2.state["872"].last_gate == (True, True) and _m2.store.last_quote("872") is None,
+      f"{_s5} {_s6} {_gstat(_m2)}")
+# (d) something else rests on the leg (a zero-EV exit, an order the store does not know): ours go order by order, the rest stays
+_m3 = _gmm(blocked={"D"}, fair=0.213)
+_m3.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_m3.store.record_order(12, "872", "183", "yes", "buy", 0.23, 100, "inside")
+_m3.store.record_order(40, "872", "183", "no", "buy", 0.76, 100, "exit")
+_s7 = _MM.quote_cycle(_m3, _gbook, {}, {}, {"872": [{"id": 11}, {"id": 12}, {"id": 40}, {"id": 99}]}, {}, 50000.0, 7, 10)
+check("mm gate-pull (d): with an exit and an unknown order on the leg the MM's and the inside quoter's orders are cancelled one by one, "
+      "never a cancel-all; the exit and the unknown order stay",
+      _m3.api.cancel_alls == [] and _m3.api.cancels == [11, 12] and _s7.get("pulled") == ["872"] and _s7["writes"] == 2
+      and _gstat(_m3) == {11: "cancelled", 12: "cancelled", 40: "open"}, f"{_s7} {_m3.api.cancels} {_gstat(_m3)}")
+# (f) no write budget left: nothing is cancelled, nothing recorded, the pull happens next cycle
+_m4 = _gmm(blocked={"D"}, fair=0.213)
+_m4.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_s8 = _MM.quote_cycle(_m4, _gbook, {}, {}, {"872": [{"id": 11}]}, {}, 50000.0, 8, 0)
+_st8 = "872" in _m4.state
+_s9 = _MM.quote_cycle(_m4, _gbook, {}, {}, {"872": [{"id": 11}]}, {}, 50000.0, 9, 1)
+check("mm gate-pull (f): with no write budget the pull waits (counted as skipped_budget, state not recorded); it is done next cycle",
+      _s8["skipped_budget"] == 1 and not _s8.get("pulled") and not _st8 and _s9.get("pulled") == ["872"] and _m4.api.cancel_alls == ["872"]
+      and _m4.state["872"].last_gate == (False, True), f"{_s8} {_s9} {_m4.api.cancel_alls}")
+# a cancel-all that fails (any exception: the API client re-raises URLError / ConnectionError after its retries) is logged,
+# counted as a write, records no state and is retried next cycle; the clean retry records the gate
+_m5 = _gmm(blocked={"D"}, fair=0.213)
+_m5.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_m5.api.cancel_all = lambda exchange_id=None, **k: (_ for _ in ()).throw(ConnectionError("reset"))
+_s10 = _MM.quote_cycle(_m5, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}]}, {}, 50000.0, 10, 10)
+_st10, _os10 = "872" in _m5.state, dict(_gstat(_m5))
+_m5.api.cancel_all = lambda exchange_id=None, **k: _m5.api.cancel_alls.append(exchange_id)
+_s11 = _MM.quote_cycle(_m5, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}]}, {}, 50000.0, 11, 10)
+check("mm gate-pull: a failed cancel-all (any exception, not only ApiError) is logged, counted as a write, records no state and is retried "
+      "next cycle (the store keeps the order open); the clean retry records the gate",
+      _s10.get("pulled") == ["872"] and _s10["writes"] == 1 and not _st10 and _os10 == {11: "open"} and _s11.get("pulled") == ["872"]
+      and _gstat(_m5) == {11: "cancelled"} and _m5.api.cancel_alls == ["872"] and _m5.state["872"].last_gate == (False, True),
+      f"{_s10} {_s11} {_gstat(_m5)} {_st10} {_os10}")
+# dry run: no venue call, the write is counted
+_m6 = _gmm(blocked={"D"}, fair=0.213, dry_run=True)
+_m6.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_s12 = _MM.quote_cycle(_m6, _gbook, {}, {}, {"872": [{"id": 11}]}, {}, 50000.0, 12, 10)
+check("mm gate-pull: dry run pulls nothing on the venue and counts the write", _m6.api.cancel_alls == [] and _s12.get("pulled") == ["872"] and _s12["writes"] == 1, str(_s12))
+# the other reason for an empty ladder, the inventory cap on both sides, pulls too (hard_inventory_stop + the other side blocked)
+_m7 = _gmm(blocked={"D"}, fair=0.2375)
+_m7.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_s13 = _MM.quote_cycle(_m7, _gbook, {"872": 1e6}, {}, {"872": [{"id": 11}]}, {}, 50000.0, 13, 10)
+check("mm gate-pull: a ladder emptied by the inventory cap (bids) and the partisan block (asks) pulls the resting bid as well",
+      _s13.get("pulled") == ["872"] and _m7.api.cancel_alls == ["872"] and _m7.state["872"].last_gate == (True, True), f"{_s13}")
+# the fast path (scanner thread): the touch moves into the gate, the resting quotes are pulled, the write counts against the
+# per-minute budget, the touch is remembered so the move is not re-checked every second; force_cancel never cancels blind
+_fcalls = []
+_fst = types.SimpleNamespace(last_touch=(0.235, 0.24), last_reserve=0.23)
+_fmm = types.SimpleNamespace(quoted=["872"], state={"872": _fst}, force_cancel=False,
+                             quote_cycle=lambda books, *a, **k: _fcalls.append((dict(books), _fmm.force_cancel)) or {"pulled": ["872"], "requoted": []})
+_fbk = {"bestBid": 0.24, "bestAsk": 0.245, "bids": [{"price": 0.24, "quantity": 2000}], "asks": [{"price": 0.245, "quantity": 2000}]}
+_fb2 = types.SimpleNamespace(cfg=types.SimpleNamespace(mm_fast_requotes_per_min=3, mm=types.SimpleNamespace(enabled=True), shock_enabled=False),
+                             feed_ok=lambda: True, mm=_fmm, killed_until=0.0, wind_down=None, strategy_kill=None, cash=1000.0,
+                             fresh_book=lambda ex, age=None: _fbk, trade_lock=threading.Lock(), mm_positions=lambda p: {}, positions_snapshot={},
+                             pressures=lambda: {}, open_orders_cache={"872": [{"id": 11}]}, fills_count_cache={}, last_cycle_id=1, book_cache={}, book_ts={})
+_fsc = R.ArbScanner.__new__(R.ArbScanner)
+_fsc.bot, _fsc.fast_log, _fsc.stats = _fb2, [], {}
+_fsc.fast_requote_pass()
+check("mm gate-pull: fast path: a touch move that closes the last quotable side pulls the quotes under the trade lock with force_cancel set, "
+      "counts the write against the per-minute budget and remembers the new touch",
+      len(_fcalls) == 1 and _fcalls[0][1] is True and _fmm.force_cancel is False and len(_fsc.fast_log) == 1 and _fsc.stats.get("fast_pulls") == 1
+      and _fst.last_touch == (0.24, 0.245) and _fb2.book_cache["872"][0] is _fbk, f"{_fcalls} {_fsc.fast_log} {_fsc.stats} {_fst.last_touch}")
+_m8 = _gmm(blocked={"D"}, fair=0.213)
+_m8.force_cancel = True
+_s14 = _MM.quote_cycle(_m8, _gbook, {}, {}, {"872": []}, {}, 50000.0, 14, 2)
+check("mm gate-pull: the fast path's force_cancel never cancels a leg where nothing of ours rests",
+      _m8.api.cancel_alls == [] and _m8.api.cancels == [] and not _s14.get("pulled") and _s14["writes"] == 0, str(_s14))
+
+# review 1 (Opus) blocker: nothing is recorded while a quote of ours may still rest, and a quote resting on a side the ladder no
+# longer has is a requote trigger of its own (needs_requote stale_side), so a re-open can never leave gated-side quotes behind
+check("mm gate-pull: needs_requote fires on a quote resting on a side the ladder no longer has, everything else unchanged",
+      mm2.needs_requote("9", info2, 0, 2, 2, stale_side=True) is True and mm2.needs_requote("9", info2, 0, 2, 2) is False)
+# P1 / P2: the fast path's cache does not list this cycle's bids; the gate closes the bid side (D blocked: nothing to post):
+# the pull finds them through the store (open MM orders placed since the open-orders read) and pulls them
+_mb = _gmm(blocked={"D"}, fair=0.2375)
+_mb.open_orders_ts = time.time() - 1
+_MM.quote_cycle(_mb, _gbook, {}, {}, {"872": []}, {}, 50000.0, 20, 10)               # the bids are posted after the read
+_ids_b = [{"id": i, "side": "yes"} for i in _gstat(_mb)]
+_gfair(_mb, 0.213)
+_mb.force_cancel = True
+_sb1 = _MM.quote_cycle(_mb, _gbook, {}, {}, {"872": []}, {}, 50000.0, 20, 2)          # a fast pass on a stale (empty) cache
+_mb.force_cancel = False
+check("mm gate-pull P1/P2: a fast pass whose cache misses this cycle's bids still pulls them (the store knows them: open, placed since the "
+      "read): one cancel-all, the gate recorded",
+      _sb1.get("pulled") == ["872"] and _mb.api.cancel_alls == ["872"] and set(_gstat(_mb).values()) == {"cancelled"}
+      and _mb.state["872"].last_gate == (False, True), f"{_sb1} {_mb.api.cancel_alls} {_gstat(_mb)}")
+# the stale-side trigger itself: a closed gate recorded while our bids still rest (the failure mode review 1 found); the block
+# lifts with the gate unchanged: needs_requote fires on the resting bids (a side the ladder no longer has): cancel-all, asks only
+_mb2 = _gmm(blocked={"D"}, fair=0.2375)
+_MM.quote_cycle(_mb2, _gbook, {}, {}, {"872": []}, {}, 50000.0, 21, 10)
+_ids_b2 = [{"id": i, "side": "yes"} for i in _gstat(_mb2)]
+_gfair(_mb2, 0.213)
+_mb2.state["872"].last_gate = (False, True)
+_mb2.blocked = set()
+_sb2 = _MM.quote_cycle(_mb2, _gbook, {}, {}, {"872": _ids_b2}, {}, 50000.0, 22, 10)
+_gb2 = _mb2.api.batches[-1]
+check("mm gate-pull blocker P2: with the closed gate already recorded and the bids still resting, the block lifting (same gate, same reserve, "
+      "orders complete) still requotes through the stale-side trigger: cancel-all, asks only",
+      _sb2["requoted"] == ["872"] and _mb2.api.cancel_alls == ["872"] and _gb2 and all(o["side"] == "no" for o in _gb2)
+      and _mb2.state["872"].last_gate == (False, True), f"{_sb2} {_mb2.api.cancel_alls}")
+# P9: a failed pull, then the block lifts with the gate unchanged
+_mb9 = _gmm(blocked={"D"}, fair=0.2375)
+_MM.quote_cycle(_mb9, _gbook, {}, {}, {"872": []}, {}, 50000.0, 22, 10)
+_ids_9 = [{"id": i, "side": "yes"} for i in _gstat(_mb9)]
+_gfair(_mb9, 0.213)
+_mb9.api.cancel_all = lambda exchange_id=None, **k: (_ for _ in ()).throw(_ApiErr(503, "DOWN", "down"))
+_sb9 = _MM.quote_cycle(_mb9, _gbook, {}, {}, {"872": _ids_9}, {}, 50000.0, 23, 10)
+_gate_9 = _mb9.state["872"].last_gate
+_mb9.api.cancel_all = lambda exchange_id=None, **k: _mb9.api.cancel_alls.append(exchange_id)
+_mb9.blocked = set()
+_sb9b = _MM.quote_cycle(_mb9, _gbook, {}, {}, {"872": _ids_9}, {}, 50000.0, 24, 10)
+check("mm gate-pull blocker P9: after a failed pull the gate is not recorded; the block lifting with the gate unchanged still requotes (cancel-all, "
+      "asks only)",
+      _sb9.get("pulled") == ["872"] and _gate_9 == (True, True) and _sb9b["requoted"] == ["872"] and _mb9.api.cancel_alls == ["872"]
+      and all(o["side"] == "no" for o in _mb9.api.batches[-1]) and _mb9.state["872"].last_gate == (False, True), f"{_sb9} {_sb9b} {_mb9.api.cancel_alls}")
+# P10: a pull cut short by the budget (an exit beside ours, so order by order): not clean, nothing recorded, finished next cycle
+_mb10 = _gmm(blocked={"D"}, fair=0.2375)
+_MM.quote_cycle(_mb10, _gbook, {}, {}, {"872": []}, {}, 50000.0, 25, 10)
+_mb10.store.record_order(40, "872", "183", "no", "buy", 0.76, 100, "exit")
+_ids_10 = [{"id": i, "side": "yes"} for i in _gstat(_mb10) if i != 40] + [{"id": 40, "side": "no"}]
+_n10 = len(_ids_10) - 1
+_gfair(_mb10, 0.213)
+_sb10 = _MM.quote_cycle(_mb10, _gbook, {}, {}, {"872": _ids_10}, {}, 50000.0, 26, 2)
+_left10 = [i for i, v in _gstat(_mb10).items() if v == "open" and i != 40]
+_gate_10 = _mb10.state["872"].last_gate
+_sb10b = _MM.quote_cycle(_mb10, _gbook, {}, {}, {"872": _ids_10}, {}, 50000.0, 27, 10)
+check("mm gate-pull blocker P10: a pull cut short by the budget records nothing; the next cycle pulls the rest, the exit untouched, then the gate "
+      "is recorded",
+      _n10 >= 3 and _sb10["writes"] == 2 and len(_left10) == _n10 - 2 and _gate_10 == (True, True) and _sb10b.get("pulled") == ["872"]
+      and _mb10.api.cancel_alls == [] and _gstat(_mb10)[40] == "open" and all(v == "cancelled" for i, v in _gstat(_mb10).items() if i != 40)
+      and _mb10.state["872"].last_gate == (False, True), f"{_n10} {_sb10} {_left10} {_sb10b} {_gstat(_mb10)}")
+# P3: an order another sleeve placed on the leg since the open-orders read (the store knows it, the list does not) turns the
+# cancel-all into an order-by-order pull; one placed long before the read (and gone from the list) does not
+_mn = _gmm(blocked={"D"}, fair=0.213)
+_mn.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_mn.store.record_order(41, "872", "183", "no", "buy", 0.76, 100, "exit")
+_mn.open_orders_ts = time.time()
+_sn = _MM.quote_cycle(_mn, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}]}, {}, 50000.0, 28, 10)
+_mn2 = _gmm(blocked={"D"}, fair=0.213)
+_mn2.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_mn2.store.record_order(41, "872", "183", "no", "buy", 0.76, 100, "exit")
+_mn2.store.exec("UPDATE orders SET placed_at=? WHERE order_id=41", (time.time() - 7200,))
+_mn2.open_orders_ts = time.time()
+_sn2 = _MM.quote_cycle(_mn2, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}]}, {}, 50000.0, 29, 10)
+check("mm gate-pull P3: a non-MM order placed on the leg since the open-orders read makes the pull order by order (no cancel-all); one placed "
+      "2 h earlier and gone from the list does not",
+      _mn.api.cancel_alls == [] and _mn.api.cancels == [11] and _sn.get("pulled") == ["872"] and _gstat(_mn) == {11: "cancelled", 41: "open"}
+      and _mn2.api.cancel_alls == ["872"] and _mn2.api.cancels == [] and _sn2.get("pulled") == ["872"], f"{_sn} {_gstat(_mn)} {_sn2}")
+
+# ---------------------------------------------------------------- MM: the poll lands after the MM block: gate sweep in the same cycle
+# sim 'catchup' 29 Oct (leg 1067, Alaska Senate R, live params): the outside fair moved 3 pts at 15:14:30; the bot's poll saw it
+# at 15:15:00, after the MM had quoted that cycle with the old fair; a crowd sell hit the resting bid at 15:15:15 on the side
+# the new fair gated; the MM only reacted at 15:15:30. gate_for is the one gate; gate_changed finds the legs; mm_gate_sweep acts.
+_m9 = _gmm(fair=0.2375)
+check("mm gate-sweep: gate_for is xv_gate at the mid (open with no fair, with the gate off, or on a stale fair)",
+      _m9.gate_for("872", 0.2375) == (True, True) and (_gfair(_m9, 0.213) or _m9.gate_for("872", 0.2375) == (False, True))
+      and (_gfair(_m9, 0.262) or _m9.gate_for("872", 0.2375) == (True, False)) and _m9.gate_for("871", 0.5) == (True, True)
+      and (_m9.xv_fair.__setitem__("872", (0.213, 0.213, 0.213, time.time() - 900)) or _m9.gate_for("872", 0.2375) == (True, True))
+      and (setattr(_m9.cfg, "xv_gate_ticks", 0) or _gfair(_m9, 0.213) or _m9.gate_for("872", 0.2375) == (True, True)))
+_m9 = _gmm(fair=0.2375)
+_m9.open_orders_ts = time.time() - 1
+_s15 = _MM.quote_cycle(_m9, _gbook, {}, {}, {"872": []}, {}, 50000.0, 15, 10)        # both sides quoted, gate open, after the read
+_g15 = _m9.api.batches[-1]
+_gfair(_m9, 0.213)                                                                     # the poll: 4.9 ticks under the mid: bids closed
+_cl = _m9.gate_closed(_gbook)
+_cl_unknown = _m9.gate_closed({"872": {"bids": [], "asks": [{"price": 0.24, "quantity": 2000}]}})
+_m9.state["872"].last_reserve = None
+_cl_wave = _m9.gate_closed(_gbook)
+_m9.state["872"].last_reserve = 0.23
+_m9o = _gmm(fair=0.213)
+_m9o.state["872"] = QuoteState("872", last_reserve=0.23, last_quote_ts=time.time(), fills_seen=0, last_gate=(False, True))
+_gfair(_m9o, 0.2375)                                                                   # a side only OPENED: not the sweep's business
+check("mm gate-sweep: gate_closed lists a quoted leg whose gate closed a side with the new fair, not one with an unknown mid, not one forced "
+      "to requote anyway, not one never quoted, not one whose gate only opened",
+      {o["side"] for o in _g15} == {"yes", "no"} and _cl == {"872": ((True, True), (False, True))} and _cl_unknown == {} and _cl_wave == {}
+      and _gmm(fair=0.213).gate_closed(_gbook) == {} and _m9o.gate_closed(_gbook) == {}, f"{_cl} {_cl_unknown} {_cl_wave}")
+# the sweep itself on the real MM: the cycle's list predates the quotes (empty); the quotes are found in the store and pulled
+# with one cancel-all; nothing is posted; the gate is recorded; the next cycle's requote posts the asks only
+_s16 = _m9.pull_closed(_gbook, {"872": []}, 6)
+_st16, _gate16, _nb16 = dict(_gstat(_m9)), _m9.state["872"].last_gate, len(_m9.api.batches)
+_cl16 = _m9.pull_closed(_gbook, {"872": []}, 6)
+_s16b = _MM.quote_cycle(_m9, _gbook, {}, {}, {"872": []}, {}, 50000.0, 16, 10)
+_g16 = _m9.api.batches[-1]
+check("mm gate-sweep: pull_closed pulls the leg's quotes (one cancel-all, nothing posted) and records the gate, so a second sweep finds nothing; "
+      "the next cycle posts the open side only",
+      _s16 == {"legs": ["872"], "pulled": ["872"], "writes": 1, "skipped_budget": 0} and _m9.api.cancel_alls == ["872"] and _nb16 == 1
+      and set(_st16.values()) == {"cancelled"} and _gate16 == (False, True) and _cl16["legs"] == []
+      and _s16b["requoted"] == ["872"] and len(_m9.api.batches) == 2 and all(o["side"] == "no" for o in _g16) and _m9.api.cancel_alls == ["872"],
+      f"{_s16} {_st16} {_cl16} {_s16b} {_m9.api.cancel_alls}")
+# with the other side blocked too, and an exit beside ours on the leg (in the list): order by order, the exit untouched; no budget: reported
+_m10 = _gmm(blocked={"D"}, fair=0.2375)
+_MM.quote_cycle(_m10, _gbook, {}, {}, {"872": []}, {}, 50000.0, 16, 10)
+_m10.store.record_order(40, "872", "183", "no", "buy", 0.76, 100, "exit")
+_oo10 = {"872": [{"id": i, "side": "yes"} for i in _gstat(_m10) if i != 40] + [{"id": 40, "side": "no"}]}
+_gfair(_m10, 0.213)
+_s17z = _m10.pull_closed(_gbook, _oo10, 0)
+_s17 = _m10.pull_closed(_gbook, _oo10, 6)
+check("mm gate-sweep: with an exit beside ours the sweep cancels ours one by one and leaves the exit; with no budget it only reports",
+      _s17z == {"legs": ["872"], "pulled": [], "writes": 0, "skipped_budget": 1} and _s17["pulled"] == ["872"] and _s17["writes"] == len(_oo10["872"]) - 1
+      and _m10.api.cancel_alls == [] and sorted(_m10.api.cancels) == sorted(i for i in _gstat(_m10) if i != 40) and _gstat(_m10)[40] == "open"
+      and _m10.state["872"].last_gate == (False, True), f"{_s17z} {_s17} {_m10.api.cancels} {_gstat(_m10)}")
+# both sides quoted and a catch-up order placed on the leg since the read (sim 'catchup' 29 Oct, three legs at once): only our
+# bids (the closed side) go, one by one; the asks keep resting and the next cycle leaves them alone
+_m11 = _gmm(fair=0.2375)
+_m11.open_orders_ts = time.time() - 1
+_MM.quote_cycle(_m11, _gbook, {}, {}, {"872": []}, {}, 50000.0, 17, 10)
+_m11.store.record_order(50, "872", "183", "yes", "buy", 0.24, 100, "catchup")
+_sides11 = {r["order_id"]: r["side"] for r in _m11.store.rows("SELECT order_id, side FROM orders")}
+_gfair(_m11, 0.213)
+_s18 = _m11.pull_closed(_gbook, {"872": []}, 8)
+_st18 = dict(_gstat(_m11))
+_s18b = _MM.quote_cycle(_m11, _gbook, {}, {}, {"872": [{"id": i, "side": _sides11[i]} for i, v in _st18.items() if v == "open"]}, {}, 50000.0, 18, 10)
+check("mm gate-sweep: with another sleeve's order placed on the leg since the read, only our orders on the closed side are cancelled, one by "
+      "one; the open side's quotes keep resting and the next cycle does not touch them",
+      _s18["pulled"] == ["872"] and _m11.api.cancel_alls == [] and sorted(_m11.api.cancels) == sorted(i for i, sd in _sides11.items() if sd == "yes" and i != 50)
+      and _s18["writes"] == len(_m11.api.cancels) >= 1 and all(_st18[i] == "cancelled" for i in _m11.api.cancels)
+      and all(_st18[i] == "open" for i, sd in _sides11.items() if sd == "no") and _st18[50] == "open"
+      and _s18b["requoted"] == [] and not _s18b.get("pulled") and _m11.state["872"].last_gate == (False, True), f"{_s18} {_st18} {_s18b} {_m11.api.cancels}")
+# review 2 (Opus), findings 1, 2 and note 4. (1) a requote's cancel-all marks every order of ours on the leg, listed or not, so a later
+# pull spends no cancels on phantoms; (2) the cycle's list holding the previous ladder's ids (ours, cancelled) does not stop the one
+# cancel-all; (4) a cancel answered 409 / 404 (the order is not open any more) marks the order gone and counts as clean
+_m12 = _gmm(fair=0.2375)
+_m12.open_orders_ts = time.time() - 1
+_MM.quote_cycle(_m12, _gbook, {}, {}, {"872": []}, {}, 50000.0, 30, 10)               # ladder A
+_ids_a = sorted(_gstat(_m12))
+_m12.force_cancel = True
+_s19 = _MM.quote_cycle(_m12, _gbook, {}, {}, {"872": []}, {}, 50000.0, 30, 10)        # a fast requote on an empty cache: ladder B
+_m12.force_cancel = False
+_st19 = dict(_gstat(_m12))
+_ids_b = sorted(i for i in _st19 if i not in _ids_a)
+check("mm review 2 (1): a requote's cancel-all marks this cycle's earlier quotes cancelled too, listed or not",
+      _s19["requoted"] == ["872"] and _m12.api.cancel_alls == ["872"] and _ids_b and all(_st19[i] == "cancelled" for i in _ids_a)
+      and all(_st19[i] == "open" for i in _ids_b), f"{_s19} {_st19}")
+_gfair(_m12, 0.213)                                                                    # the poll closes the bid side
+_m12.store.record_order(9, "872", "183", "yes", "buy", 0.2, 50, "mm")               # an old quote of ours the list lacks (expired, say)
+_m12.store.exec("UPDATE orders SET placed_at=? WHERE order_id=9", (time.time() - 7200,))
+_s20 = _m12.pull_closed(_gbook, {"872": [{"id": i, "side": "yes"} for i in _ids_a]}, 8)   # the cycle's list: ladder A's ids
+_st20 = dict(_gstat(_m12))
+check("mm review 2 (2): a sweep on a leg requoted this cycle (the list holds the old ladder's ids, ours) is one cancel-all, not order by "
+      "order; ladder B and every older open row of ours on the leg are marked cancelled",
+      _s20["pulled"] == ["872"] and _s20["writes"] == 1 and _m12.api.cancel_alls == ["872", "872"] and _m12.api.cancels == []
+      and all(_st20[i] == "cancelled" for i in _ids_b) and _st20[9] == "cancelled" and _m12.state["872"].last_gate == (False, True), f"{_s20} {_st20}")
+_m13 = _gmm(blocked={"D"}, fair=0.213)
+for _i in (11, 12, 13):
+    _m13.store.record_order(_i, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_m13.store.record_order(40, "872", "183", "no", "buy", 0.76, 100, "exit")
+_m13.api.cancel_order = lambda oid: (_ for _ in ()).throw(_ApiErr(409, "NOT_OPEN", "not open")) if oid == 12 else _m13.api.cancels.append(oid)
+_s21 = _MM.quote_cycle(_m13, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}, {"id": 12, "side": "yes"}, {"id": 13, "side": "yes"}, {"id": 40, "side": "no"}]},
+                       {}, 50000.0, 31, 10)
+_m14 = _gmm(blocked={"D"}, fair=0.213)
+_m14.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
+_m14.store.record_order(40, "872", "183", "no", "buy", 0.76, 100, "exit")
+_m14.api.cancel_order = lambda oid: (_ for _ in ()).throw(_ApiErr(500, "ERR", "boom"))
+_s22 = _MM.quote_cycle(_m14, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}, {"id": 40, "side": "no"}]}, {}, 50000.0, 32, 10)
+check("mm review 2 (4): a cancel answered 409 (the order is gone) is marked cancelled and the pull is clean (gate recorded); a 500 is not",
+      _s21.get("pulled") == ["872"] and _m13.api.cancels == [11, 13] and _gstat(_m13) == {11: "cancelled", 12: "cancelled", 13: "cancelled", 40: "open"}
+      and getattr(_m13.state.get("872"), "last_gate", None) == (False, True) and _s22.get("pulled") == ["872"] and _gstat(_m14) == {11: "open", 40: "open"}
+      and "872" not in _m14.state, f"{_s21} {_gstat(_m13)} {_s22} {_gstat(_m14)}")
+# Bot.mm_gate_sweep wiring on a stub: pull_closed under the trade lock with the given budget; nothing to do -> {}
+_swcalls = []
+
+
+class _SwMM:
+    def __init__(self):
+        self.locked_seen = None
+
+    def pull_closed(self, books, open_orders, budget):
+        self.locked_seen = _swbot.trade_lock.locked()
+        _swcalls.append((sorted(books), sorted(open_orders), budget))
+        return {"legs": ["A"], "pulled": ["A"], "writes": 1, "skipped_budget": 0} if "A" in books else {"legs": [], "pulled": [], "writes": 0, "skipped_budget": 0}
+
+
+_swbot = types.SimpleNamespace(mm=_SwMM(), trade_lock=threading.Lock())
+_sw = R.Bot.mm_gate_sweep(_swbot, {"A": _rbk(0.5, 0.505), "B": _rbk(0.4, 0.405)}, {"A": [{"id": 1}]}, 5)
+_swn = R.Bot.mm_gate_sweep(_swbot, {"B": _rbk(0.4, 0.405)}, {}, 5)
+check("mm gate-sweep: Bot.mm_gate_sweep runs pull_closed under the trade lock with the cycle's books, list and budget; nothing closed -> {}",
+      _swcalls == [(["A", "B"], ["A"], 5), (["B"], [], 5)] and _swbot.mm.locked_seen is True and not _swbot.trade_lock.locked()
+      and _sw == {"legs": ["A"], "pulled": ["A"], "writes": 1, "skipped_budget": 0} and _swn == {}, f"{_swcalls} {_sw} {_swn}")
+_rs_gs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+_i_ref = _rs_gs.find("# ---- outside fair for the MM's gate, refreshed right after the directional poll")
+_i_sw = _rs_gs.find("sw = self.mm_gate_sweep(mm_books, open_orders, max(0, min(8, left)))")
+_i_cf = _rs_gs.find("# ---- cheap safe favourites")
+check("mm gate-sweep: wired right after the post-poll xv_fair refresh (before cheap favourites), only after a poll, with the MM, inside and "
+      "tilt writes and the directional sleeve's 2 taken off the budget, capped at 8",
+      0 < _i_ref < _i_sw < _i_cf and 'if mm_books and dir_summary.get("polled") and not killed and gate_ready and not mm_paused:' in _rs_gs
+      and "mm_books = books" in _rs_gs and _rs_gs.count("mm_summary, mm_books = {}, {}") == 1)
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

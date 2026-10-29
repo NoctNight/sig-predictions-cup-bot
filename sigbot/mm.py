@@ -10,6 +10,12 @@ Per quoted exchange, each cycle:
      by one tick, otherwise it joins the queue at the touch.
   5. requote only when needed (fair moved >= requote_ticks, a fill happened, TTL elapsed, orders missing):
      cancel-all scoped to the exchange (1 write) + one batch per 50 orders (1 write each).
+  6. a known book with nothing to post (the partisan block leaves one side and the outside-fair gate closes it, or the
+     inventory cap zeroes both sides) pulls our resting quotes there (pull_quotes): a quote left resting fills on a side
+     we no longer want (sim 'day' 29 Oct: a bid rested 19 min on a gated side). An unknown book never cancels.
+  7. the main cycle polls the outside fair AFTER this block; on legs where the new fair closed a side (gate_closed) the
+     resting quotes are pulled in the same cycle (Bot.mm_gate_sweep -> pull_closed), not a cycle later (sim 'catchup'
+     29 Oct); nothing is posted there, the next cycle requotes the open side.
 
 Everything placed is logged with level/ticks-from-mid/fair/imbalance/inventory so that fills can be attributed
 and the analytics module can re-size the ladder from realized markouts and fill rates.
@@ -203,6 +209,62 @@ class MarketMaker:
         r = self.u.by_exchange.get(ex)
         return self.u.races[r[0]].legs[r[1]].market_id if r else None
 
+    def gate_for(self, ex: str, mid: float) -> tuple:
+        """The outside-fair gate (allow bid, allow ask) for `ex` at `mid`: xv_gate on the leg's fresh Polymarket/Kalshi fair
+        (xv_fair, set by the main cycle), open when there is none or the gate is off. One place, so that build_quotes and
+        gate_changed agree."""
+        xv = getattr(self, "xv_fair", {}).get(ex)
+        if not xv or self.cfg.xv_gate_ticks <= 0:
+            return (True, True)
+        from .proposals.mm_upgrade import xv_gate
+        ok_bid, ok_ask = xv_gate(mid, xv[0], xv[1], xv[2], time.time() - xv[3], gap_ticks=self.cfg.xv_gate_ticks)
+        return (ok_bid, ok_ask)
+
+    def gate_closed(self, books: dict) -> dict:
+        """The quoted legs on which the gate, at the book's mid and the current xv_fair, has CLOSED a side that was open
+        when their resting quotes were built (QuoteState.last_gate): ex -> (old gate, new gate). Legs never quoted (or
+        forced to requote by a wave) and legs with an unknown mid are left out; a side that only opened is left to the
+        next cycle's requote."""
+        out = {}
+        for ex in self.quoted:
+            st, bk = self.state.get(ex), books.get(ex)
+            if st is None or st.last_reserve is None or not bk:
+                continue
+            mid = self.microprice(bk)[0]
+            if mid is None:
+                continue
+            new, old = self.gate_for(ex, mid), tuple(st.last_gate)
+            if (old[0] and not new[0]) or (old[1] and not new[1]):
+                out[ex] = (old, new)
+        return out
+
+    def pull_closed(self, books: dict, open_orders: dict, budget: int) -> dict:
+        """Right after the outside-fair poll (Bot.mm_gate_sweep): on every quoted leg where the fresh fair closed a side that
+        was open when its quotes were built, pull our quotes resting on that side now; nothing is posted here, the next
+        cycle requotes as usual. When the leg is all ours (and no other sleeve placed an order there since the list was
+        read) that is one cancel-all; otherwise only our orders on the closed side go, one by one, and the open side keeps
+        quoting. `open_orders` is the cycle's list, read before this cycle's quotes: own_resting adds those from the store.
+        Returns {legs, pulled, writes, skipped_budget}."""
+        closed = self.gate_closed(books)
+        out = {"legs": sorted(closed), "pulled": [], "writes": 0, "skipped_budget": 0}
+        for ex, (old, new) in closed.items():
+            sides = ({"yes"} if old[0] and not new[0] else set()) | ({"no"} if old[1] and not new[1] else set())
+            oo = open_orders.get(ex, [])
+            mine = self.own_resting(ex, oo, dedupe=True)
+            gone = [o for o in mine if o.get("side") in sides]
+            if not gone:
+                continue
+            if out["writes"] >= budget:
+                out["skipped_budget"] += 1
+                continue
+            n, clean = self.pull_quotes(ex, oo, mine, budget - out["writes"], only=gone)
+            out["writes"] += n
+            out["pulled"].append(ex)
+            log.info("MM gate sweep pulled %d resting order(s) on %s: the poll closed %s (gate %s -> %s, clean %s)", len(gone), ex, sorted(sides), old, new, clean)
+            if clean:
+                self.state[ex].last_gate = new       # the closed side is empty; a leg left empty is re-posted by the next cycle
+        return out
+
     def build_quotes(self, ex: str, book: dict, positions: dict[str, float], pressure: float, per_market_budget: float) -> tuple[list[Quote], dict]:
         mid, micro, imb = self.microprice(book)
         if mid is None:
@@ -314,16 +376,11 @@ class MarketMaker:
         paused = self.paused_sides(ex)
         # outside-fair gate (research_notes/mm_upgrade.md, verified on realised fills): when the fresh Polymarket/Kalshi
         # fair sits >= xv_gate_ticks away from our mid, stop taking the other side of that convergence on every level
-        xv = getattr(self, "xv_fair", {}).get(ex)
-        gate = (True, True)
-        if xv and self.cfg.xv_gate_ticks > 0:
-            from .proposals.mm_upgrade import xv_gate
-            ok_bid, ok_ask = xv_gate(mid, xv[0], xv[1], xv[2], time.time() - xv[3], gap_ticks=self.cfg.xv_gate_ticks)
-            gate = (ok_bid, ok_ask)
-            if not ok_bid:
-                paused = set(paused) | {"yes_all"}
-            if not ok_ask:
-                paused = set(paused) | {"no_all"}
+        gate = self.gate_for(ex, mid)
+        if not gate[0]:
+            paused = set(paused) | {"yes_all"}
+        if not gate[1]:
+            paused = set(paused) | {"no_all"}
         for k, dticks in enumerate(self.cfg.level_ticks[:n_levels]):
             dt = dticks + spread_add
             improve = TICK if (k == 0 and spread_ticks >= self.cfg.improve_when_spread_ticks_ge) else 0.0
@@ -353,11 +410,15 @@ class MarketMaker:
         return quotes, info
 
     # ------------------------------------------------------------- requoting
-    def needs_requote(self, ex: str, info: dict, fills_on_ex: int, open_orders_on_ex: int, expected_orders: int) -> bool:
+    def needs_requote(self, ex: str, info: dict, fills_on_ex: int, open_orders_on_ex: int, expected_orders: int,
+                      stale_side: bool = False) -> bool:
         st = self.state.setdefault(ex, QuoteState(ex))
         now = time.time()
         if st.last_reserve is None:
             return True
+        if stale_side:
+            return True                          # one of our quotes rests on a side the ladder no longer has (a gate, the
+                                                 # partisan block or the inventory cap closed it since): requote at once
         if info.get("gate", (True, True)) != st.last_gate:
             return True                          # the outside-fair gate opened or closed a side: requote at once
         if abs(info["reserve"] - st.last_reserve) >= self.cfg.requote_ticks * TICK - 1e-9:
@@ -369,6 +430,95 @@ class MarketMaker:
         if open_orders_on_ex < expected_orders:
             return True
         return False
+
+    def own_resting(self, ex: str, oo: list, dedupe: bool = False) -> list:
+        """Our resting orders on `ex`: the orders among `oo` (the venue's open orders there) that are the MM's or the inside
+        quoter's. With `dedupe` (a caller whose list may be older than what it did since: the fast path's cache, the gate
+        sweep) the orders the store already holds as cancelled are left out, so a cancel is not repeated, and our orders
+        the store holds open that were placed after the list was read (this cycle's quotes) are added, so they can be
+        pulled. A fresh venue list is trusted as it is (a cancel-all that answered OK but left an order resting is retried)."""
+        if self.store is None:
+            return []
+        out, seen = [], set()
+        for o in oo:
+            meta = self.store.order_meta(o.get("id")) if o.get("id") is not None else None
+            if meta is None or meta["purpose"] not in ("mm", "inside"):
+                continue
+            if dedupe and meta["status"] == "cancelled":
+                continue
+            out.append(o)
+            seen.add(str(o.get("id")))
+        if dedupe:
+            since = float(getattr(self, "open_orders_ts", 0.0) or 0.0)
+            for r in self.store.rows("SELECT order_id, side FROM orders WHERE exchange_id=? AND purpose IN ('mm', 'inside') AND status='open' "
+                                     "AND placed_at>=? ORDER BY placed_at", (str(ex), since)):
+                if str(r["order_id"]) not in seen:
+                    out.append({"id": r["order_id"], "side": r["side"]})
+                    seen.add(str(r["order_id"]))
+        return out
+
+    def mark_ours_cancelled(self, ex: str):
+        """After an exchange-scoped cancel-all: every order of ours the store still holds open on the leg is off the venue now,
+        listed or not (this cycle's quotes, an earlier fast requote's), so mark them all; an unmarked one is a phantom a later
+        pull would spend a cancel on (review 2, finding 1)."""
+        self.store.exec("UPDATE orders SET status='cancelled' WHERE exchange_id=? AND purpose IN ('mm', 'inside') AND status='open' AND placed_at<=?",
+                        (str(ex), time.time()))
+
+    def pull_quotes(self, ex: str, oo: list, mine: list, budget: int, only: Optional[list] = None) -> tuple[int, bool]:
+        """Pull our resting quotes `mine` on `ex` (a subset of `oo`, the venue's open orders there): one exchange-scoped
+        cancel-all when every order the venue lists there is ours and no other sleeve placed an order there since the list
+        was read (the check cancel_mm_quotes makes), otherwise order by order, so that an exit, a catch-up entry or an
+        order the store does not know is left alone. `mine` may hold orders the list lacks (this cycle's quotes, from the
+        store). With `only` (a subset of `mine`: the orders on a side that just closed), the order-by-order pull cancels
+        those alone and the rest keep resting; the cancel-all, when allowed, pulls everything of ours (one write; the next
+        cycle re-posts the open side). Returns (writes spent, clean): clean when every targeted order was cancelled without
+        an error; what the budget did not reach, and a cancel that failed, is pulled next cycle."""
+        if budget < 1:
+            return 0, False
+        since = float(getattr(self, "open_orders_ts", 0.0) or 0.0) - 60.0
+        newer = self.store.one("SELECT 1 FROM orders WHERE exchange_id=? AND purpose NOT IN ('mm', 'inside') AND placed_at>=? LIMIT 1",
+                               (str(ex), since))
+        ours = {str(o.get("id")) for o in mine}
+
+        def listed_ours(o):                      # ours whatever the status: an id of ours we cancelled earlier is no stranger
+            if str(o.get("id")) in ours:
+                return True
+            meta = self.store.order_meta(o.get("id")) if o.get("id") is not None else None
+            return meta is not None and meta["purpose"] in ("mm", "inside")
+        if all(listed_ours(o) for o in oo) and newer is None:
+            if self.dry_run:
+                log.info("[DRY] pull: cancel-all exchange %s (%d orders)", ex, len(mine))
+                return 1, True
+            try:
+                self.api.cancel_all(exchange_id=ex)
+                self.store.mark_orders([o["id"] for o in mine], "cancelled")
+                self.mark_ours_cancelled(ex)
+                return 1, True
+            except Exception as e:               # a network error (not every one is an ApiError) must not abort the cycle
+                log.warning("pull cancel-all %s failed: %s", ex, e)
+                return 1, False
+        writes, clean = 0, True
+        for o in (mine if only is None else only):
+            if writes >= budget:
+                clean = False
+                break
+            if self.dry_run:
+                log.info("[DRY] pull: cancel order %s on %s", o.get("id"), ex)
+            else:
+                try:
+                    self.api.cancel_order(o["id"])
+                    self.store.mark_orders([o["id"]], "cancelled")
+                except Exception as e:
+                    if getattr(e, "status", None) in (404, 409, 410):
+                        # the venue has no open order by that id (filled, expired or cancelled since): nothing rests, so
+                        # mark it; otherwise it would be retried on every pass until the next open-orders read (review 2)
+                        self.store.mark_orders([o["id"]], "cancelled")
+                        log.info("pull cancel %s on %s: gone (%s)", o.get("id"), ex, e)
+                    else:
+                        log.warning("pull cancel %s on %s failed: %s", o.get("id"), ex, e)
+                        clean = False
+            writes += 1
+        return writes, clean
 
     @staticmethod
     def last_look(to_place: list, touch_fn, stats: Optional[dict] = None) -> list:
@@ -482,12 +632,43 @@ class MarketMaker:
             if not book:
                 continue
             quotes, info = self.build_quotes(ex, book, positions, pressures.get(ex, 0.0), per_market)
+            oo = open_orders.get(ex, [])
+            # our orders resting on the leg; a caller with a list that may be older than a cancel it sent (the fast path's
+            # cache, the gate sweep: force_cancel set) does not repeat that cancel
+            mine = self.own_resting(ex, oo, dedupe=bool(getattr(self, "force_cancel", False)))
             if not quotes:
+                if not info:
+                    continue                 # a side of the book is missing: the leg is unknown this cycle, never cancel blind
+                # a known book with nothing to post: the partisan block left one side and the outside-fair gate closed it
+                # (sim 'day' 29 Oct, Nevada Governor 872: bids only from 10:05, the bid side gated from 10:22, the resting
+                # bid swept at 10:24), or the inventory cap / the budget zeroed both sides. Pull our resting quotes (one
+                # cancel-all when nothing else rests there, else order by order) and, once the leg is clean, record the
+                # gate, so that the re-open is a gate change needs_requote acts on at once. Nothing is recorded while a
+                # quote of ours may still rest (a failed or partial pull, a list that may be stale): the next cycle's fresh
+                # list pulls it, or requotes through the stale-side trigger. The quotes row keeps the vol-regime history.
+                self.store.record_quote(cycle_id, ex, info["bb"], info["ba"], info["bid_qty"], info["ask_qty"], info.get("last"),
+                                        info["mid"], info["micro"], info["imb"], info["fair"], info["inv"], info["pressure"])
+                if not mine:
+                    continue
+                if writes >= write_budget:
+                    summary["skipped_budget"] += 1
+                    continue
+                n, clean = self.pull_quotes(ex, oo, mine, write_budget - writes)
+                writes += n
+                summary.setdefault("pulled", []).append(ex)
+                log.info("MM pulled %d resting order(s) on %s: no quotable side (gate %s, bid/ask %.3f/%.3f, inv %.0f, clean %s)", len(mine), ex,
+                         info.get("gate"), info["bb"], info["ba"], info["inv"], clean)
+                if clean:
+                    st = self.state.setdefault(ex, QuoteState(ex))
+                    st.last_reserve, st.last_quote_ts, st.fills_seen = info["reserve"], time.time(), fills_count.get(ex, 0)
+                    st.last_touch = (info["bb"], info["ba"])
+                    st.last_gate = info.get("gate", (True, True))
                 continue
             self.store.record_quote(cycle_id, ex, info["bb"], info["ba"], info["bid_qty"], info["ask_qty"], info.get("last"),
                                     info["mid"], info["micro"], info["imb"], info["fair"], info["inv"], info["pressure"])
-            oo = open_orders.get(ex, [])
-            if not self.needs_requote(ex, info, fills_count.get(ex, 0), len(oo), len(quotes)):
+            sides = {q.side for q in quotes}
+            stale = any(o.get("side") in ("yes", "no") and o.get("side") not in sides for o in mine)
+            if not self.needs_requote(ex, info, fills_count.get(ex, 0), len(oo), len(quotes), stale_side=stale):
                 continue
             if writes + 1 + math.ceil((len(to_place) + len(quotes)) / self.cfg.batch_size) > write_budget:
                 summary["skipped_budget"] += 1
@@ -504,6 +685,7 @@ class MarketMaker:
                     try:
                         self.api.cancel_all(exchange_id=ex)
                         self.store.mark_orders([o["id"] for o in oo], "cancelled")
+                        self.mark_ours_cancelled(ex)     # also this cycle's quotes the list lacks (review 2, finding 1)
                     except ApiError as e:
                         log.warning("cancel-all %s failed: %s", ex, e)
                         continue
