@@ -4372,5 +4372,47 @@ check("mm gate-sweep: wired right after the post-poll xv_fair refresh (before ch
       0 < _i_ref < _i_sw < _i_cf and 'if mm_books and dir_summary.get("polled") and not killed and gate_ready and not mm_paused:' in _rs_gs
       and "mm_books = books" in _rs_gs and _rs_gs.count("mm_summary, mm_books = {}, {}") == 1)
 
+# ---------------------------------------------------------------- sim churn_blowout false positive, 29 Oct 11:3x BST
+# The precheck failed on `sets_left_at_sell_all {'IA-02 House race': 75}`: sim taker flow hit our MM bids on both legs of a race AFTER
+# the sell-all (none at the sell-all cycle itself); the old check re-read every later cycle and judged the end of the run.
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+import sim_pipeline as _spl  # noqa: E402
+
+
+# ChurnBlowout.after_cycle: the snapshot is the sell-all cycle's, kept; later MM fills do not overwrite it, and a venue set left
+# in a churn race at the sell-all cycle (churn's own or not: the sell-all must sell every set in its races) is still reported.
+_pos_now, _calls_now = {}, []
+_bsim = types.SimpleNamespace(v=types.SimpleNamespace(calls=_calls_now, signed_positions=lambda: dict(_pos_now)),
+                              legs=lambda race: {"A": ["1", "2"], "IA": ["905", "904"]}[race])
+_bo = _spl.ChurnBlowout()
+_bo.races, _bo.sell_all = ["A", "IA"], _spl.T0 + 100.0
+_tr0 = _spl.ChurnBase.after_cycle
+_spl.ChurnBase.after_cycle = lambda self, sim, i: None
+_t_save = _spl.CLOCK.t
+try:
+    _spl.CLOCK.t = _spl.T0 + 90.0
+    _bo.after_cycle(_bsim, 1)                                                          # before the deadline: no snapshot
+    _b0 = getattr(_bo, "left_after", None)
+    _spl.CLOCK.t = _spl.T0 + 100.0
+    _bo.after_cycle(_bsim, 2)                                                          # the sell-all cycle: clean
+    _b1 = dict(_bo.left_after)
+    _pos_now.update({"905": -744.0, "904": -75.0})                                     # later taker flow on the MM bids of IA
+    _spl.CLOCK.t = _spl.T0 + 130.0
+    _bo.after_cycle(_bsim, 3)
+    _b2 = dict(_bo.left_after)
+    _bo2 = _spl.ChurnBlowout()                                                         # a run where a set is left at the deadline
+    _bo2.races, _bo2.sell_all = ["A", "IA"], _spl.T0 + 100.0
+    _pos_now.clear()
+    _pos_now.update({"1": -50.0, "2": -50.0})
+    _spl.CLOCK.t = _spl.T0 + 100.0
+    _bo2.after_cycle(_bsim, 2)
+    _b3 = dict(_bo2.left_after)
+finally:
+    _spl.ChurnBase.after_cycle = _tr0
+    _spl.CLOCK.t = _t_save
+check("sim churn_blowout: sets_left_at_sell_all reads the sell-all cycle only (MM fills after it do not count) and still reports a set "
+      "the venue holds there",
+      _b0 is None and _b1 == {} and _b2 == {} and _b3 == {"A": 50}, f"{_b0} {_b1} {_b2} {_b3}")
+
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

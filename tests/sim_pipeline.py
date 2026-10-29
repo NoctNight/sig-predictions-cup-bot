@@ -1699,7 +1699,10 @@ class ChurnBlowout(ChurnBase):
 
     def after_cycle(self, sim, i):
         super().after_cycle(sim, i)
-        if CLOCK.t >= self.sell_all:          # right after a sell-all cycle (MM quotes are passive: nothing traded since)
+        if CLOCK.t >= self.sell_all and getattr(self, "left_after", None) is None:
+            # Only the sell-all cycle itself (the first at or past the deadline). The old check re-read every later cycle, so it
+            # judged the end of the run: sim taker flow keeps hitting the MM's quotes after the sell-all, building 'sets' (NO on
+            # every leg of a two-leg race) that are MM inventory, not churn's (29 Oct: IA-02, 75 sets at t+93 min, none at t+75).
             self.left_after = {r: venue_sets(sim, r) for r in self.races if venue_sets(sim, r)}
 
     def before_cycle(self, sim, i):
@@ -1725,7 +1728,7 @@ class ChurnBlowout(ChurnBase):
             sim.chk.violation("churn_sell_all_incomplete", f"after the sell-all: ledger {ch.lots}")
         left = getattr(self, "left_after", None)
         if left is None or left:
-            sim.chk.violation("sets_left_at_sell_all", f"venue sets in churn races right after the last sell-all cycle: {left}")
+            sim.chk.violation("sets_left_at_sell_all", f"venue sets in churn races right after the sell-all cycle: {left}")
         if self.entries_after(sim, self.sell_all):
             sim.chk.violation("churn_entry_after_sell_all", "bought again after the sell-all")
         rep.update(pause_after_min=None if self.pause_t is None else round((self.pause_t - T0) / 60),
