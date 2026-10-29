@@ -158,7 +158,7 @@
   "strategy_stops_enabled": true,
   "punt_enabled": false,
   "gap_enabled": true,
-  "gap_budget": 900.0,
+  "gap_budget": 150.0,
   "gap_min_edge": 0.03,
   "gap_leg_cap": 300.0,
   "gap_order_notional": 150.0,

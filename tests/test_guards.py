@@ -3852,7 +3852,7 @@ check("gap: the time stop and the stop need no outside fair", _xp.exit_reason("n
 _grs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 _gm = _grs[_grs.index("    def _gap_trade("):_grs.index("    # ------------------------------------------------------------------ shock mode (proposals/shock_mode.py)")]
 check("gap: wiring: off by default in config.py, the launch config.json carries the pilot's keys, needs the cheap-favourites sleeve",
-      _pcfg.BotConfig.__dataclass_fields__["gap_enabled"].default is False and _live.get("gap_budget") == 900.0 and _live.get("gap_min_edge") == 0.03
+      _pcfg.BotConfig.__dataclass_fields__["gap_enabled"].default is False and _live.get("gap_budget") == 150.0 and _live.get("gap_min_edge") == 0.03
       and 'getattr(cfg, "gap_enabled", False) and self.cheapfav is not None' in _grs)
 check("gap: wiring: orders carry the cheapfav purposes (ledger, race protections, wind-down exemption); cheapfav skips the pilot's legs",
       '"cheapfav", response=resp' in _gm and '"cheapfav_exit", response=resp' in _gm and 'c["exchange_id"] not in gap_legs' in _grs)
