@@ -775,6 +775,7 @@ class Bot:
                 st = json.load(open(self.catchup_state_path))
                 self.catchup.ctx = {str(k): v for k, v in (st.get("ctx") or {}).items()}
                 self.catchup.last_signal = dict(st.get("last_signal") or {})
+                self.catchup.exit_try = {str(k): float(v) for k, v in (st.get("exit_try") or {}).items()}
                 self.catchup.killed = bool(st.get("killed", False))
             except Exception as e:                   # missing, corrupt or not a dict: start empty (positions without
                 log.warning("catchup state unreadable (%s): starting empty", e)   # context are then closed)
@@ -2817,8 +2818,8 @@ class Bot:
             cs.exit_try[ex] = now                      # set before the call: a timeout leaves the outcome unknown, never re-sent blind
             if ex in cs.ctx:
                 cs.ctx[ex]["exiting"] = True           # no more clips of a trade that is being closed
-                changed = True
-                self.catchup_save()
+            changed = True
+            self.catchup_save()                        # saved first: a restart inside CLIP_WAIT must still see the throttle
             try:
                 resp = self.api.place_order(ex, side, "buy", int(abs(q)), px, expiration=expiry_in(60), key=self.api.new_key("cux"))
                 self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, int(abs(q)), "catchup_exit", response=resp)
@@ -2998,7 +2999,7 @@ class Bot:
         try:
             tmp = self.catchup_state_path + ".tmp"
             with open(tmp, "w") as f:
-                json.dump({"ctx": cs.ctx, "last_signal": cs.last_signal, "killed": cs.killed}, f)
+                json.dump({"ctx": cs.ctx, "last_signal": cs.last_signal, "exit_try": cs.exit_try, "killed": cs.killed}, f)
             os.replace(tmp, self.catchup_state_path)
         except OSError as e:
             log.warning("catchup state: %s", e)

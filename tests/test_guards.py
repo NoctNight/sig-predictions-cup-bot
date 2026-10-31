@@ -906,6 +906,15 @@ _o = _cr.run(T0)
 check("catchup room: our own unfilled clip on another leg (4,000 ordered, 0 held, 2,000) counts as pending D: net D 2,500 + 2,000 -> room 300 -> 594 shares",
       [x for x in _o if x[0] == "1042"] and [x for x in _o if x[0] == "1042"][0][2] == int(300 / 0.505), str(_o))
 check("catchup room: a failed fresh positions read means no clip or entry at all", _Real([_s1], {}).run(T0, fresh_positions=lambda: None) == [])
+# exit throttle across a restart: an exit that timed out may still be live for 60 s (review 31 Oct)
+_es = types.SimpleNamespace(catchup=types.SimpleNamespace(ctx={}, last_signal={}, killed=False, exit_try={"7": 123.5}),
+                            catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"))
+R.Bot.catchup_save(_es)
+_rs = open(R.__file__).read()
+_ei = _rs.index("cs.exit_try[ex] = now")
+check("catchup exit throttle: saved to the state file, read back at start, and saved before the exit order goes out, with or without a context",
+      _json.load(open(_es.catchup_state_path)).get("exit_try") == {"7": 123.5} and 'self.catchup.exit_try = {str(k): float(v)' in _rs
+      and _ei < _rs.index("self.catchup_save()", _ei) < _rs.index("self.api.place_order", _ei))
 # own quotes in the book
 _bk = {"bids": [{"price": 0.50, "quantity": 5000}], "asks": [{"price": 0.505, "quantity": 5000}, {"price": 0.51, "quantity": 1000}]}
 _oo = {"1042": [{"id": "m1", "side": "yes", "action": "sell", "priceLimit": 0.505, "quantity": 5000}]}
