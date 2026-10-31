@@ -275,6 +275,7 @@ class BotConfig:
     punt_max_budget: float = 150000.0    # hard ceiling on a plan's budget (cash brought in from outside the punt)
     punt_cash_floor: float = 100.0       # free cash the executor never spends
     offload_enabled: bool = False        # offload executor (proposals/offload_executor.py): sells a target's list from the plan file in
+    offload_conventional_sell: bool = False   # a basket too big for the cash: sold as a conventional sell, off until one is verified live
     offload_dry_run: bool = True         # about 5 min. Logs only while dry; live only by a session in which Sizhe approved the target in chat
     offload_plan_path: str = "data/research_offload/plan.json"
     offload_plan_sha256: str = ""        # SHA-256 of the approved plan file; any other bytes are refused

@@ -64,6 +64,7 @@ class Fake:
         self.tags = []
         self.keys, self.rest, self.resting, self.lag, self.lag_pos, self.lag_left = {}, False, [], 0, None, 0
         self.pull_writes, self.after = 0, 0
+        self.sell_ok, self.floors = True, {}
         self.lose_batch = False
 
     def now(self):
@@ -105,6 +106,9 @@ class Fake:
 
     def book(self, ex):
         return self.books.get(ex)
+
+    def set_floor(self, r):
+        return self.floors.get(r)
 
     def race_legs(self, r):
         return self.races[r]
@@ -257,6 +261,13 @@ def batches(f):
 # ---------------------------------------------------------------- switched off by default
 cfg = BotConfig()
 live = json.load(open(os.path.join(ROOT, "config.json")))
+_ba = types.SimpleNamespace(cfg=types.SimpleNamespace(offload_conventional_sell=False, wind_down_set_floor={"RI": 1.905}), churn=None, catchup_open={}, catchup=types.SimpleNamespace(ctx={"e1": {"target": 100}}),
+                            universe=types.SimpleNamespace(races={"X": types.SimpleNamespace(exchange_ids=["e1"]), "Y": types.SimpleNamespace(exchange_ids=["e2"])}),
+                            wind_down_hold_path=os.path.join(tempfile.mkdtemp(), "none.json"), punt_races=lambda: set(), punt_held_races=lambda: set(), shock_races=lambda: set())
+import sigbot.run as _R  # noqa: E402
+_ad = _R._OffloadAdapter(_ba)
+check("adapter: a catch-up trade with a context is left alone even before its fill is in the ledger; conventional sells default off; the wind-down floor is read",
+      _ad.busy("X") == "catch-up sweep" and _ad.busy("Y") is None and _ad.sell_ok is False and _ad.set_floor("RI") == 1.905, str(_ad.busy("X")))
 check("off: offload_enabled defaults false, offload_dry_run true, no approved hash", not cfg.offload_enabled and cfg.offload_dry_run and not cfg.offload_plan_sha256)
 check("off: config.json does not enable it or turn the dry run off", not live.get("offload_enabled") and live.get("offload_dry_run", True))
 check("tags: baskets and legs carry purposes the strategy stops own", all(p in SS.PURPOSE_LEDGER for p in ("raise_set", "raise", "cheapfav_exit")))
@@ -358,6 +369,22 @@ run(e, f)
 s0 = baskets(f)[0]
 check("cash: a buy that would gross above the cash balance goes as a conventional sell of what is held", all(l["action"] == "sell" and l["side"] == "no" for l in s0["legs"]), str(s0["legs"]))
 check("cash: the sell's limit is 1 - the buy's (the same floor)", abs(sum(l["price"] for l in s0["legs"]) - 1.94) < 1e-6, str(s0["legs"]))
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+f.bal, f.sell_ok = 300.0, False
+run(e, f, 60)
+check("cash: with conventional sells off a basket too big for the cash waits: nothing is sent", not f.sent, str(f.sent[:1]))
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+run(e, f)
+_wf = [len(s["legs"]) - sum(l["price"] for l in s["legs"]) for s in baskets(f)]
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+f.floors = {"RI": max(_wf) + 0.5}
+run(e, f, 60)
+check("floor: a race's set floor above the book sends nothing", not f.sent, str(f.sent[:1]))
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+f.floors = {"RI": min(_wf)}
+run(e, f)
+check("floor: at a floor the worst level meets, the sale goes and no basket's limits pass it",
+      baskets(f) and all(len(s["legs"]) - sum(l["price"] for l in s["legs"]) >= min(_wf) - 1e-9 for s in baskets(f)), str(_wf))
 e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
 f.fail = [AON()]
 run(e, f)

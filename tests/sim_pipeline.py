@@ -2688,6 +2688,7 @@ class OffloadSale(Scenario):
 class OffloadSaleSell(OffloadSale):
     name, cycles, seed = "offload_sell", 60, 61
     doc = "offload_sale with too little cash for the baskets' gross: they go as conventional sells, and the checks are the same"
+    cfg = dict(OffloadSale.cfg, offload_conventional_sell=True)
 
     def bot_setup(self, sim):
         super().bot_setup(sim)

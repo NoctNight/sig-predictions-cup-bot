@@ -33,8 +33,9 @@ the venue's responses; the position settles only sends whose outcome was unknown
 is never mistaken for a sale. Orders of unknown outcome hold every leg until they have expired.
 A list's below_payout_sets near 2,000 can trip rule 1b of the strategy stops (the raise ledger's hourly fall): 60k is about 1,840
 before slack and the wind-down's own costs, 80k is over. The sale then holds and ends: raising that limit is Sizhe's decision.
-A conventional sell has never been sent live (every order on record is a buy): the venue's fill sign for one is unverified, so watch
-the raise ledger if a basket logs "conventional sell".
+A conventional sell has never been sent live (every order on record is a buy) and the fills table has no action column, so every
+ledger would book it as a buy: off (the basket waits for cash) unless config offload_conventional_sell is true.
+A race in wind_down_set_floor is never sold under that floor, at the worst level of a basket (the limits, not the average).
 
 Dry run, against a book dump (sends nothing; positions come from the plan):
     python3 -m sigbot.proposals.offload_executor --target 20000
@@ -141,7 +142,8 @@ class OffloadExecutor:
       cap_ok(before, after) -> bool;  net_d(pos) -> float or None;  cap -> float;  abort_requested() -> bool;
       basket(race, kind, legs, key, q, proceeds, payout, sgn) -> response (raises with .status/.code/.details);
       batch(orders, key) -> [{"ok", "status", "data"}, ...] (raises);  record_leg(data, order, purpose);  cancel(ids) -> None (raises);
-      optional: pull_cost(exs) -> writes a pull will take;  after_batch() -> None"""
+      optional: pull_cost(exs) -> writes a pull will take;  after_batch() -> None;  set_floor(race) -> lowest price a set, or None;
+      sell_ok -> conventional sells allowed"""
 
     def __init__(self, plan_path: str, state_path: str, expected_sha: str, adapter, target: float, speed: str, start: str, stop: str,
                  writes_per_min: int = 15, slack_ticks: float = 2.0):
@@ -456,6 +458,12 @@ class OffloadExecutor:
         kind = r["kind"]
         plan_ps = r["plan_cash"] / r["qty"]
         floor = plan_ps - self.slack
+        hard = getattr(self.a, "set_floor", lambda race: None)(r["race"])   # Sizhe's floor: judged on the worst level, what the limits allow
+
+        def priced(w):
+            return (w is not None and w["proceeds"] >= floor - 1e-9
+                    and (not hard or WD.worst_set_price(kind, w, exs) >= hard - 1e-9))
+
         with self.a.lock():
             now = self._gate()
             if now is None:
@@ -484,10 +492,10 @@ class OffloadExecutor:
                 return None
             q = min(left, int(math.ceil(r["qty"] / baskets_of(r["qty"]))))
             wq = WD.walk_quote(kind, books, exs, q)
-            while not test and q > min(MIN_BASKET, left) and (wq is None or wq["proceeds"] < floor - 1e-9):
+            while not test and q > min(MIN_BASKET, left) and not priced(wq):
                 q = max(min(MIN_BASKET, left), q // 2)                # a shallow or dear book: a smaller basket, the rest later
                 wq = WD.walk_quote(kind, books, exs, q)
-            if wq is None or wq["proceeds"] < floor - 1e-9:
+            if not priced(wq):
                 got = "no depth" if wq is None else f"{wq['proceeds']:.4f}"
                 if test:
                     self.abort(f"test basket: {q} sets of {r['holding']} would fetch {got}, the plan says {plan_ps:.4f}")
@@ -503,6 +511,9 @@ class OffloadExecutor:
             buy_side = "yes" if kind == "sell_set" else "no"
             gross = q * sum(wq["limits"].values())
             if gross > CASH_MARGIN * bal:              # admitted on the gross: a conventional sell needs no cash
+                if not getattr(self.a, "sell_ok", False):   # no ledger books a sell yet (fills have no action): off until one is verified live
+                    self._wait(r, v, now, "cash", f"{r['holding']}: {q} sets would gross {gross:.0f} against {bal:.0f}: waiting for cash")
+                    return None
                 legs = [{"exchangeId": e, "side": "no" if buy_side == "yes" else "yes", "action": "sell", "quantity": q,
                          "price": round(1.0 - lim, 3)} for e, lim in wq["limits"].items()]
                 self.note(f"{r['holding']}: {q} sets would gross {gross:.0f} against {bal:.0f}: conventional sell")

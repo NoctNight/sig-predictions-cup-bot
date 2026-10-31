@@ -274,6 +274,7 @@ class _OffloadAdapter:
 
     def __init__(self, bot):
         self.b = bot
+        self.sell_ok = bool(getattr(bot.cfg, "offload_conventional_sell", False))
         self.vpos: dict = {}
         self.vcash = 0.0
 
@@ -336,6 +337,7 @@ class _OffloadAdapter:
             return "hold file"
         held = {str(e) for e in hold.get("exchanges", [])}
         catchup = {str(e) for e, q in (getattr(b, "catchup_open", None) or {}).items() if q}
+        catchup |= {str(e) for e in (getattr(getattr(b, "catchup", None), "ctx", None) or {})}   # a fill not ingested yet is in the positions, not the ledger
         for e in b.universe.races[race].exchange_ids:
             if e in held:
                 return "hold file"
@@ -369,6 +371,9 @@ class _OffloadAdapter:
 
     def pull_cost(self, exs: list) -> int:
         return 0 if self.dry else sum(1 for e in exs if (self.b.open_orders_cache or {}).get(e))
+
+    def set_floor(self, race: str):
+        return (getattr(self.b.cfg, "wind_down_set_floor", None) or {}).get(race)
 
     def cap_ok(self, before: dict, after: dict) -> bool:
         prices = self.b.mm.prices
