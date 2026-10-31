@@ -5017,11 +5017,16 @@ _q2, _w2 = WD.floor_clip("sell_set", _fb, ["a", "b", "c"], 4000, 100, 1.905)
 _q3, _ = WD.floor_clip("sell_set", _fb, ["a", "b", "c"], 500, 100, 1.92)
 check("ri floor: a 1,000-set clip that reaches 1.905 at its worst level goes; 4,000 sets would reach 1.90 and halve to 2,000; a floor above the touch sells nothing",
       _q1 == 1000 and abs(WD.worst_set_price("sell_set", _w1, ["a", "b", "c"]) - 1.905) < 1e-9 and _q2 == 2000 and _q3 == 0, f"{_q1} {_q2} {_q3}")
+_fs = {"a": {"asks": [{"price": 0.04, "quantity": 5000}]}, "b": {"asks": [{"price": 0.93, "quantity": 110}, {"price": 0.97, "quantity": 9000}]}, "c": {"asks": [{"price": 0.12, "quantity": 5000}]}}
+check("ri floor: halving past 125 still tries the 100-set minimum clip", WD.floor_clip("sell_set", _fs, ["a", "b", "c"], 1000, 100, 1.905)[0] == 100)
 _rt = open(R.__file__).read()
 _rc = _rt[_rt.index("def wind_down_candidates"):_rt.index("def wind_down_foreign")]
 _rk = _rt[_rt.index("def wind_down_set_clip"):_rt.index("def wind_down_leg_clip")]
 check("ri floor: the clip is sized by floor_clip, the gate and schedule are skipped only for a floored race, and the send re-checks the floor on the re-clamped quote",
       "WD.floor_clip(kind, books" in _rc and 'ok, gwhy, cap = True, f"floor' in _rc and "WD.worst_set_price(kind, wq, exs) < floor" in _rk)
+_rw = _rt[_rt.index("def wind_down_cycle"):_rt.index("def snapshot_books")]
+check("ri floor: the floored sale goes first and does not wait for the hourly exit-cost budget; cheapfav's cash need uses the same punt room as its orders",
+      'out.sort(key=lambda c: (0 if c.get("floor") else 1' in _rc and 'not c.get("floor") and used + c["est_cost"]' in _rw and _rt.count("net_d_ex=nd_ex") == 2)
 _cb = CF.CheapFavourites(budget=21000, min_edge=0.04, same_terms={"w", "x", "y"}, min_price=0.90, max_price=0.92, states={"WY": 19.0, "TN": 19.0, "RI": 19.0})
 _cr = [dict(race="Wyoming Senate", party="R", exchange_id="w", fair=0.985, sig_bid=0.89, sig_ask=0.895, pm=0.985, kalshi=0.985),
        dict(race="Wyoming Senate", party="D", exchange_id="wd", fair=0.015, sig_bid=None, sig_ask=None, pm=0.015, kalshi=0.015),

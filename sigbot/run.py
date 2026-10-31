@@ -2463,8 +2463,8 @@ class Bot:
             if wq is not None and q >= 1 and ok and wq["cost_frac"] <= cap + 1e-9:
                 out.append({"type": "set", "race": race, "kind": kind, "qty": q, "held": k, "books": books, "quote": wq,
                             "cap": cap, "cost_frac": wq["cost_frac"], "est_cost": q * wq["forgone"], "fallback": fb,
-                            "why": f"{why}; {gwhy}"})
-        out.sort(key=lambda c: c["cost_frac"])
+                            "floor": floor, "why": f"{why}; {gwhy}"})
+        out.sort(key=lambda c: (0 if c.get("floor") else 1, c["cost_frac"]))   # Sizhe's floored sale goes first
         return out
 
     def wind_down_foreign(self, e: str) -> bool:
@@ -2693,7 +2693,7 @@ class Bot:
             # past its fallback a clip may use the kill switch's room: the drawdown already holds this hour's exits, so the
             # larger of the two is counted once (review 2)
             used = max(spent, getattr(self, "wd_drawdown", 0.0)) if late else spent
-            if used + c["est_cost"] > (late_budget if late else budget):
+            if not c.get("floor") and used + c["est_cost"] > (late_budget if late else budget):   # a floored race's cost is bounded by its floor
                 if now - self.wd_cap_logged > 900:
                     self.wd_cap_logged = now
                     log.info("WIND-DOWN: hourly exit-cost budget %.0f reached (%.0f used): waiting", late_budget if late else budget, used)
@@ -3162,7 +3162,7 @@ class Bot:
                             blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()))   # the bot's block this cycle
         if getattr(self.cfg, "raise_enabled", False):  # what it would buy with unlimited cash: the shortfall is a cash need
             free = cf.entries(cands, held, deployed, 1e12, now, touch, positions, expo.net_d_notional,
-                              cap=self.cfg.mm.portfolio_max_partisan_notional, pend=(pend_d, pend_r), own=cf_pend,
+                              cap=self.cfg.mm.portfolio_max_partisan_notional, pend=(pend_d, pend_r), own=cf_pend, net_d_ex=nd_ex,
                               blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()))
             want = sum(o["notional"] for o in free)
             if want > sum(o["notional"] for o in orders) + 1:

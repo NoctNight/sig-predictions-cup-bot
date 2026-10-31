@@ -251,6 +251,9 @@ def floor_clip(kind: str, books: dict, exs: list, want: int, min_clip: int, floo
         if wq is not None and worst_set_price(kind, wq, exs) >= floor - 1e-9:
             return q, wq
         q //= 2
+    wq = walk_quote(kind, books, exs, min_clip)
+    if want >= min_clip and wq is not None and worst_set_price(kind, wq, exs) >= floor - 1e-9:
+        return min_clip, wq
     return 0, None
 
 
