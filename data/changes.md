@@ -489,3 +489,10 @@
 - Tests: test_guards `catchup room`, `catchup punt`, `catchup own quotes`, `catchup exit throttle`; precheck passed; sims 40 scenarios, 0 violations. Two independent reviews of the rebased code, the second narrow. Watch passed (settlement 105,372.7 -> 105,367.1), no tracebacks, no catch-up trade yet.
 - Known and left: a filled clip not yet ingested can be re-clipped once per 90 s, bounded by the cash and 15,000 limits.
 - Revert: set `catchup_enabled` false and deploy. A stop: add `catchup` to `params/strategy_kill.json` (read on mtime, no restart).
+
+## 2026-10-31 22:42 UTC
+- Sizhe: sell the positions that are not recovering and buy markets at 90-92% that are more than 4% under Kalshi/Polymarket. A check of the book found no real losers: most are favourites priced under the outside fair, plus set legs and C1's spread. Sizhe chose to raise the capital from the Rhode Island Governor sets, "please dont sell it at horrible prices".
+- `wind_down_set_floor` {"Rhode Island Governor": 1.905}: sold from now, 1,000 sets a clip, one clip per 30 min, every set at or above 1.905 (payout 2.00) by the leg limits. No schedule, timing gate, hourly budget or deadline for that race, and it goes first. The floor also stops the 3 Nov deadline sale: anything left needs a decision by 3 Nov.
+- Cheap favourites: `cheapfav_min_edge` 0.02 -> 0.04, new `cheapfav_min_price` 0.90 and `cheapfav_max_price` 0.92, `cheapfav_budget` 15,000 -> 21,000 (it was full), `cheapfav_cash_floor` 1,000 -> 100. The 15,000 shock reserve is unchanged. D adds count net D without the punt's legs, so C1's exit keeps its room.
+- Tests: test_guards `ri floor`, `cheapfav band`, `cheapfav punt room`; the live-config guard now pins these values. Sim `shock_reserve` keeps the sleeve at its old broad settings, because its refill needs that sleeve's trades. One independent review, its should-fix items done. Precheck passed.
+- Revert: remove `wind_down_set_floor`; set the four cheap favourites values back; deploy.
