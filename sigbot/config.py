@@ -194,7 +194,9 @@ class BotConfig:
     inside_ttl_sec: int = 300
     election_enabled: bool = False       # election-night sleeve (proposals/election_night): Sizhe switches it on for 3 Nov
     catchup_enabled: bool = False        # catch-up sweep trial (proposals/outside_sweep): take SIG's stale touch when PM+Kalshi moved
-    catchup_notional: float = 300.0      # per position; at most 4 open; sleeve switches itself off at catchup_kill
+    catchup_notional: float = 300.0      # base per trade (built in clips); tilted up to catchup_notional_max; sleeve switches itself off at catchup_kill
+    catchup_notional_max: float = 5000.0  # a trade never goes past this, whatever the tilt
+    catchup_max_open: float = 15000.0    # cost of everything the sleeve holds or has on order
     catchup_kill: float = -50.0
     churn_enabled: bool = False          # deviation churn (proposals/dev_churn): buy sell-sets only when unusually cheap,
     churn_capital: float = 12000.0       # sell after +2 ticks/set or 24 h; pot, cash floor and stop below

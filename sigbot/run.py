@@ -48,7 +48,8 @@ from .allocator import build_state_from_bot, offload_check
 from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
-from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
+from .proposals.outside_sweep import (CatchupSweep, avg_yes_from_fills, inputs_from_model, pnl_from_fills, rows_from_venue_quotes,
+                                      BUILD_WINDOW_FAST, BUILD_WINDOW_SLOW, CLIP_SLIPPAGE, CLIP_WAIT)
 from .proposals import cheap_favourites as CF
 from .proposals import gap_pilot as GP
 from .proposals import cash_raise as CR
@@ -764,7 +765,9 @@ class Bot:
             except Exception as e:
                 log.warning("election sleeve disabled: %s", e)
                 self.election = None
-        self.catchup = (CatchupSweep(notional=cfg.catchup_notional, kill_pnl=cfg.catchup_kill)
+        self.catchup = (CatchupSweep(notional=cfg.catchup_notional, kill_pnl=cfg.catchup_kill,
+                                     max_notional=getattr(cfg, "catchup_notional_max", 5000.0),
+                                     max_open_notional=getattr(cfg, "catchup_max_open", 15000.0))
                         if getattr(cfg, "catchup_enabled", False) else None)
         self.catchup_state_path = os.path.join(HERE, "params", "catchup_state.json")
         if self.catchup is not None:
@@ -775,10 +778,14 @@ class Bot:
                 self.catchup.killed = bool(st.get("killed", False))
             except Exception as e:                   # missing, corrupt or not a dict: start empty (positions without
                 log.warning("catchup state unreadable (%s): starting empty", e)   # context are then closed)
-            try:                                     # the 60-min look-back from stored quotes: no hour of waiting after a restart
+            try:                                     # polls / ratings for the conviction points (params/fair_model.json, read once)
+                self.catchup.inputs = inputs_from_model(json.load(open(os.path.join(HERE, "params", "fair_model.json"))))
+            except Exception as e:
+                log.warning("catchup conviction inputs unreadable (%s): no poll / rating points", e)
+            try:                                     # the look-back from stored quotes (3 h: the 60-min window and the 2 h unchanged point): no waiting after a restart
                 leg_of = {(r.name, p): l.exchange_id for r in self.universe.races.values() for p, l in r.legs.items()}
                 vq = self.store.rows("SELECT ts, venue, race, party, COALESCE(mid, (bid + ask) / 2.0) m FROM venue_quotes "
-                                     "WHERE ts > ? AND venue IN ('polymarket', 'kalshi', 'sig')", (time.time() - 5400,))
+                                     "WHERE ts > ? AND venue IN ('polymarket', 'kalshi', 'sig')", (time.time() - 3 * 3600,))
                 boot = rows_from_venue_quotes([(r["ts"], r["venue"], r["race"], r["party"], r["m"]) for r in vq], leg_of)
                 self.catchup.push(boot)
                 log.info("catchup: %d stored quote rows loaded as history (%d legs)", len(boot), len({r["exchange_id"] for r in boot}))
@@ -2259,6 +2266,7 @@ class Bot:
         if self.churn is not None:
             races.update({l["race"]: "high-frequency arb" for l in self.churn.lots})
         legs = {str(e): "catch-up sweep" for e, q in (getattr(self, "catchup_open", None) or {}).items() if q}
+        legs.update({str(e): "catch-up sweep" for e in (getattr(getattr(self, "catchup", None), "ctx", None) or {})})   # a trade being built in clips
         if self.store is not None:
             ph = ",".join("?" * len(WD.HOLD_PURPOSES))
             for r in self.store.rows(f"SELECT DISTINCT exchange_id FROM fills WHERE purpose IN ({ph}) UNION "
@@ -2745,8 +2753,10 @@ class Bot:
         return best[1] if best else None
 
     def catchup_cycle(self, dir_summary: dict, positions: dict, prices: dict, killed: bool):
-        """Catch-up sweep trial (proposals/outside_sweep.py): exits first (convergence, 12 h stop, outside disagreement or
-        reversal, kill, 3 Nov flatten), then entries on a fresh directional poll. Positions come from the fills table
+        """Catch-up sweep (proposals/outside_sweep.py): exits first (8 h fast / 20 h slow time stops, slow take-profit, outside
+        disagreement or reversal, kill, 3 Nov flatten; no convergence exit), then more clips of the trades being built, then
+        entries on a fresh directional poll. A trade is built in repeat clips of at most 0.8 of the touch. Only entries and
+        clips are limited by the partisan cap and the cash reserve; exits never are. Positions come from the fills table
         (purposes catchup / catchup_exit), so a restart cannot lose them. One order per exchange in flight (60 s TTL)."""
         cs = self.catchup
         if cs is None or self.dry_run or self.store is None:
@@ -2759,6 +2769,7 @@ class Bot:
         fills = [dict(r) for r in self.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('catchup','catchup_exit') ORDER BY filled_at")]
         marks = {ex: r.get("sig_mid") for ex, r in byex.items()}
         pnl, open_pos = pnl_from_fills(fills, marks)
+        avg = avg_yes_from_fills(fills)
         self.catchup_open = dict(open_pos)           # the MM excludes these from its inventory
         if not cs.killed and cs.check_kill(pnl):
             log.warning("CATCHUP: sleeve P&L %.1f at or below %.0f: switched off; open positions are being closed", pnl, cs.kill_pnl)
@@ -2773,7 +2784,7 @@ class Bot:
         for ex, q in open_pos.items():
             if ex in resting:
                 continue
-            why = cs.exit_reason(ex, byex.get(ex), now)
+            why = cs.exit_reason(ex, byex.get(ex), now, avg.get(ex), q)
             if not why:
                 continue
             bk = self.fresh_book(ex, 30.0)
@@ -2793,51 +2804,95 @@ class Bot:
                 resp = self.api.place_order(ex, side, "buy", int(abs(q)), px, expiration=expiry_in(60), key=self.api.new_key("cux"))
                 self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, int(abs(q)), "catchup_exit", response=resp)
                 log.info("CATCHUP exit %s %s x%d @%.3f (%s)", ex, side, int(abs(q)), px, why)
+                if ex in cs.ctx:
+                    cs.ctx[ex]["exiting"] = True       # no more clips of a trade that is being closed
+                    changed = True
             except ApiError as e:
                 log.warning("catchup exit %s: %s", ex, e)
         for ex in list(cs.ctx):
             if ex not in open_pos and ex not in resting and now - cs.ctx[ex].get("ts", now) > 300:
                 cs.ctx.pop(ex)                      # flat and settled: forget the entry context
                 changed = True
-        if not killed and not cs.killed and dir_summary.get("polled") and not strategy_paused(self, "catchup"):
-            sigs = [s for s in cs.signals(rows, now) if s["race"] not in punt_races_of(self)]
-            if sigs:
-                expo = risk.exposure(self.universe, positions, prices)
-                n_open = len(open_pos) + len([e for e in resting if e not in open_pos])
-                for s in sigs:
-                    ex = s["exchange_id"]
-                    if ex in open_pos or ex in resting or ex in cs.ctx:
-                        continue
-                    bk = self.fresh_book(ex, 10.0)
-                    if not bk or not bk.get("bids") or not bk.get("asks"):
-                        continue
-                    b0, a0 = bk["bids"][0], bk["asks"][0]
-                    if a0["price"] - b0["price"] > 2 * TICK + 1e-9:
-                        continue
-                    s = dict(s, bid=b0["price"], ask=a0["price"])
-                    side, px, q = cs.size(s, (a0 if s["d"] > 0 else b0)["quantity"])
-                    if not q:
-                        continue
-                    if not cs.can_enter(n_open, risk.adds(self.universe, ex, side), expo.net_d_notional, q * px,
-                                        cap=self.cfg.mm.portfolio_max_partisan_notional):
-                        continue
-                    if shock_reserve(self) > 0 and spendable_cash(self) < q * px:
-                        continue                               # the shock reserve is not catch-up's to spend
-                    try:
-                        resp = self.api.place_order(ex, side, "buy", q, px, expiration=expiry_in(60), key=self.api.new_key("cu"))
-                        self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, q, "catchup", response=resp)
-                        self.cash = getattr(self, "cash", 0.0) - q * px   # the next entry this cycle sees it (shock reserve)
-                    except ApiError as e:
-                        log.warning("catchup entry %s: %s", ex, e)
-                        continue
-                    adds_dir = risk.adds(self.universe, ex, side)
-                    expo.net_d_notional += q * px if adds_dir == "D" else (-q * px if adds_dir == "R" else 0.0)   # next signal sees it
-                    cs.ctx[ex] = {"ts": now, "d": s["d"], "f_then": s["f_then"], "move": s["move"], "mid0": s["mid"], "gap": s["gap"]}
+        can_trade = not killed and not cs.killed and dir_summary.get("polled") and not strategy_paused(self, "catchup")
+        building = [ex for ex, c in cs.ctx.items() if can_trade and c.get("target") and not c.get("exiting") and ex not in resting
+                    and now < c.get("build_until", 0.0)]
+        sigs = [s for s in cs.signals(rows, now) if s["race"] not in punt_races_of(self)] if can_trade else []
+        if building or sigs:
+            cap = self.cfg.mm.portfolio_max_partisan_notional
+            expo = risk.exposure(self.universe, positions, prices)
+            n_open = len(open_pos) + len([e for e in resting if e not in open_pos])
+            open_cost = sum(abs(q) * (avg[e] if q > 0 else 1.0 - avg[e]) for e, q in open_pos.items() if e in avg)
+
+            def clip(ex, s, remaining, first):
+                """One clip on ex for signal s: priced at the fresh touch, cut to the partisan room, the sleeve's open-cost limit
+                and the spendable cash (shock reserve). Returns the notional placed (0 if nothing)."""
+                nonlocal open_cost
+                bk = self.fresh_book(ex, 10.0)
+                if not bk or not bk.get("bids") or not bk.get("asks"):
+                    return 0.0
+                b0, a0 = bk["bids"][0], bk["asks"][0]
+                if a0["price"] - b0["price"] > 2 * TICK + 1e-9:
+                    return 0.0
+                s = dict(s, bid=b0["price"], ask=a0["price"])
+                side, px, q = cs.size(s, (a0 if s["d"] > 0 else b0)["quantity"], remaining)
+                if not q:
+                    return 0.0
+                if not first and px > cs.ctx[ex]["px0"] + CLIP_SLIPPAGE + 1e-9:
+                    return 0.0                             # the touch ran away from the first clip
+                adds_dir = risk.adds(self.universe, ex, side)
+                q = min(q, int(cs.room(adds_dir, expo.net_d_notional, cap) / max(px, 0.01)),
+                        int(max(0.0, cs.max_open_notional - open_cost) / max(px, 0.01)))
+                if shock_reserve(self) > 0:
+                    q = min(q, int(max(0.0, spendable_cash(self)) / max(px, 0.01)))     # the shock reserve is not catch-up's to spend
+                if q < cs.min_shares or not cs.can_enter(n_open if first else 0, adds_dir, expo.net_d_notional, q * px, cap=cap):
+                    return 0.0
+                try:
+                    resp = self.api.place_order(ex, side, "buy", q, px, expiration=expiry_in(60), key=self.api.new_key("cu"))
+                    self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, q, "catchup", response=resp)
+                    self.cash = getattr(self, "cash", 0.0) - q * px   # the next entry this cycle sees it (shock reserve)
+                except ApiError as e:
+                    log.warning("catchup entry %s: %s", ex, e)
+                    return 0.0
+                open_cost += q * px
+                expo.net_d_notional += q * px if adds_dir == "D" else (-q * px if adds_dir == "R" else 0.0)   # next clip sees it
+                if first:
+                    cs.ctx[ex] = {"ts": now, "d": s["d"], "f_then": s["f_then"], "move": s["move"], "mid0": s["mid"], "gap": s["gap"],
+                                  "kind": s["kind"], "pts": s["pts"], "right": bool(s["right"]), "px0": px, "target": cs.target_shares(s, px),
+                                  "ordered": q, "clips": 1, "last_clip": now,
+                                  "build_until": now + (BUILD_WINDOW_FAST if s["kind"] == "fast" else BUILD_WINDOW_SLOW)}
                     cs.last_signal[s["race"]] = now
+                else:
+                    c = cs.ctx[ex]
+                    c["ordered"] = c.get("ordered", 0) + q
+                    c["clips"] = c.get("clips", 1) + 1
+                    c["last_clip"] = now
+                log.info("CATCHUP %s %s %s %s x%d @%.3f (%s %d pts%s, clip %d of target %d): outside moved %+.3f, SIG gap %.1f ticks",
+                         "enter" if first else "clip", s["race"], ex, side, q, px, s["kind"], s["pts"], ", right of the line" if s["right"] else "",
+                         cs.ctx[ex]["clips"], cs.ctx[ex]["target"], s["move"], s["gap"] / TICK)
+                return q * px
+
+            for ex in building:                            # more clips of the trades being built
+                c = cs.ctx[ex]
+                held = abs(open_pos.get(ex, 0.0))
+                if now - c.get("last_clip", 0.0) >= CLIP_WAIT:
+                    c["ordered"] = held                    # the last order is over (filled or expired): count what we hold
+                elif held < c.get("ordered", 0) - cs.min_shares:
+                    continue                               # the last clip is still settling
+                remaining = c["target"] - c["ordered"]
+                row = byex.get(ex)
+                if remaining < cs.min_shares or row is None or cs.exit_reason(ex, row, now, avg.get(ex), open_pos.get(ex, 0.0)):
+                    continue
+                s = {"d": c["d"], "race": row.get("race"), "kind": c.get("kind"), "pts": c.get("pts", 0), "right": c.get("right", False),
+                     "f_then": c["f_then"], "move": c["move"], "mid": row.get("sig_mid") or c["mid0"], "gap": c["gap"]}
+                if clip(ex, s, remaining, False):
+                    changed = True
+            for s in sigs:
+                ex = s["exchange_id"]
+                if ex in open_pos or ex in resting or ex in cs.ctx:
+                    continue
+                if clip(ex, s, None, True):
                     n_open += 1
                     changed = True
-                    log.info("CATCHUP enter %s %s %s x%d @%.3f: outside moved %+.3f, SIG gap %.1f ticks", s["race"], ex, side, q, px,
-                             s["move"], s["gap"] / TICK)
         if changed or cs.killed:
             try:
                 tmp = self.catchup_state_path + ".tmp"

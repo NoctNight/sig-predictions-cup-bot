@@ -499,25 +499,29 @@ check("catchup: one leg per race (D), never both legs of the same move", [x["exc
 _, sg = _cs([_row(OS.LAST_ENTRY - 3600, 0.50, 0.50, 0.50)], [_row(OS.LAST_ENTRY + 60, 0.53, 0.53, 0.50)])
 check("catchup: no entries after 2 Nov 23:30 ET", sg == [])
 cs = OS.CatchupSweep()
-check("catchup: size = 300 notional at the touch, capped by 80% of the touch", cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 5000)[2] == 600
-      and cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 400)[2] == 320 and cs.size({"d": -1, "ask": 0.705, "bid": 0.7}, 5000)[:2] == ("no", 0.3))
+check("catchup: a clip is at the touch, capped by 80% of what shows (first clip of a 2,500 trade at 50c: 5,000 shares wanted)",
+      cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 5000)[2] == 4000 and cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 400)[2] == 320
+      and cs.size({"d": -1, "ask": 0.705, "bid": 0.7}, 5000)[:2] == ("no", 0.3) and cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 5000, 700)[2] == 700)
 check("catchup: tiny touch -> no trade", cs.size({"d": 1, "ask": 0.5, "bid": 0.495}, 100)[2] == 0)
 check("catchup: partisan cap: no D-adding entry near the cap, R-adding allowed, never past the cap",
       not cs.can_enter(0, "D", 4850, 300) and cs.can_enter(0, "R", 4850, 300) and not cs.can_enter(0, "D", 4600, 500)
       and cs.can_enter(0, "D", 2000, 300))
-check("catchup: at most 4 open positions", not cs.can_enter(4, "R", 0, 300) and cs.can_enter(3, "R", 0, 300))
+check("catchup: at most 6 open positions", not cs.can_enter(6, "R", 0, 300) and cs.can_enter(5, "R", 0, 300))
 cs.ctx["10"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03}
-check("catchup: exit when SIG has moved 70% of the gap", cs.exit_reason("10", _row(T0 + 600, 0.53, 0.53, 0.521), T0 + 600) == "SIG caught up")
+check("catchup: NO exit when SIG has moved 70% of the gap (31 Oct: the convergence exit cut the winners; was 'SIG caught up')",
+      cs.exit_reason("10", _row(T0 + 600, 0.53, 0.53, 0.521), T0 + 600) is None and cs.exit_reason("10", _row(T0 + 600, 0.53, 0.53, 0.53), T0 + 600) is None)
 check("catchup: hold while SIG has not caught up and the outside holds", cs.exit_reason("10", _row(T0 + 600, 0.53, 0.53, 0.51), T0 + 600) is None)
 check("catchup: exit when the outside move reverts", cs.exit_reason("10", _row(T0 + 600, 0.505, 0.505, 0.50), T0 + 600) == "outside move reverted")
 check("catchup: exit when Polymarket and Kalshi disagree by > 4 pts", cs.exit_reason("10", _row(T0 + 600, 0.58, 0.53, 0.50), T0 + 600) is not None)
-check("catchup: 12 h time stop", cs.exit_reason("10", _row(T0 + 43201, 0.53, 0.53, 0.51), T0 + 43201) == "12 h time stop")
+check("catchup: a position whose context has no kind (written by the old code) keeps its 12 h time stop",
+      cs.exit_reason("10", _row(T0 + 43201, 0.53, 0.53, 0.51), T0 + 43201) == "12 h time stop (legacy)" and cs.exit_reason("10", _row(T0 + 43100, 0.53, 0.53, 0.51), T0 + 43100) is None)
 check("catchup: flatten everything before the punt (3 Nov 11:30 ET)", cs.exit_reason("10", _row(OS.FLATTEN_AT, 0.53, 0.53, 0.51), OS.FLATTEN_AT) is not None)
 check("catchup: a position without entry context (restart) is closed", cs.exit_reason("99", None, T0) is not None)
 pnl, op = OS.pnl_from_fills([{"exchange_id": "10", "quantity": 600, "price": 0.50}, {"exchange_id": "10", "quantity": -600, "price": 0.41}], {})
 check("catchup: P&L from fills (buy 600 @0.50, sell @0.41 = -54) and the sleeve switches itself off at -50",
       abs(pnl + 54) < 1e-6 and op == {} and cs.check_kill(pnl) and cs.signals([_row(T0 + 3600, 0.53, 0.53, 0.50)], T0 + 3600) == [])
-check("catchup: live config: trial on, 300 per position, -50 stop", _live.get("catchup_enabled") is True and _live.get("catchup_notional") == 300.0
+check("catchup: live config: on, 2,500 base a trade tilted to at most 5,000, 15k open at most, -50 stop", _live.get("catchup_enabled") is True
+      and _live.get("catchup_notional") == 2500.0 and _live.get("catchup_notional_max") == 5000.0 and _live.get("catchup_max_open") == 15000.0
       and _live.get("catchup_kill") == -50.0)
 
 # review 23 Oct (catch-up): cap per entry, missing marks, exits off a fresh/REST book, MM inventory
@@ -552,17 +556,221 @@ def _cbot(fills, sigs, net_d, fresh=True):
         R.risk.exposure = _orig
     return b, sent
 _sigs = [{"exchange_id": str(i), "race": "R%d" % i, "party": "D", "d": 1, "move": 0.03, "f_now": 0.53, "f_then": 0.50, "mid": 0.5025, "gap": 0.0275,
-          "bid": 0.50, "ask": 0.505} for i in range(4)]
+          "bid": 0.50, "ask": 0.505, "kind": "slow", "pts": 0, "right": False, "move30": None} for i in range(4)]
 _b, _sent = _cbot([], _sigs, 4400.0)
-check("catchup: four D-adding signals in one poll at net D 4,400: entries stop before net D passes 5,000 (was: all four, 5,600)",
-      len(_sent) == 2 and 4400.0 + sum(x[2] * x[3] for x in _sent) <= 5000.0 + 1e-6, str(_sent))
+check("catchup: four D-adding signals in one poll at net D 4,400: entries stop at net D 4,800 (clip cut to the room), never past 5,000 (was: all four, 5,600)",
+      len(_sent) == 1 and 4400.0 + sum(x[2] * x[3] for x in _sent) <= 4800.0 + 1e-6 and _sent[0][2] * _sent[0][3] > 350, str(_sent))
 _b, _sent = _cbot([], _sigs, 0.0)
-check("catchup: ... and with room, at most 4 entries of <= 300 each", len(_sent) == 4 and all(x[2] * x[3] <= 300.0 + 1e-6 for x in _sent), str(_sent))
+check("catchup: four D-adding signals at net D 0: clips stop at net D 4,800 (the third is cut to the room, the fourth gets none), each <= 80% of its touch",
+      len(_sent) == 3 and sum(x[2] * x[3] for x in _sent) <= 4800.0 + 1e-6 and sum(x[2] * x[3] for x in _sent) > 4700.0, str(_sent))
+_b, _sent = _cbot([], _sigs, -4000.0)
+check("catchup: ... with net D -4,000 all four D-adding entries fit, each <= 2,500 (base size), up to 80% of the touch (4,000 shares)",
+      len(_sent) == 4 and all(x[2] * x[3] <= 2500.0 + 1e-6 and x[2] == 4000 for x in _sent), str(_sent))
 _b, _sent = _cbot([{"exchange_id": "7", "quantity": 600.0, "price": 0.50}], [], 0.0, fresh=False)
 check("catchup: an exit with no fresh feed book is priced off a REST read (sell YES at its bid 0.48 = buy NO @0.52), never a stale row",
       _sent == [("7", "no", 600, 0.52)], str(_sent))
 _mmb = types.SimpleNamespace(catchup_open={"5": 600.0})
 check("mm: the catch-up sweep's own position is not counted as MM inventory", R.Bot.mm_positions(_mmb, {"5": 650.0, "6": -10.0}) == {"5": 50.0, "6": -10.0})
+
+# ---------------------------------------------------------------- 31 Oct: catch-up follows the dir_alpha research (exits, size, cap, wind-down)
+# fast / slow tag
+def _hist(rows_by_age, now_row):
+    c = OS.CatchupSweep(); [c.push([r]) for r in rows_by_age]; c.push([now_row])
+    return c, c.signals([now_row], now_row["ts"])
+_fast_then = [_row(T0, 0.50, 0.50, 0.50), _row(T0 + 1800, 0.51, 0.51, 0.50)]
+_cf, sg = _hist(_fast_then, _row(T0 + 3600, 0.53, 0.53, 0.50))
+check("catchup tag: both venues up 2c in the last 30 min, SIG flat, leg at 50c -> fast", len(sg) == 1 and sg[0]["kind"] == "fast", str(sg))
+_cf, sg = _hist([_row(T0, 0.50, 0.50, 0.50), _row(T0 + 1800, 0.525, 0.525, 0.50)], _row(T0 + 3600, 0.53, 0.53, 0.50))
+check("catchup tag: the move came earlier (only 0.5c in the last 30 min) -> slow", len(sg) == 1 and sg[0]["kind"] == "slow", str(sg))
+_cf, sg = _hist([_row(T0, 0.50, 0.50, 0.50), _row(T0 + 1800, 0.515, 0.515, 0.50)], _row(T0 + 3600, 0.53, 0.53, 0.508))
+check("catchup tag: SIG copied half of the 30-min move (0.8c of 1.5c) -> slow, not fast", len(sg) == 1 and sg[0]["kind"] == "slow", str(sg))
+_cf, sg = _hist([_row(T0, 0.82, 0.82, 0.82), _row(T0 + 1800, 0.83, 0.83, 0.82)], _row(T0 + 3600, 0.85, 0.85, 0.82))
+check("catchup tag: leg priced 82c is outside the fast 25-75 range -> slow, and slow with our side at 82c+ is skipped", sg == [], str(sg))
+_cf, sg = _hist([_row(T0, 0.70, 0.70, 0.70), _row(T0 + 1800, 0.71, 0.71, 0.70)], _row(T0 + 3600, 0.73, 0.73, 0.70, bid=0.6975, ask=0.7025))
+check("catchup tag: a fast signal with our side at 70.25c is NOT skipped (the 70c filter is slow only)", len(sg) == 1 and sg[0]["kind"] == "fast", str(sg))
+_cf, sg = _hist([_row(T0, 0.67, 0.67, 0.67)], _row(T0 + 3600, 0.70, 0.70, 0.67, bid=0.6675, ask=0.6725))
+check("catchup filter: slow with our side at 67.25c is kept, ...", len(sg) == 1 and sg[0]["kind"] == "slow", str(sg))
+_cf, sg = _hist([_row(T0, 0.70, 0.70, 0.70)], _row(T0 + 3600, 0.73, 0.73, 0.70, bid=0.6975, ask=0.7025))
+check("catchup filter: ... slow with our side at 70.25c (the ask) is skipped; selling a leg at 30c costs 70.25c on the NO side, also skipped",
+      sg == [] and _hist([_row(T0, 0.30, 0.30, 0.30)], _row(T0 + 3600, 0.27, 0.27, 0.30, bid=0.2975, ask=0.3025))[1] == [])
+# conviction points and the line
+_cp = OS.CatchupSweep()
+_cp.inputs = {"Rc": {"n_polls": 0, "rating_margin": 1.0}, "Rp": {"n_polls": 3, "rating_margin": 6.0}}
+check("catchup points: no polls (1) + toss-up (1) + gap 3c in the upper two thirds (1) = 3; a polled lean race with a 1c gap = 0",
+      _cp.points("Rc", "slow", 0.0, 0.03, None) == 3 and _cp.points("Rp", "slow", 0.0, 0.01, None) == 0 and _cp.points("Rc", "slow", 0.0, 0.01, None) == 2)
+check("catchup points: quote unchanged 2 h+ is a point (7,199 s is not), fast counts the 30-min move (2.28c) instead of the gap, an unknown race has none of the model points",
+      _cp.points("Rp", "slow", 7200.0, 0.01, None) == 1 and _cp.points("Rp", "slow", 7199.0, 0.01, None) == 0
+      and _cp.points("Rp", "fast", 0.0, 0.05, 0.0227) == 0 and _cp.points("Rp", "fast", 0.0, 0.0, 0.0229) == 1 and _cp.points("Nowhere", "slow", 0.0, 0.0, None) == 0)
+_cu = OS.CatchupSweep(); _cu.push([_row(T0, 0.5, 0.5, 0.50)]); _cu.push([_row(T0 + 5000, 0.5, 0.5, 0.50)]); _cu.push([_row(T0 + 8000, 0.5, 0.5, 0.505)])
+check("catchup points: the unchanged clock restarts when SIG's mid moves (a short history reads short, never long)",
+      _cu.unchanged_for("10", T0 + 8000) == 0.0 and _cu.unchanged_for("10", T0 + 8000 + 7300) == 7300.0 and OS.CatchupSweep().unchanged_for("10", T0) == 0.0)
+_cf, sg = _hist([_row(T0, 0.50, 0.50, 0.50), _row(T0 + 1800, 0.51, 0.51, 0.50)], _row(T0 + 3600, 0.53, 0.53, 0.50))
+check("catchup line: the leg at 50c, outside 53c: the market maker's line is 52.76c, 2.76c on the right side of a buy -> right", sg[0]["right"] is True)
+_cf, sg = _hist([_row(T0, 0.50, 0.50, 0.50)], _row(T0 + 3600, 0.53, 0.53, 0.5095))
+check("catchup line: SIG already at 50.95c (1.8c under the line) -> not right-side; ... and a sell with the leg richer than the line is right-side",
+      sg[0]["right"] is False and _hist([_row(T0, 0.50, 0.50, 0.50)], _row(T0 + 3600, 0.47, 0.47, 0.50))[1][0]["right"] is True)
+# size
+_s0 = {"kind": "slow", "pts": 0, "right": False, "move30": None}
+_cz = OS.CatchupSweep()
+check("catchup size: base 2,500; 2 points x1.4 = 3,500; 3+ points x2 = 5,000; right of the line x1.4 (both 4,900); 3+ and right capped at 5,000 (never 7,000)",
+      abs(_cz.target_notional(_s0) - 2500) < 1e-6 and abs(_cz.target_notional(dict(_s0, pts=1)) - 2500) < 1e-6
+      and abs(_cz.target_notional(dict(_s0, pts=2)) - 3500) < 1e-6 and abs(_cz.target_notional(dict(_s0, pts=3)) - 5000) < 1e-6
+      and abs(_cz.target_notional(dict(_s0, right=True)) - 3500) < 1e-6 and abs(_cz.target_notional(dict(_s0, pts=2, right=True)) - 4900) < 1e-6
+      and abs(_cz.target_notional(dict(_s0, pts=4, right=True)) - 5000) < 1e-6)
+check("catchup size: a fast signal under 2.3c (smallest third) gets 0.6 of the base, one at 2.3c+ gets the full tilt",
+      abs(_cz.target_notional(dict(_s0, kind="fast", move30=0.02)) - 1500) < 1e-6 and abs(_cz.target_notional(dict(_s0, kind="fast", move30=-0.0231)) - 2500) < 1e-6)
+check("catchup size: shares for the trade come from the dollars at the touch (5,000 at 50c, 16,667 at 30c capped at 15,000 shares)",
+      _cz.target_shares(dict(_s0, pts=3), 0.50) == 10000 and _cz.target_shares(dict(_s0, pts=3), 0.30) == 15000
+      and OS.CatchupSweep(notional=300.0).target_shares(_s0, 0.50) == 600)
+# exits
+def _xcs(kind, px_yes=0.50, d=1):
+    c = OS.CatchupSweep(); c.ctx["10"] = {"ts": T0, "d": d, "f_then": 0.50 if d > 0 else 0.50, "move": 0.03 * d, "mid0": 0.50, "gap": 0.03, "kind": kind}
+    return c
+def _xrow(t, mid, bid=None, ask=None, pm=0.53, k=0.53):
+    return _row(t, pm, k, mid, bid=bid, ask=ask)
+_fx = _xcs("fast")
+check("catchup exit fast: sold at 8 h (28,800 s), held at 7 h 59 min", _fx.exit_reason("10", _xrow(T0 + 28800, 0.51), T0 + 28800) == "8 h time stop (fast)"
+      and _fx.exit_reason("10", _xrow(T0 + 28740, 0.51), T0 + 28740) is None)
+check("catchup exit fast: no take-profit however far it is up (+8c at 2 h), no stop however far it is down (-8c at 2 h)",
+      _fx.exit_reason("10", _xrow(T0 + 7200, 0.58, bid=0.58, ask=0.585), T0 + 7200, 0.50, 3000.0) is None
+      and _fx.exit_reason("10", _xrow(T0 + 7200, 0.42, bid=0.42, ask=0.425), T0 + 7200, 0.50, 3000.0) is None)
+_sx = _xcs("slow")
+check("catchup exit slow: held at 12 h and 19 h 59 min (was sold at 12 h), sold at 20 h",
+      _sx.exit_reason("10", _xrow(T0 + 43201, 0.51), T0 + 43201) is None and _sx.exit_reason("10", _xrow(T0 + 71940, 0.51), T0 + 71940) is None
+      and _sx.exit_reason("10", _xrow(T0 + 72000, 0.51), T0 + 72000) == "20 h time stop (slow)")
+check("catchup exit slow: take-profit at +3c on the bid (bought YES at 50c, bid 53c), not at +2.9c; none without a known entry price",
+      (_sx.exit_reason("10", _xrow(T0 + 3600, 0.535, bid=0.53, ask=0.54), T0 + 3600, 0.50, 3000.0) or "").startswith("slow take-profit")
+      and _sx.exit_reason("10", _xrow(T0 + 3600, 0.5325, bid=0.529, ask=0.535), T0 + 3600, 0.50, 3000.0) is None
+      and _sx.exit_reason("10", _xrow(T0 + 3600, 0.535, bid=0.53, ask=0.54), T0 + 3600) is None)
+_sn = _xcs("slow", d=-1); _sn.ctx["10"]["f_then"] = 0.53; _sn.ctx["10"]["move"] = -0.03
+check("catchup exit slow: a NO position (short YES at an average YES price of 0.60) takes profit when the ask is 3c lower (0.57), not at 0.575",
+      (_sn.exit_reason("10", _xrow(T0 + 3600, 0.565, bid=0.56, ask=0.57, pm=0.50, k=0.50), T0 + 3600, 0.60, -3000.0) or "").startswith("slow take-profit")
+      and _sn.exit_reason("10", _xrow(T0 + 3600, 0.57, bid=0.565, ask=0.575, pm=0.50, k=0.50), T0 + 3600, 0.60, -3000.0) is None)
+check("catchup exit slow: no hard stop on a loser (-6c at 6 h while the outside holds): held; the outside reverting still sells it",
+      _sx.exit_reason("10", _xrow(T0 + 21600, 0.44, bid=0.44, ask=0.445), T0 + 21600, 0.50, 3000.0) is None
+      and _sx.exit_reason("10", _xrow(T0 + 21600, 0.44, bid=0.44, ask=0.445, pm=0.505, k=0.505), T0 + 21600, 0.50, 3000.0) == "outside move reverted")
+check("catchup exit: Polymarket / Kalshi disagreement and the 3 Nov flatten still sell fast and slow",
+      _fx.exit_reason("10", _xrow(T0 + 600, 0.50, pm=0.58, k=0.53), T0 + 600) is not None and _sx.exit_reason("10", _xrow(OS.FLATTEN_AT, 0.50), OS.FLATTEN_AT) is not None)
+check("catchup exit: average YES price from fills: adds weight it, a part-sale keeps it, a flip restarts it at the flipping price",
+      OS.avg_yes_from_fills([{"exchange_id": "1", "quantity": 1000, "price": 0.50}, {"exchange_id": "1", "quantity": 1000, "price": 0.52}]) == {"1": 0.51}
+      and OS.avg_yes_from_fills([{"exchange_id": "1", "quantity": 1000, "price": 0.50}, {"exchange_id": "1", "quantity": -400, "price": 0.55}]) == {"1": 0.50}
+      and abs(OS.avg_yes_from_fills([{"exchange_id": "1", "quantity": 1000, "price": 0.50}, {"exchange_id": "1", "quantity": -1500, "price": 0.55}])["1"] - 0.55) < 1e-9
+      and OS.avg_yes_from_fills([{"exchange_id": "1", "quantity": 1000, "price": 0.50}, {"exchange_id": "1", "quantity": -1000, "price": 0.55}]) == {})
+# the partisan room: only adds are limited
+check("catchup cap: room to add D is cap - 200 - net D (0 at net D +4,965), room to add R is cap - 200 + net D (9,765 there); other legs unlimited",
+      OS.CatchupSweep.room("D", 4965.0) == 0.0 and abs(OS.CatchupSweep.room("R", 4965.0) - 9765.0) < 1e-6
+      and abs(OS.CatchupSweep.room("D", 3000.0) - 1800.0) < 1e-6 and OS.CatchupSweep.room(None, 4965.0) == float("inf") and OS.CatchupSweep.room("D", 5300.0) == 0.0)
+
+# cycle level: repeat clips, partisan room for adds only, open-cost limit, cash reserve, exits at the cap, wind-down
+class _Cyc:
+    """A catch-up bot that lives across cycles: fills the test adds are what the store returns, the clock is set per cycle."""
+    def __init__(self, sig=None, net_d=-4000.0, rows=None, touch=(0.50, 0.505, 5000), cash=None, **cskw):
+        self.sent, self.fills, self.net_d, self.touch = [], [], net_d, touch
+        self.cs = OS.CatchupSweep(**cskw)
+        self.sig = dict(sig) if sig else None
+        races = {"R%d" % i: types.SimpleNamespace(legs={}) for i in range(4)}
+        uni = types.SimpleNamespace(by_exchange={str(i): ("R%d" % i, "D") for i in range(4)}, races=races)
+        self.rows = rows if rows is not None else [{"exchange_id": "0", "race": "R0", "party": "D", "sig_mid": 0.5025, "pm": 0.53, "kalshi": 0.53,
+                                                   "sig_bid": 0.50, "sig_ask": 0.505}]
+        store = _CStore(self.fills)
+        self.bot = types.SimpleNamespace(catchup=self.cs, dry_run=False, store=store, direction=types.SimpleNamespace(rows=self.rows),
+                                         universe=uni, open_orders_cache={}, cfg=types.SimpleNamespace(mm=types.SimpleNamespace(portfolio_max_partisan_notional=5000.0)),
+                                         fresh_book=lambda ex, age=None: {"bids": [{"price": self.touch[0], "quantity": self.touch[2]}], "asks": [{"price": self.touch[1], "quantity": self.touch[2]}]},
+                                         get_book=lambda ex, depth=50, client=None, max_age=None: {"bids": [{"price": 0.48, "quantity": 5000}], "asks": [{"price": 0.485, "quantity": 5000}]},
+                                         api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: self.sent.append((ex, side, q, px, key)) or {"orderId": len(self.sent)},
+                                                                   new_key=lambda p: p),
+                                         catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"))
+        if cash is not None:
+            self.bot.cash, self.bot.cfg.shock_enabled, self.bot.cfg.shock_reserve = cash, True, 15000.0
+        if sig:
+            self.cs.signals = lambda rows, now: [self.sig] if self.sig else []
+    def run(self, t):
+        _orig, _ot = R.risk.exposure, time.time
+        R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=self.net_d)
+        time.time = lambda: t
+        n0 = len(self.sent)
+        try:
+            R.Bot.catchup_cycle(self.bot, {"polled": True}, {}, {}, False)
+        finally:
+            R.risk.exposure, time.time = _orig, _ot
+        return self.sent[n0:]
+    def fill(self, ex, q, px):
+        self.fills.append({"exchange_id": ex, "quantity": q, "price": px})
+        self.net_d += q * px                         # a D leg bought adds D, sold (NO bought) adds R
+_sg = {"exchange_id": "0", "race": "R0", "party": "D", "d": 1, "move": 0.03, "f_now": 0.53, "f_then": 0.50, "mid": 0.5025, "gap": 0.0275,
+       "bid": 0.50, "ask": 0.505, "kind": "slow", "pts": 3, "right": True, "move30": None}
+_c = _Cyc(_sg)                                                  # target 5,000 at 50.5c = 9,900 shares, touch 5,000 -> clips of 4,000
+_o1 = _c.run(T0)
+_c.fill("0", 4000, 0.505); _o2 = _c.run(T0 + 30)
+_c.fill("0", 4000, 0.505); _o3 = _c.run(T0 + 60)
+_c.fill("0", 1900, 0.505); _o4 = _c.run(T0 + 90)
+check("catchup clips: 3,000-share-plus trade built in repeat clips of 80% of the touch (4,000 + 4,000 + 1,900 = the 9,900 target at 50.5c), then no more",
+      [x[2] for x in _o1 + _o2 + _o3] == [4000, 4000, 1900] and _o4 == [] and all(x[1] == "yes" and x[3] == 0.505 for x in _o1 + _o2 + _o3), str((_o1, _o2, _o3, _o4)))
+check("catchup clips: the trade's context carries kind, points, target and the clip count; the whole trade costs <= 5,000",
+      _c.cs.ctx["0"]["kind"] == "slow" and _c.cs.ctx["0"]["target"] == 9900 and _c.cs.ctx["0"]["clips"] == 3 and sum(x[2] * x[3] for x in _o1 + _o2 + _o3) <= 5000.0 + 1e-6)
+_c = _Cyc(_sg); _c.run(T0); _c.fill("0", 4000, 0.505); _c.touch = (0.515, 0.52, 5000)
+check("catchup clips: the touch ran 1.5c away from the first clip (0.52 against 0.505): no second clip", _c.run(T0 + 30) == [])
+_c.touch = (0.505, 0.51, 5000)
+check("catchup clips: ... and it clips again at 0.51 (within 1c of the first)", [x[2] for x in _c.run(T0 + 40)] == [4000])
+_c = _Cyc(_sg); _c.run(T0); _c.fill("0", 4000, 0.505)
+check("catchup clips: no clip after the build window (slow 60 min): none at 3,601 s, a fast trade's window is 20 min",
+      _c.run(T0 + 3601) == [] and (lambda c: (c.run(T0), c.fill("0", 4000, 0.505), c.run(T0 + 1201))[2])(_Cyc(dict(_sg, kind="fast"))) == [])
+_c = _Cyc(_sg); _c.run(T0)
+check("catchup clips: the last clip is still settling (nothing filled yet, 10 s): no second clip; after 90 s it counts what it holds (0) and tries the remaining target again",
+      _c.run(T0 + 10) == [] and [x[2] for x in _c.run(T0 + 95)] == [4000])
+_c = _Cyc(_sg); _c.run(T0); _c.fill("0", 4000, 0.505)
+_c.rows[0].update(pm=0.505, kalshi=0.505)                          # the outside reverted
+_oo = _c.run(T0 + 30)
+check("catchup clips: when the outside reverts the trade is sold at the REST/feed bid, never clipped again, even in the next cycles",
+      len(_oo) == 1 and _oo[0][1] == "no" and _oo[0][2] == 4000 and _c.cs.ctx["0"].get("exiting") is True and [x for x in _c.run(T0 + 200) if x[4] == "cu"] == [], str(_oo))
+_c = _Cyc(_sg, net_d=4965.0)
+check("catchup cap: at net D +4,965 a D-adding signal (buy YES on a D leg) places nothing - room 0, no order - and sets no context", _c.run(T0) == [] and _c.cs.ctx == {})
+_sgr = dict(_sg, d=-1, bid=0.495, ask=0.50)
+_c = _Cyc(_sgr, net_d=4965.0, touch=(0.495, 0.50, 5000))
+_o = _c.run(T0)
+check("catchup cap: ... but an R-adding signal (buy NO) trades at net D +4,965: 4,000 shares clip at 50.5c, room 9,765", len(_o) == 1 and _o[0][1] == "no" and _o[0][2] == 4000, str(_o))
+_c = _Cyc(_sg, net_d=3000.0)
+_o = _c.run(T0)
+check("catchup cap: at net D +3,000 the D-adding clip is cut to the room under 4,800 (1,800 / 0.505 = 3,564 shares), a second clip later gets what is left (0)",
+      len(_o) == 1 and _o[0][2] == int(1800 / 0.505) and (_c.fill("0", _o[0][2], 0.505), _c.run(T0 + 30))[1] == [], str(_o))
+# exits are never blocked by the cap
+_c = _Cyc(None, net_d=4965.0); _c.fills.append({"exchange_id": "1", "quantity": -3000.0, "price": 0.50})      # holds NO on a D leg: its exit buys YES = adds D
+_c.cs.ctx["1"] = {"ts": T0, "d": -1, "f_then": 0.53, "move": -0.03, "mid0": 0.50, "gap": 0.03, "kind": "fast"}
+_c.rows.append({"exchange_id": "1", "race": "R1", "party": "D", "sig_mid": 0.50, "pm": 0.50, "kalshi": 0.50, "sig_bid": 0.4975, "sig_ask": 0.5025})
+_o = _c.run(T0 + 28800)
+check("catchup cap: at net D +4,965 the 8 h fast exit of a NO on a D leg (the exit buys YES, which adds D) is sent in full - the cap blocks adds, not exits",
+      len(_o) == 1 and _o[0][0] == "1" and _o[0][1] == "yes" and _o[0][2] == 3000 and _o[0][4].startswith("cux"), str(_o))
+_c = _Cyc(None, net_d=-4965.0); _c.fills.append({"exchange_id": "1", "quantity": 3000.0, "price": 0.50})
+_c.cs.ctx["1"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03, "kind": "slow"}
+_c.rows.append({"exchange_id": "1", "race": "R1", "party": "D", "sig_mid": 0.535, "pm": 0.55, "kalshi": 0.55, "sig_bid": 0.53, "sig_ask": 0.54})
+_o = _c.run(T0 + 3600)
+check("catchup cap: ... and at net D -4,965 the slow take-profit of a YES on a D leg (the exit sells D, buying NO) is sent", len(_o) == 1 and _o[0][1] == "no" and _o[0][2] == 3000, str(_o))
+# open-cost limit and cash
+_c = _Cyc(_sg, max_open_notional=1000.0)
+_o = _c.run(T0)
+_c.fill("0", _o[0][2], 0.505)
+check("catchup limit: the sleeve's open cost is capped (1,000 here, 15,000 live): the first clip of 4,000 shares is cut to 1,980, and once that fills the sleeve is full: no second clip",
+      _o and _o[0][2] == int(1000 / 0.505) and _c.run(T0 + 30) == [], str(_o))
+_c = _Cyc(_sg, cash=17000.0)
+_o = _c.run(T0)
+check("catchup cash: with the 15k shock reserve and 17k cash only 2,000 is the sleeve's: the clip is cut to 3,960 shares (was: skipped); with 15.5k cash 500 -> 990 shares; under min_shares nothing",
+      _o and _o[0][2] == int(2000 / 0.505) and len(_Cyc(_sg, cash=15500.0).run(T0)) == 1 and _Cyc(_sg, cash=15500.0).run(T0)[0][2] == int(500 / 0.505) and _Cyc(_sg, cash=15040.0).run(T0) == [], str(_o))
+_c = _Cyc(_sg, max_positions=1)
+_c.fills.append({"exchange_id": "1", "quantity": 500.0, "price": 0.50})
+_c.cs.ctx["1"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03, "kind": "slow"}
+check("catchup limit: max positions still blocks a NEW trade (1 open, max 1) but not the clips of the trade already open", _c.run(T0 + 60) == [])
+# wind-down: legs of an open position and of a trade being built are exempt; the exits run under the wind-down
+_wb2 = types.SimpleNamespace(churn=None, store=None, wind_down_hold_path="/nonexistent/hold.json", cheapfav_races=lambda: set(), shock_races=lambda: set(),
+                             catchup_open={"4": 3000.0, "5": 0.0}, cheapfav_open={}, shock_open={}, catchup=types.SimpleNamespace(ctx={"6": {"ts": T0}}))
+_er, _el = R.Bot.wind_down_exempt(_wb2)
+check("wind-down: catch-up legs with an open position, and a trade with a context (being built in clips, between two fills), are exempt; a flat leg is not",
+      _el.get("4") == "catch-up sweep" and _el.get("6") == "catch-up sweep" and "5" not in _el, str(_el))
+check("wind-down: catch-up's own lots are not inventory to sell (wind_down_positions removes them)", R.Bot.wind_down_positions(_wb2, {"4": 3500.0}) == {"4": 500.0, "5": 0.0})
+_ws = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+_wi = _ws.index("def catchup_cycle")
+_wj = _ws.index("def cheapfav_races")
+check("wind-down: catchup_cycle runs its exit loop whatever the wind-down does (no wind_down / WD.active reference inside it); entries only check kill, pause and the cap",
+      "wind_down" not in _ws[_wi:_wj] and "WD." not in _ws[_wi:_wj])
 
 # ---------------------------------------------------------------- 23 Oct: deviation churn (proposals/dev_churn.py)
 from sigbot.proposals import dev_churn as DC  # noqa: E402
@@ -878,9 +1086,14 @@ finally:
 # 24 h); no re-entry there for 24 h. Cost 0.985 per set: loss = sum of the two asks - 1.015
 _b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.525, 0.53), lots=[("CA", 2000, 0.985, _t - 100)])
 R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+_old_le = DC.LAST_ENTRY
+DC.LAST_ENTRY = time.time() + 30 * 86400      # 31 Oct: the real clock + 25 h is past the 1 Nov entry deadline, which would fail the lockout check for the wrong reason
+try:
+    _lock_ok = not _ch.eligible(_HR["CA"], time.time() + 23 * 3600) and _ch.eligible(_HR["CA"], time.time() + 25 * 3600)
+finally:
+    DC.LAST_ENTRY = _old_le
 check("hf arb: a race 9+ ticks per set under water is sold at the touch, and is not bought again for 24 h",
-      _sold(_v) == [2000] and _ch.held("CA") == 0 and "CA" in _ch.last_loss and not _ch.eligible(_HR["CA"], time.time() + 23 * 3600)
-      and _ch.eligible(_HR["CA"], time.time() + 25 * 3600), str(_sold(_v)))
+      _sold(_v) == [2000] and _ch.held("CA") == 0 and "CA" in _ch.last_loss and _lock_ok, str(_sold(_v)))
 # loss exit widened to 9 ticks: a set 7 or 8 ticks under water is held (no sale, no 24-h lockout); 9 and 10 ticks are sold
 _lx = {}
 for _tk, (_a1, _a2) in {7: (0.525, 0.525), 8: (0.525, 0.53), 9: (0.53, 0.53), 10: (0.53, 0.535)}.items():
@@ -1780,7 +1993,7 @@ _cfs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 check("shock reserve: cheap favourites, arbs, recycles, offload, catch-up and the MM / tilt / news / direction budgets read the "
       "spendable cash (only the value log reads raw cash)",
       "cf.entries(cands, held, deployed, spendable_cash(self)" in _cfs and "b.arb.plan(cand_books, spendable_cash(b))" in _cfs
-      and "fills_count, max(0.0, spendable_cash(self)), cycle_id" in _cfs and "shock_reserve(self) > 0 and spendable_cash(self) < q * px" in _cfs
+      and "fills_count, max(0.0, spendable_cash(self)), cycle_id" in _cfs and "if shock_reserve(self) > 0:\n                    q = min(q, int(max(0.0, spendable_cash(self)) / max(px, 0.01)))" in _cfs
       and _cfs.count("spendable_cash(") >= 20)
 # the raise refills the reserve after a shock spent it, tier 1 only, capped at deficit + buffer
 _b, _v = _rbot(_rpos, _rbooks, {})

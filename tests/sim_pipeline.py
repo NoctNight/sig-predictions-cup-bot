@@ -806,8 +806,8 @@ class OutsideMove(Scenario):
 
 class Catchup(Scenario):
     name, cycles, seed = "catchup", 320, 28
-    cfg = {"catchup_enabled": True}
-    doc = "catch-up sweep trial: after 75 min of history, Polymarket+Kalshi move 3 pts on three races (SIG's DMM follows 10 min later, 1 tick / 2 min) and on a fourth race the outside move reverts after 10 min: enter at SIG's touch, <= 300 notional, <= 4 open, exit on convergence or reversal"
+    cfg = {"catchup_enabled": True, "catchup_notional": 2500.0}
+    doc = "catch-up sweep: after 75 min of history, Polymarket+Kalshi move 3 pts on three races (SIG's DMM follows 10 min later, 1 tick / 2 min) and on a fourth race the outside move reverts after 10 min: enter at SIG's touch in clips, <= 5,000 notional a trade, <= 6 open, no convergence exit (held to the time stop / take-profit), exit on reversal"
 
     def before_cycle(self, sim, i):
         v = sim.v
@@ -839,16 +839,19 @@ class Catchup(Scenario):
         entries = [c for c in calls if c["prefix"] == "cu"]
         if not entries:
             sim.chk.violation("catchup_none", "no catch-up entry although Polymarket+Kalshi moved 3 pts and SIG lagged")
+        spent = {}
         for c in entries:
-            if c["qty"] * c["price"] > 300 * 1.02:
-                sim.chk.violation("catchup_oversize", f"{c['key']} {c['ex']} x{c['qty']} @{c['price']} = {c['qty'] * c['price']:.0f} > 300")
+            spent[c["ex"]] = spent.get(c["ex"], 0.0) + c["qty"] * c["price"]
+        for ex, v in spent.items():
+            if v > 5000 * 1.02:
+                sim.chk.violation("catchup_oversize", f"{ex}: {v:.0f} bought in clips > 5,000 for one trade")
         fills = [dict(r) for r in sim.bot.store.rows("SELECT exchange_id, quantity, filled_at FROM fills WHERE purpose IN ('catchup','catchup_exit') ORDER BY filled_at")]
         pos, peak = {}, 0
         for f in fills:
             pos[f["exchange_id"]] = pos.get(f["exchange_id"], 0.0) + float(f["quantity"])
             peak = max(peak, sum(1 for q in pos.values() if abs(q) >= 1))
-        if peak > 4:
-            sim.chk.violation("catchup_too_many", f"{peak} catch-up positions open at once (max 4)")
+        if peak > 6:
+            sim.chk.violation("catchup_too_many", f"{peak} catch-up positions open at once (max 6)")
         for ex in getattr(self, "noise", []):
             if abs(pos.get(ex, 0.0)) >= 1:
                 sim.chk.violation("catchup_noise_held", f"{ex}: catch-up position still open after the outside move reverted")
