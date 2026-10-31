@@ -274,7 +274,7 @@ class _OffloadAdapter:
 
     def __init__(self, bot):
         self.b = bot
-        self.sell_ok = bool(getattr(bot.cfg, "offload_conventional_sell", False))
+        self.sell_ok = bool(getattr(getattr(bot, "cfg", None), "offload_conventional_sell", False))
         self.vpos: dict = {}
         self.vcash = 0.0
 
@@ -373,7 +373,7 @@ class _OffloadAdapter:
         return 0 if self.dry else sum(1 for e in exs if (self.b.open_orders_cache or {}).get(e))
 
     def set_floor(self, race: str):
-        return (getattr(self.b.cfg, "wind_down_set_floor", None) or {}).get(race)
+        return (getattr(getattr(self.b, "cfg", None), "wind_down_set_floor", None) or {}).get(race)
 
     def cap_ok(self, before: dict, after: dict) -> bool:
         prices = self.b.mm.prices
