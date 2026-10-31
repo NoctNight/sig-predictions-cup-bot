@@ -3314,13 +3314,50 @@ _f.fq_on, _f.fq_lag = True, 300.0            # fills reach the store minutes aft
 _prun(_e, _f, _cx0 + 3600, step=30.0)
 check("punt: with fills lagging 5 minutes a timed exit never sells the 856 NO it did not buy", _f.pos["842"] == -856.0, str(_f.pos))
 _e, _f, _n = _cbought()
-_f.exit_cap_ok = lambda ex, side, qty: False
+_f.exit_cap_ok = lambda ex, side, qty, pos: False
 _prun(_e, _f, _cx0 + 1800, step=30.0)
 _cheld = len(_f.sent) - _n
-_f.exit_cap_ok = lambda ex, side, qty: True
+_f.exit_cap_ok = lambda ex, side, qty, pos: True
 _prun(_e, _f, _cx0 + 7200, step=30.0)
 check("punt: a timed exit waits while the sale would break the partisan cap, then sells once there is room, inside its window",
       _cheld == 0 and _f.pos["842"] == -856.0 and _e.st("x")["status"] != "aborted", f"{_cheld} {_f.pos} {_e.st('x')}")
+_e, _f, _n = _cbought()
+_f.exit_cap_ok = lambda ex, side, qty, pos: qty <= 660
+_prun(_e, _f, _cx0 + 900, step=30.0)
+_cs = _f.sent[_n:]
+check("punt: a clip too big for the cap is cut to what fits (never above it), not skipped", _cs and all(300 <= o["qty"] <= 660 for o in _cs), str([o["qty"] for o in _cs]))
+_e, _f, _n = _cbought()
+_f.exit_cap_ok = lambda ex, side, qty, pos: False
+_prun(_e, _f, PE.ts_of("2026-11-03T15:00:00-05:00") + 120, step=30.0)
+check("punt: an exit that cannot sell by its stop records what it left unsold", _e.st("x")["status"] == "done" and "unsold" in str(_e.st("x").get("why")), str(_e.st("x")))
+_e, _f, _n = _cbought()
+_estate = _e.state_path
+_cplan2 = _pmk(_pplan(), _f)[1]
+_e2 = PE.PuntExecutor(_cplan2, _estate, PE.sha256_file(_cplan2), _f, max_budget=150000.0, cash_floor=100.0)
+_nb = len(_f.sent)
+_e2.tick()
+check("punt: a new plan is refused while a timed exit is open, and the old state is kept", bool(_e2.refused) and "timed exit" in _e2.refused and len(_f.sent) == _nb
+      and PE.json.load(open(_estate)).get("plan_id") == "C", str(_e2.refused))
+from sigbot.universe import Universe as _CU, Race as _CR, Leg as _CL  # noqa: E402
+_cu = _CU()
+_cu.races["U.S. Senate"] = _CR("U.S. Senate", {"D": _CL("D", "m1", "842", "t"), "R": _CL("R", "m2", "843", "t")})
+_cu.races["Big"] = _CR("Big", {"D": _CL("D", "m3", "901", "t"), "R": _CL("R", "m4", "902", "t")})
+_cu.by_exchange = {"842": ("U.S. Senate", "D"), "843": ("U.S. Senate", "R"), "901": ("Big", "D"), "902": ("Big", "R")}
+_cpx = {"842": {"bestBid": 0.74, "bestAsk": 0.75, "last": 0.75}, "843": {"bestBid": 0.25, "bestAsk": 0.26, "last": 0.25},
+        "901": {"bestBid": 0.49, "bestAsk": 0.51, "last": 0.5}, "902": {"bestBid": 0.49, "bestAsk": 0.51, "last": 0.5}}
+_cbot = types.SimpleNamespace(universe=_cu, cfg=types.SimpleNamespace(mm=types.SimpleNamespace(portfolio_max_partisan_notional=5000.0)),
+                              mm=types.SimpleNamespace(prices=_cpx))
+_cbot.wind_down_partisan_ok = lambda b, a, p: R.Bot.wind_down_partisan_ok(_cbot, b, a, p)
+_ca = R._PuntAdapter(_cbot)
+_cpos = {"842": -10000.0, "901": 9000.0}     # net D: short 2,500 or so on the Senate, long 4,500 on Big: about +2,000
+_cnd = lambda p: R.risk.exposure(_cu, p, _cpx).net_d_notional
+_cafter = _cnd(dict(_cpos, **{"842": -6000.0}))
+check("punt: real exit_cap_ok on real exposure: buying YES adds net D (sign), a small clip passes, a clip over 5,000 fails",
+      _cafter > _cnd(_cpos) and _ca.exit_cap_ok("842", "yes", 1000, _cpos) and not _ca.exit_cap_ok("842", "yes", 10000, dict(_cpos, **{"901": 18000.0, "842": -10000.0})),
+      f"{_cnd(_cpos)} {_cafter}")
+_cbot.mm.prices = {}
+check("punt: exit_cap_ok says no with no marks yet (after a restart)", not _ca.exit_cap_ok("842", "yes", 10, _cpos))
+_cbot.mm.prices = _cpx
 _e, _f, _n = _cbought()
 _f.terminal = False
 _rej = {"n": 0}

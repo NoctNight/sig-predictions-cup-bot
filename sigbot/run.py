@@ -137,13 +137,17 @@ class _PuntAdapter:
             c = float(getattr(self.b, "cash", 0.0) or 0.0)
         return c - self.vcash - shock_reserve(self.b)   # shock's reserve is not ours (0 once its last entry has passed, 3 Nov)
 
-    def exit_cap_ok(self, ex, side, qty) -> bool:
-        """Would buying qty of `side` keep |net D| within the partisan cap (or no larger than now)? Unknown means no."""
+    def exit_cap_ok(self, ex, side, qty, pos) -> bool:
+        """Would buying qty of `side` keep |net D| within the partisan cap (or no larger than now)? Unknown means no: no
+        marks yet (after a restart every leg would count at 0.5)."""
         try:
-            before = {str(k): float(v) for k, v in self.positions().items()}
+            prices = self.b.mm.prices
+            if not prices:
+                return False
+            before = {str(k): float(v) for k, v in pos.items()}
             after = dict(before)
             after[str(ex)] = after.get(str(ex), 0.0) + (qty if side == "yes" else -qty)
-            return self.b.wind_down_partisan_ok(before, after, self.b.mm.prices)
+            return self.b.wind_down_partisan_ok(before, after, prices)
         except Exception as e:
             log.warning("PUNT exit cap check: %s", e)
             return False

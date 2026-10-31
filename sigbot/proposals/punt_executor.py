@@ -62,7 +62,8 @@ MAX_STEPS = 8
 ORDER_TTL = 30.0                     # seconds a chunk order rests before it expires on the venue
 MIN_ORDER_CASH = 50.0
 MAX_ERRORS = 3
-EXIT_BACKOFF = 300.0              # a timed exit after MAX_ERRORS rejects in a row: seconds before the next try
+EXIT_BACKOFF = 300.0              # a timed exit after MAX_ERRORS rejects in a row: extra seconds before the next try
+MIN_EXIT_CLIP = 100               # a timed exit never sends a smaller clip to squeeze under the partisan cap
 RECOVER_AFTER = 10.0                 # review R2-2: look a placeholder order up this long after its expiry
 FILL_LAG_WAIT = 180.0                # review R3-1: a finished sale waits this long after its last order for the fill store to catch up
 RECOVER_GIVE_UP = 600.0              # ... and stop looking this long after it
@@ -232,6 +233,10 @@ class PuntExecutor:
             st = json.load(open(self.state_path))
             if st.get("plan_id") == self.plan.get("plan_id") and st.get("sha") == self._sha():
                 return st
+            if st.get("timed_open"):                 # the new plan would forget shares a timed exit still has to sell
+                self.refused = f"plan {st.get('plan_id')} still has a timed exit open: it must finish first"
+                log.warning("PUNT refused: %s", self.refused)
+                return st
             log.warning("PUNT state belongs to another plan: starting fresh")
         except FileNotFoundError:
             pass
@@ -246,6 +251,8 @@ class PuntExecutor:
             return None
 
     def save(self):
+        self.state["timed_open"] = not self.state.get("aborted") and any(
+            s.get("timed_exit") is True and self.st(s["id"])["status"] not in ("done", "aborted") for s in self.plan.get("steps") or [])
         d = os.path.dirname(self.state_path) or "."
         fd, tmp = tempfile.mkstemp(dir=d, prefix=".punt_state.")
         with os.fdopen(fd, "w") as f:
@@ -341,6 +348,8 @@ class PuntExecutor:
             if v["status"] in ("done", "aborted") or ts_of(s["start"]) > now:
                 continue
             if now > ts_of(s["stop"]):
+                if s.get("timed_exit") is True:
+                    self._exit_unsold(s, v, pos)
                 v["status"] = "done"
                 self.note(f"{s['id']}: window closed ({v.get('why') or 'time'})")
                 self._cancel_step(v)
@@ -502,7 +511,7 @@ class PuntExecutor:
             if v["errors"] >= MAX_ERRORS:
                 if s.get("timed_exit") is True:      # a position has to come out by the clock: wait and retry, never give up on it
                     v["last"] = now + EXIT_BACKOFF
-                    self.note(f"{s['id']}: {v['errors']} rejected orders in a row: retrying in {EXIT_BACKOFF:.0f} s")
+                    self.note(f"{s['id']}: {v['errors']} rejected orders in a row: backing off")
                 else:
                     v["status"] = "aborted"
                     v["why"] = "3 rejected orders"
@@ -654,13 +663,39 @@ class PuntExecutor:
         if q < 1:
             return None
         opp = "no" if side == "yes" else "yes"     # selling `side` at >= p = buying the other side at <= 1 - p
-        if s.get("timed_exit") is True and not self.plan.get("cap_exempt") and not getattr(self.a, "exit_cap_ok", lambda *a: True)(ex, opp, q):
-            if not v.get("cap_noted"):               # the 5,000 partisan cap is a hard limit: wait for the wind-down to make room
-                v["cap_noted"] = True
-                self.note(f"{s['id']}: held: selling {q} would take net D past the partisan cap")
-            v["last"] = now
-            return None
+        if s.get("timed_exit") is True and not self.plan.get("cap_exempt"):
+            q = self._cap_clip(ex, opp, q, pos)      # the 5,000 partisan cap is a hard limit: sell what fits, wait for the rest
+            if q < MIN_EXIT_CLIP:
+                if not v.get("cap_noted"):
+                    v["cap_noted"] = True
+                    self.note(f"{s['id']}: held: a sale would take net D past the partisan cap ({left:.0f} left)")
+                v["last"] = now
+                return None
         return self._send(s, v, ex, opp, q, round(1 - float(s["min_price"]), 3), "SELL")
+
+    def _cap_clip(self, ex: str, side: str, q: int, pos: dict) -> int:
+        """The largest of q shares of `side` that keeps the partisan cap, to about 3% of q."""
+        ok = getattr(self.a, "exit_cap_ok", lambda *a: True)
+        if ok(ex, side, q, pos):
+            return q
+        lo, hi = 0, q
+        for _ in range(5):
+            mid = (lo + hi) // 2
+            if mid and ok(ex, side, mid, pos):
+                lo = mid
+            else:
+                hi = mid
+        return lo
+
+    def _exit_unsold(self, s: dict, v: dict, pos: dict):
+        """A timed exit's window closed: say loudly what it left behind (the race stays protected, so nothing else will sell it)."""
+        src = next(x for x in self.plan["steps"] if x["id"] == s["of_step"])
+        sv = self.st(src["id"])
+        bought = float(sv.get("filled") or 0.0)
+        left = bought if v["base"] is None else self._sale_state(v, pos, str(src.get("exchange_id")), src.get("side"), bought)[1]
+        if left >= 1:
+            v["why"] = f"{left:.0f} unsold"
+            log.error("PUNT %s: window closed with %.0f shares unsold: they ride to the result unless sold by hand", s["id"], left)
 
     def _target_buy(self, s, v, pos, now):
         if v.get("chosen") is None:
