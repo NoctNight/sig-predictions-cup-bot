@@ -549,6 +549,8 @@ def _cbot(fills, sigs, net_d, fresh=True):
                                                         new_key=lambda p: p),
                               catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"))
     b.catchup_save = lambda: R.Bot.catchup_save(b)
+    b._catchup_trade = lambda *a_: R.Bot._catchup_trade(b, *a_)
+    b.catchup_pending = lambda now: R.Bot.catchup_pending(b, now)
     _orig = R.risk.exposure
     R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=net_d)
     try:
@@ -682,6 +684,8 @@ class _Cyc:
                                                                    new_key=lambda p: p),
                                          catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"), cash=1e9)
         self.bot.catchup_save = lambda: R.Bot.catchup_save(self.bot)
+        self.bot._catchup_trade = lambda *a_: R.Bot._catchup_trade(self.bot, *a_)
+        self.bot.catchup_pending = lambda now: R.Bot.catchup_pending(self.bot, now)
         if cash is not None:
             self.bot.cash, self.bot.cfg.shock_enabled, self.bot.cfg.shock_reserve = cash, True, 15000.0
         if sig:
@@ -810,6 +814,133 @@ _cf, sg = _hist([_row(T0, 0.33, 0.33, 0.33)], _row(T0 + 3600, 0.30, 0.30, 0.33))
 _cf2, sg2 = _hist([_row(T0, 0.50, 0.50, 0.50)], _row(T0 + 3600, 0.53, 0.53, 0.50))
 check("catchup review: the slow upper-two-thirds point is the distance beyond the MM line: a sell with outside 30c / SIG 33c has a 3.0c raw gap but is only 1.4c beyond the line -> no point; at 50c the gap and the line distance (2.76c) both count",
       len(sg) == 1 and sg[0]["pts"] == 0 and abs(sg[0]["gap"] - 0.03) < 1e-9 and len(sg2) == 1 and sg2[0]["pts"] == 1, str((sg, sg2)))
+
+# ---- 31 Oct, second review: REAL risk.exposure on a real universe, books carrying our own quotes, the punt's timed exit, pending orders
+from sigbot.universe import Universe as _UnivC  # noqa: E402
+_UC = _UnivC.from_markets(__import__("json").load(open(os.path.join(ROOT, "data", "markets.json"))))
+_PUNT = "1076"                                                  # Rhode Island Senate D: stands in for the punt's short (C1 holds 10,196 NO on 842)
+class _CStore2(_CStore):
+    def __init__(self, fills, pending=()):
+        super().__init__(fills); self.pending = list(pending)
+    def rows(self, q, a=()):
+        if "FROM orders" in q and "'cheapfav','direction'" in q: return self.pending
+        if "FROM fills" in q and "'cheapfav','direction'" in q: return []
+        return super().rows(q, a)
+class _Real:
+    """Catch-up cycles on a real universe and the real risk.exposure: positions and marks are real dicts, fills move them."""
+    def __init__(self, sigs, positions, punt=(_PUNT,), pending=(), book=None, touch=(0.50, 0.505, 5000), rows=(), open_orders=None):
+        self.sent, self.fills, self.positions = [], [], dict(positions)
+        self.prices = {e: {"bestBid": 0.495, "bestAsk": 0.505} for e in _UC.all_exchanges()}
+        self.prices[_PUNT] = {"bestBid": 0.73, "bestAsk": 0.75}
+        self.cs = OS.CatchupSweep()
+        self.sigs = list(sigs)
+        self.cs.signals = lambda rows_, now: list(self.sigs)
+        self.touch, self.book = touch, book
+        self.rows = list(rows)
+        for s in self.sigs:
+            self.rows.append({"exchange_id": s["exchange_id"], "race": s["race"], "party": "D", "sig_mid": 0.5025, "pm": 0.53, "kalshi": 0.53, "sig_bid": 0.50, "sig_ask": 0.505})
+        b = types.SimpleNamespace(catchup=self.cs, dry_run=False, cash=1e9, store=_CStore2(self.fills, pending), direction=types.SimpleNamespace(rows=self.rows),
+                                  universe=_UC, open_orders_cache=open_orders or {}, cfg=types.SimpleNamespace(mm=types.SimpleNamespace(portfolio_max_partisan_notional=5000.0)),
+                                  fresh_book=lambda ex, age=None: self.book if self.book is not None else {"bids": [{"price": self.touch[0], "quantity": self.touch[2]}], "asks": [{"price": self.touch[1], "quantity": self.touch[2]}]},
+                                  get_book=lambda ex, depth=50, client=None, max_age=None: {"bids": [{"price": 0.48, "quantity": 5000}], "asks": [{"price": 0.485, "quantity": 5000}]},
+                                  api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: self.sent.append((ex, side, q, px, key)) or {"orderId": len(self.sent)},
+                                                            new_key=lambda p: p),
+                                  catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"), fresh_positions=lambda: dict(self.positions),
+                                  punt_legs=lambda: set(punt))
+        b.catchup_save = lambda: R.Bot.catchup_save(b)
+        b._catchup_trade = lambda *a_: R.Bot._catchup_trade(b, *a_)
+        b.catchup_pending = lambda now: R.Bot.catchup_pending(b, now)
+        self.bot = b
+    def run(self, t, stale_positions=None, **attrs):
+        for k_, v_ in attrs.items(): setattr(self.bot, k_, v_)
+        _ot = time.time; time.time = lambda: t
+        n0 = len(self.sent)
+        try:
+            R.Bot.catchup_cycle(self.bot, {"polled": True}, stale_positions if stale_positions is not None else dict(self.positions), self.prices, False)
+        finally:
+            time.time = _ot
+        return self.sent[n0:]
+    def fill(self, ex, q, px):
+        self.fills.append({"exchange_id": ex, "quantity": q, "price": px})
+        self.positions[ex] = self.positions.get(ex, 0.0) + q
+    def net_d(self, drop=()):
+        return R.risk.exposure(_UC, {e: q for e, q in self.positions.items() if e not in drop}, self.prices).net_d_notional
+def _rsig(ex, race, **kw):
+    return dict(_sg, exchange_id=ex, race=race, **kw)
+_s1, _s2 = _rsig("1042", "Delaware Senate"), _rsig("1072", "Oklahoma Senate")
+def _drive(c, n=8):
+    """Run cycles 30 s apart, filling every order at its price, until nothing more is sent."""
+    for i in range(n):
+        o = c.run(T0 + 30 * i)
+        for ex, side, q, px, k in o:
+            c.fill(ex, q if side == "yes" else -q, px)
+        if not o and i > 1: break
+    return c
+_cp1 = _drive(_Real([_s1, _s2], {_PUNT: -10196.0}))
+_ncu = lambda c: sum(max(0.0, c.positions.get(e, 0.0)) * 0.5025 for e in ("1042", "1072"))
+check("catchup punt: with the punt's short (about -2,650 net D) in the book, catch-up adds D only to 4,800 judged without it, not to 4,800 + 2,650 = 7,450: two 5k trades stop at 4,800 of their own",
+      abs((_cp1.net_d() - _cp1.net_d(drop=(_PUNT,))) + 2650) < 60 and 4000 < _cp1.net_d(drop=(_PUNT,)) <= 4800 + 1e-6, str((_cp1.net_d(), _cp1.net_d(drop=(_PUNT,)))))
+check("catchup punt: ... and the punt's timed exit still fits the cap afterwards: net D without the punt legs is within 5,000 (exit_cap_ok: |after| <= cap)",
+      abs(_cp1.net_d(drop=(_PUNT,))) <= 5000.0, str(_cp1.net_d(drop=(_PUNT,))))
+_cp0 = _drive(_Real([_s1, _s2], {_PUNT: -10196.0}, punt=()))
+check("catchup punt (control): without the punt adjustment the same cycles take catch-up past the cap once the punt exits (>5,000), which is the bug this test must see",
+      _cp0.net_d(drop=(_PUNT,)) > 5000.0, str(_cp0.net_d(drop=(_PUNT,))))
+# an R-adding trade with a punt LONG D: the matching min
+_cpl = _drive(_Real([dict(_s1, d=-1, bid=0.495, ask=0.50)], {_PUNT: 20000.0}, touch=(0.495, 0.50, 5000)))
+_ncr = -min(0.0, _cpl.positions.get("1042", 0.0)) * 0.4975
+check("catchup punt: with a punt LONG D (+5,000 net D) an R-adding trade is judged without it too: R adds stop at 4,800 below the book without the punt, not 9,800",
+      _ncr <= 4800 + 1e-6 and _cpl.net_d(drop=(_PUNT,)) >= -5000.0, str((_ncr, _cpl.net_d(drop=(_PUNT,)))))
+# a stale cycle-start read, other sleeves' unfilled orders and our own unfilled clips on other legs
+_cr = _Real([_s1], {"1072": 6000.0})                           # the venue now: D long 6,000 @ ~50c = 3,000 net D; the cycle-start read was empty
+_o = _cr.run(T0, stale_positions={})
+check("catchup room: the clip is cut by a positions read made now (net D 3,000 -> room 1,800 -> 3,564 shares), not by the stale cycle-start read (empty -> 4,000)",
+      len(_o) == 1 and _o[0][2] == int(1800 / 0.505), str(_o))
+_pend = [{"order_id": "d1", "exchange_id": "1072", "side": "yes", "quantity": 3000, "price": 0.5, "placed_at": T0 - 30}]
+_cr = _Real([_s1], {"1072": 6000.0}, pending=_pend)
+_o = _cr.run(T0)
+check("catchup room: a direction-sleeve D order placed 30 s ago and not filled (1,500) counts: room 4,800 - 3,000 - 1,500 = 300 -> 594 shares",
+      len(_o) == 1 and _o[0][2] == int(300 / 0.505), str(_o))
+_cr = _Real([_s1], {"1072": 5000.0})
+_cr.cs.ctx["1072"] = {"ts": T0 - 20, "d": 1, "f_then": 0.5, "move": 0.03, "mid0": 0.5, "gap": 0.03, "kind": "slow", "px0": 0.5, "target": 9900, "ordered": 4000, "clips": 1, "last_clip": T0 - 10, "build_until": T0 + 3000}
+_o = _cr.run(T0)
+check("catchup room: our own unfilled clip on another leg (4,000 ordered, 0 held, 2,000) counts as pending D: net D 2,500 + 2,000 -> room 300 -> 594 shares",
+      [x for x in _o if x[0] == "1042"] and [x for x in _o if x[0] == "1042"][0][2] == int(300 / 0.505), str(_o))
+check("catchup room: a failed fresh positions read means no clip or entry at all", _Real([_s1], {}).run(T0, fresh_positions=lambda: None) == [])
+# own quotes in the book
+_bk = {"bids": [{"price": 0.50, "quantity": 5000}], "asks": [{"price": 0.505, "quantity": 5000}, {"price": 0.51, "quantity": 1000}]}
+_oo = {"1042": [{"id": "m1", "side": "yes", "action": "sell", "priceLimit": 0.505, "quantity": 5000}]}
+_cr = _Real([_s1], {}, book=_bk, open_orders=_oo)
+_o = _cr.run(T0)
+check("catchup own quotes: our MM's 5,000 ask at 50.5c is not liquidity: the clip sizes off the next level (0.51 x 1,000 -> 800 shares at 51c), not 4,000 at 50.5c that would rest unfilled",
+      len(_o) == 1 and _o[0][2:4] == (800, 0.51), str(_o))
+_cr = _Real([_s1], {}, book=_bk, open_orders={})
+check("catchup own quotes (control): with no own order the same book gives 4,000 at 50.5c", _cr.run(T0)[0][2:4] == (4000, 0.505))
+_bkx = {"bids": [{"price": 0.53, "quantity": 5000}, {"price": 0.51, "quantity": 5000}], "asks": [{"price": 0.535, "quantity": 5000}]}
+_oox = {"1042": [{"id": "m2", "side": "yes", "action": "buy", "priceLimit": 0.53, "quantity": 5000}]}
+def _tp(oo):
+    c = _Real([], {"1042": 3000.0}, book=_bkx, open_orders=oo)
+    c.fills.append({"exchange_id": "1042", "quantity": 3000.0, "price": 0.50})
+    c.cs.ctx["1042"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03, "kind": "slow"}
+    c.rows.append({"exchange_id": "1042", "race": "Delaware Senate", "party": "D", "sig_mid": 0.5325, "pm": 0.55, "kalshi": 0.55, "sig_bid": 0.53, "sig_ask": 0.535})
+    return c, c.run(T0 + 3600)
+_c1, _o1 = _tp({}); _c2, _o2 = _tp(_oox)
+check("catchup own quotes: the take-profit is confirmed on the book without our own bid: our MM's 53c bid is not a buyer, the real bid is 51c (+1c) -> held; with the 53c bid real it sells",
+      len(_o1) == 1 and _o1[0][1] == "no" and _o2 == [], str((_o1, _o2)))
+# the cut-off
+_cr = _Real([], {"1042": 4000.0})
+_cr.fills.append({"exchange_id": "1042", "quantity": 4000.0, "price": 0.50})
+_cr.cs.ctx["1042"] = {"ts": OS.LAST_ENTRY - 600, "d": 1, "f_then": 0.5, "move": 0.03, "mid0": 0.5, "gap": 0.03, "kind": "slow", "px0": 0.5, "target": 9900, "ordered": 4000,
+                      "clips": 1, "last_clip": OS.LAST_ENTRY - 400, "build_until": OS.LAST_ENTRY + 3000}
+_cr.rows.append({"exchange_id": "1042", "race": "Delaware Senate", "party": "D", "sig_mid": 0.5025, "pm": 0.53, "kalshi": 0.53, "sig_bid": 0.50, "sig_ask": 0.505})
+check("catchup last entry: a build still inside its window clips before LAST_ENTRY (2 Nov 23:30 ET) and not after it (the shock reserve is free then)",
+      len(_cr.run(OS.LAST_ENTRY - 300)) == 1 and _cr.run(OS.LAST_ENTRY + 60) == [])
+# an exit that timed out with no context
+def _boom2(*a, **k): raise TimeoutError("timed out")
+_cr = _Real([], {"1042": 3000.0})
+_cr.fills.append({"exchange_id": "1042", "quantity": 3000.0, "price": 0.50})
+_ok2 = _cr.bot.api.place_order; _cr.bot.api.place_order = _boom2
+_cr.run(T0); _cr.bot.api.place_order = _ok2
+check("catchup exit: an exit with no entry context that timed out is not re-sent every cycle: held back 90 s (side dict), then re-sent", _cr.run(T0 + 30) == [] and len(_cr.run(T0 + 100)) == 1)
 
 # wind-down: legs of an open position and of a trade being built are exempt; the exits run under the wind-down
 _wb2 = types.SimpleNamespace(churn=None, store=None, wind_down_hold_path="/nonexistent/hold.json", cheapfav_races=lambda: set(), shock_races=lambda: set(),
@@ -4366,7 +4497,7 @@ def _per_order_expiry(fn, seconds, *keys):
 check("expiry: cash raise: each clip's expiry is computed right before its own order (cancel writes sit between clips)",
       _per_order_expiry(R.Bot.raise_cycle, 60, "raise"))
 check("expiry: catch-up: the exits and the entries each take expiry_in(60) right before their own order (one cycle sends several)",
-      _per_order_expiry(R.Bot.catchup_cycle, 60, "cux", "cu"))
+      _per_order_expiry(R.Bot.catchup_cycle, 60, "cux") and _per_order_expiry(R.Bot._catchup_trade, 60, "cu"))
 _cft = _insp.getsource(R.Bot._cheapfav_trade)
 check("expiry: cheap favourites: exits and entries take expiry_in(60) in their own call; no batch-wide ttl is computed before the trade lock or passed down",
       _per_order_expiry(R.Bot._cheapfav_trade, 60, "cfx", "cf") and "ttl" not in _insp.getsource(R.Bot.cheapfav_cycle)
@@ -4812,8 +4943,12 @@ import sim_pipeline as _spl  # noqa: E402
 # ChurnBlowout.after_cycle: the snapshot is the sell-all cycle's, kept; later MM fills do not overwrite it, and a venue set left
 # in a churn race at the sell-all cycle (churn's own or not: the sell-all must sell every set in its races) is still reported.
 _pos_now, _calls_now = {}, []
+_mm_fills = {}
+class _MmStore:
+    def rows(self, q, a=()):
+        return [{"exchange_id": e, "q": x} for e, x in _mm_fills.items()] if "purpose IN ('mm','inside')" in q else []
 _bsim = types.SimpleNamespace(v=types.SimpleNamespace(calls=_calls_now, signed_positions=lambda: dict(_pos_now)),
-                              legs=lambda race: {"A": ["1", "2"], "IA": ["905", "904"]}[race])
+                              legs=lambda race: {"A": ["1", "2"], "IA": ["905", "904"]}[race], bot=types.SimpleNamespace(store=_MmStore()))
 _bo = _spl.ChurnBlowout()
 _bo.races, _bo.sell_all = ["A", "IA"], _spl.T0 + 100.0
 _tr0 = _spl.ChurnBase.after_cycle
@@ -4837,12 +4972,32 @@ try:
     _spl.CLOCK.t = _spl.T0 + 100.0
     _bo2.after_cycle(_bsim, 2)
     _b3 = dict(_bo2.left_after)
+    # 31 Oct: MM inventory present AT the sell-all cycle (IA-02: -19 / -740, purpose mm only) is not a churn set; churn's own set next to it is
+    _bo3 = _spl.ChurnBlowout()
+    _bo3.races, _bo3.sell_all = ["A", "IA"], _spl.T0 + 100.0
+    _pos_now.clear(); _pos_now.update({"905": -740.0, "904": -19.0}); _mm_fills.update({"905": -740.0, "904": -19.0})
+    _spl.CLOCK.t = _spl.T0 + 100.0
+    _bo3.after_cycle(_bsim, 2)
+    _b4 = dict(_bo3.left_after)
+    _bo4 = _spl.ChurnBlowout()
+    _bo4.races, _bo4.sell_all = ["A", "IA"], _spl.T0 + 100.0
+    _pos_now.update({"905": -840.0, "904": -119.0})            # 100 more on both legs from a basket (not MM fills): a real set of 100 on top of the MM's
+    _bo4.after_cycle(_bsim, 2)
+    _b5 = dict(_bo4.left_after)
+    _bo5 = _spl.ChurnBlowout()                                  # Kansas Senate: MM long 120 on one leg, short 560 on the other, flat venue leg: no set at all
+    _bo5.races, _bo5.sell_all = ["A", "IA"], _spl.T0 + 100.0
+    _pos_now.clear(); _pos_now.update({"904": -680.0}); _mm_fills.clear(); _mm_fills.update({"904": -560.0, "905": 120.0})
+    _bo5.after_cycle(_bsim, 2)
+    _b6 = dict(_bo5.left_after)
 finally:
     _spl.ChurnBase.after_cycle = _tr0
     _spl.CLOCK.t = _t_save
+    _mm_fills.clear()
 check("sim churn_blowout: sets_left_at_sell_all reads the sell-all cycle only (MM fills after it do not count) and still reports a set "
       "the venue holds there",
       _b0 is None and _b1 == {} and _b2 == {} and _b3 == {"A": 50}, f"{_b0} {_b1} {_b2} {_b3}")
+check("sim churn_blowout: MM inventory at the sell-all cycle (mm-purpose fills on both legs) is not counted as sets, a churn set next to it still is, and an MM long on one leg never turns a flat race into a set",
+      _b4 == {} and _b5 == {"IA": 100} and _b6 == {}, f"{_b4} {_b5} {_b6}")
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

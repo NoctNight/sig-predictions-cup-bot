@@ -63,7 +63,7 @@ FAST_SMALL_MULT = 0.6
 BUILD_WINDOW_FAST = 20 * 60.0   # clips keep coming for this long after the first (fast decays: 15 min late +1.3c, 60 min late +0.5c)
 BUILD_WINDOW_SLOW = 60 * 60.0
 CLIP_SLIPPAGE = 0.01       # no clip when the side costs more than 1c above the first clip
-CLIP_WAIT = 90.0           # next clip waits for the last order to settle (or this long, so a lagging fill sync cannot double up)
+CLIP_WAIT = 90.0           # next clip and next exit wait for the last order to settle (or this long, so a lagging fill sync cannot double up)
 PARTISAN_MARGIN = 200.0    # D/R-adding clips leave this much room under the partisan cap (the old soft limit of 4,800 at a 5,000 cap)
 RACE_GAP = 2 * 3600.0      # one signal per race per 2 h
 LAST_ENTRY = datetime(2026, 11, 3, 4, 30, tzinfo=timezone.utc).timestamp()    # 2 Nov 23:30 ET (EST, UTC-5)
@@ -84,6 +84,7 @@ class CatchupSweep:
         self.inputs: dict = {}          # race -> {"n_polls", "rating_margin"} from params/fair_model.json (conviction points)
         self.last_signal: dict = {}     # race -> ts of the last signal
         self.ctx: dict = {}             # exchange_id -> entry context {ts, d, f_then, move, mid0, gap, kind, target, ordered, ...}
+        self.exit_try: dict = {}        # exchange_id -> ts of the last exit order sent (or timed out): no blind re-send within CLIP_WAIT
         self.killed = False
 
     # ------------------------------------------------------------------ history

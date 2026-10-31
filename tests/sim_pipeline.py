@@ -1093,6 +1093,23 @@ def venue_sets(sim, race):
     return int(min(-q for q in qs)) if qs and all(q < 0 for q in qs) else 0
 
 
+def churn_sets(sim, race):
+    """Venue sets in `race` beyond the ones the market maker's own fills (purposes mm / inside) would form by themselves: the
+    venue's sets less the MM-only sets, never below 0. A fill with no purpose still counts, so a real churn set on top of MM
+    inventory is seen. 31 Oct: by the sell-all cycle the MM's quotes had collected -19 and -740 on the two legs of IA-02 (purpose
+    mm only, no churn fill), and the old reading, which counted that as a set, failed an unchanged main. (Not 'venue position
+    less MM fills': an MM long on one leg would then make a flat race look like a set.)"""
+    legs = list(sim.legs(race))
+    sets = venue_sets(sim, race)
+    if not sets:
+        return 0
+    mm = {str(r["exchange_id"]): float(r["q"] or 0.0) for r in sim.bot.store.rows(
+        "SELECT exchange_id, SUM(quantity) q FROM fills WHERE purpose IN ('mm','inside') GROUP BY exchange_id")}
+    qs = [mm.get(e, 0.0) for e in legs]
+    mm_sets = int(min(-q for q in qs)) if qs and all(q < 0 for q in qs) else 0
+    return max(0, sets - mm_sets)
+
+
 def is_main(c):
     return str(c.get("step", "")).startswith("cycle")       # main-loop step = churn; scanner steps = recycle / free unwind
 
@@ -1706,7 +1723,8 @@ class ChurnBlowout(ChurnBase):
             # Only the sell-all cycle itself (the first at or past the deadline). The old check re-read every later cycle, so it
             # judged the end of the run: sim taker flow keeps hitting the MM's quotes after the sell-all, building 'sets' (NO on
             # every leg of a two-leg race) that are MM inventory, not churn's (29 Oct: IA-02, 75 sets at t+93 min, none at t+75).
-            self.left_after = {r: venue_sets(sim, r) for r in self.races if venue_sets(sim, r)}
+            # And MM inventory present AT the sell-all cycle (31 Oct: IA-02, 19) is not churn's either: churn_sets() leaves it out.
+            self.left_after = {r: churn_sets(sim, r) for r in self.races if churn_sets(sim, r)}
 
     def before_cycle(self, sim, i):
         if i < 20:
