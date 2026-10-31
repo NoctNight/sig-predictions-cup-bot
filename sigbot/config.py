@@ -274,6 +274,17 @@ class BotConfig:
     punt_tick_sec: float = 10.0          # executor thread cadence (2 reads a tick while a step is in its window)
     punt_max_budget: float = 150000.0    # hard ceiling on a plan's budget (cash brought in from outside the punt)
     punt_cash_floor: float = 100.0       # free cash the executor never spends
+    offload_enabled: bool = False        # offload executor (proposals/offload_executor.py): sells a target's list from the plan file in
+    offload_dry_run: bool = True         # about 5 min. Logs only while dry; live only by a session in which Sizhe approved the target in chat
+    offload_plan_path: str = "data/research_offload/plan.json"
+    offload_plan_sha256: str = ""        # SHA-256 of the approved plan file; any other bytes are refused
+    offload_target: float = 0.0          # one of the plan's targets
+    offload_speed: str = "5 min"
+    offload_start: str = ""              # ISO with offset: no sale outside this window (at most 2 h)
+    offload_stop: str = ""
+    offload_tick_sec: float = 2.0        # executor thread cadence
+    offload_writes_per_min: int = 20     # baskets and batches a minute: the account's writes are shared with the other sleeves
+    offload_price_slack_ticks: float = 2.0   # a basket or leg may price this far under the plan (books in the plan are up to an hour old)
     strategy_stops_enabled: bool = False     # strategy_stops.py: per-strategy P&L stops replace the bot-wide kill switch
     stop_limits: dict = field(default_factory=dict)   # {strategy: P&L floor since armed}; defaults in strategy_stops.DEFAULT_LIMITS
     unattributed_limit: float = 2000.0       # unexplained account loss that pauses the strategies on its legs (or all entries)

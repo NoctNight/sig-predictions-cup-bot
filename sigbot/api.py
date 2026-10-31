@@ -324,11 +324,12 @@ class SuperMarketClient:
             time.sleep(wait)
         return last
 
-    def place_multi_leg(self, legs: list[dict], all_or_none: bool = True, key: Optional[str] = None) -> dict:
+    def place_multi_leg(self, legs: list[dict], all_or_none: bool = True, key: Optional[str] = None,
+                        retries: Optional[int] = None) -> dict:
         body = {"idempotencyKey": key or self.new_key("ml"), "legs": legs[:10]}
         if all_or_none:
             body["executionMode"] = "allOrNone"
-        return self.post("/orders/multi-leg", body)
+        return self._request("POST", "/orders/multi-leg", body=body, max_retries=retries)
 
     def cancel_order(self, order_id: int) -> dict:
         return self.delete(f"/orders/{order_id}")

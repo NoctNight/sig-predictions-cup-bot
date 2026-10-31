@@ -3494,6 +3494,16 @@ check("sim wind_down: a clock jump re-arms the MM's restart wait (no quote on a 
       _g1 is False and _g2 is True and _gb.mm_need_xv is False
       and "                self.preload(sim)\n" in _sp and "sim.bot.mm_need_xv = True" in _sp, f"{_g1} {_g2}")
 
+# ---------------------------------------------------------------- offload executor (research_notes/offload_plan.md; full set: tests/test_offload.py)
+_cfg0 = R.BotConfig()
+check("offload: off and dry unless a session sets both, with an approved hash", not _cfg0.offload_enabled and _cfg0.offload_dry_run and not _cfg0.offload_plan_sha256)
+_bo = types.SimpleNamespace(store=None, universe=None, punt=None, offload=types.SimpleNamespace(races=lambda: {"MN-05 House race"}))
+check("offload: a live sale's races count as punt races, so every other path keeps off them", R.Bot.punt_races(_bo) == {"MN-05 House race"})
+_bo.offload = types.SimpleNamespace(races=lambda: set())
+_bo._punt_races_c = None
+check("offload: and they go back when it ends", R.Bot.punt_races(_bo) == set())
+check("offload: its own race check does not see itself (a sale's race is not 'busy' with the sale)", R.Bot.punt_held_races(types.SimpleNamespace(store=None, universe=None, punt=None, offload=_bo.offload)) == set())
+
 # ---------------------------------------------------------------- punt executor (BACKLOG 0000 / 0c; research_notes/punt_plan.md)
 import json as _pj
 import tempfile as _ptf

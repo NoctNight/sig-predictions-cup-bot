@@ -62,6 +62,7 @@ from .proposals.dev_churn import (DevChurn, overround_series, medians_from_serie
 from .proposals import election_night as EN
 from .proposals import wind_down as WD
 from .proposals import punt_executor as PE
+from .proposals import offload_executor as OE
 from .proposals.own_book import OwnLevels
 from . import strategy_monitor as SMON
 from . import strategy_stops as STOPS
@@ -265,6 +266,155 @@ class _PuntAdapter:
             resp = self.b.api.place_order(str(ex), side, "buy", int(qty), price, expiration=exp, key=key, retries=0)
             self.b.store.record_order(resp.get("orderId"), str(ex), None, side, "buy", price, int(qty), purpose, response=resp)
         return resp.get("orderId")
+
+
+class _OffloadAdapter:
+    """The offload executor's I/O on the live bot (proposals/offload_executor.py). While dry (the bot's dry run or offload_dry_run)
+    nothing is sent or cancelled: fills are virtual, at the basket's quote or the order's limit."""
+
+    def __init__(self, bot):
+        self.b = bot
+        self.vpos: dict = {}
+        self.vcash = 0.0
+
+    @property
+    def dry(self) -> bool:
+        return bool(self.b.dry_run or self.b.cfg.offload_dry_run)
+
+    @property
+    def cap(self) -> float:
+        return float(self.b.cfg.mm.portfolio_max_partisan_notional)
+
+    def now(self) -> float:
+        return time.time()
+
+    def lock(self):
+        return self.b.trade_lock
+
+    def positions(self) -> dict:
+        p = self.b.api.positions(self.b.slug)           # raises on failure: the executor sends nothing that tick
+        m = {str(x["exchangeId"]): float(x["quantity"]) for x in p.get("positions", []) if not x.get("settled")}
+        for ex, q in self.vpos.items():
+            m[ex] = m.get(ex, 0.0) + q
+        return m
+
+    def sale_view(self, pos: dict) -> dict:
+        return self.b.wind_down_positions(pos)
+
+    def cheapfav_open(self) -> dict:
+        return {str(k): float(v) for k, v in (getattr(self.b, "cheapfav_open", None) or {}).items()}
+
+    def balance(self) -> float:
+        return float(self.b.api.account().get("balance")) + self.vcash
+
+    def book(self, ex):
+        try:
+            return own_levels(self.b).net(str(ex), self.b.get_book(str(ex), 50, max_age=10.0))
+        except ApiError as e:
+            log.warning("OFFLOAD book %s: %s", ex, e)
+            return None
+
+    def race_legs(self, race: str) -> list:
+        return list(self.b.universe.races[race].exchange_ids)
+
+    def busy(self, race: str) -> Optional[str]:
+        """Why another sleeve owns this race: never the sale's to touch (the sale's own races are not in punt_held_races)."""
+        b = self.b
+        if race in Bot.punt_held_races(b):
+            return "punt / election night"
+        if race in shock_races_of(b):
+            return "shock mode"
+        if b.churn is not None and any(l["race"] == race for l in b.churn.lots):
+            return "high-frequency arb"
+        return None
+
+    def blocked(self) -> Optional[str]:
+        b = self.b
+        if time.time() < b.killed_until:
+            return "kill switch"
+        if strategy_paused(b, "exit:raise"):
+            return "exit:raise paused"
+        return None
+
+    def cheapfav_ok(self) -> Optional[str]:
+        if strategy_paused(self.b, "exit:cheapfav"):
+            return "exit:cheapfav paused"
+        return None if strategy_paused(self.b, "cheapfav") else "the cheap-favourites sleeve is not paused: it would buy these back"
+
+    def pull(self, exs: list, now: float) -> bool:
+        return True if self.dry else Bot.wind_down_pause_legs(self.b, exs, now)
+
+    def cap_ok(self, before: dict, after: dict) -> bool:
+        prices = self.b.mm.prices
+        return bool(prices) and Bot.wind_down_partisan_ok(self.b, before, after, prices)
+
+    def net_d(self, pos: dict) -> Optional[float]:
+        prices = self.b.mm.prices
+        return risk.exposure(self.b.universe, pos, prices).net_d_notional if prices else None
+
+    def abort_requested(self) -> bool:
+        return os.path.exists(os.path.join(HERE, "params", "offload_abort"))
+
+    def basket(self, race, kind, legs, key, q, proceeds, payout, sgn) -> dict:
+        b, tid = self.b, self.b.api.tournament_id
+        if self.dry:
+            log.info("[DRY] offload basket %s x%d at %.4f: %s", race, q, proceeds, legs)
+            for l in legs:
+                self.vpos[l["exchangeId"]] = self.vpos.get(l["exchangeId"], 0.0) + sgn * q
+            self.vcash += q * proceeds
+            return {"results": [{"data": {"exchangeId": l["exchangeId"], "quantityTraded": q, "open": False}} for l in legs]}
+        body = [dict(l, tournamentId=tid) for l in legs]
+        rec = "unwind_set" if kind == "sell_set" else "unwind_buy_set"
+        Bot.stamp_exit(b, race, "offload")
+        try:
+            resp = b.api.place_multi_leg(body, all_or_none=True, key=key, retries=0)
+        except ApiError as e:
+            b.store.record_arb(race, rec, body, q, proceeds - payout, proceeds, False, {"error": e.code, "why": "offload"})
+            raise
+        b.store.record_arb(race, rec, body, q, proceeds - payout, proceeds, True, resp)
+        for r, l in zip(resp.get("results", []), legs):
+            d = r.get("data") or {}
+            b.store.record_order(d.get("orderId"), l["exchangeId"], None, l["side"], l["action"], l["price"], q, "raise_set",
+                                 status="filled" if not d.get("open") else "open", response=d)
+        b.cash += q * proceeds
+        b.refresh_snapshot({e["exchangeId"]: sgn * q for e in legs})
+        return resp
+
+    def batch(self, orders: list, key: str) -> list:
+        b = self.b
+        if self.dry:
+            out = []
+            for o in orders:
+                log.info("[DRY] offload leg %s", o)
+                d = 1 if o["side"] == "yes" else -1
+                self.vpos[o["exchangeId"]] = self.vpos.get(o["exchangeId"], 0.0) + d * o["quantity"]
+                self.vcash += o["quantity"] * (1.0 - o["price"])
+                out.append({"ok": True, "status": 201, "data": {"orderId": None, "quantityTraded": o["quantity"], "open": False}})
+            return out
+        tid = b.api.tournament_id
+        resp = b.api.place_batch([dict(o, tournamentId=tid) for o in orders], key=key, max_rounds=1)
+        b.refresh_snapshot()
+        return resp.get("results", [])
+
+    def record_leg(self, data: dict, order: dict, purpose: str):
+        if self.dry:
+            return
+        b, ex = self.b, order["exchangeId"]
+        b.store.record_order(data.get("orderId"), ex, None, order["side"], "buy", order["price"], order["quantity"], purpose,
+                             expires_at=order["expirationDate"], status="open" if data.get("open") else "filled", response=data)
+        Bot.stamp_exit(b, b.universe.race_of(ex).name, "offload")
+
+    def cancel(self, ids: list):
+        err = None
+        for i in ids:
+            try:
+                self.b.api.cancel_order(i)
+                self.b.store.mark_orders([i], "cancelled")
+            except ApiError as e:
+                if e.status in PE.TRANSIENT:
+                    err = err or e
+        if err is not None:
+            raise err
 
 
 class ExplainedDirection(DirectionTrader):
@@ -941,6 +1091,19 @@ class Bot:
             except Exception as e:
                 log.warning("punt executor disabled: %s", e)
                 self.punt = None
+        self.offload = None
+        if getattr(cfg, "offload_enabled", False):
+            try:
+                ad = _OffloadAdapter(self)
+                self.offload = OE.OffloadExecutor(os.path.join(HERE, cfg.offload_plan_path),
+                                                  os.path.join(HERE, "params", "offload_state_dry.json" if ad.dry else "offload_state.json"),
+                                                  cfg.offload_plan_sha256, ad, cfg.offload_target, cfg.offload_speed, cfg.offload_start,
+                                                  cfg.offload_stop, cfg.offload_writes_per_min, cfg.offload_price_slack_ticks)
+                log.warning("OFFLOAD executor enabled (%s): %s", "DRY" if ad.dry else "LIVE",
+                            "REFUSED: " + self.offload.refused if self.offload.refused else "%d rows, target %.0f" % (len(self.offload.rows), cfg.offload_target))
+            except Exception as e:
+                log.warning("offload executor disabled: %s", e)
+                self.offload = None
         # punt / election-night races are never touched by the set paths (recycler, free unwinds, offload, churn)
         _prot3 = self.arb.protected
         self.arb.protected = lambda: set(_prot3()) | punt_races_of(self)
@@ -3413,6 +3576,11 @@ class Bot:
     # ------------------------------------------------------------------ shock mode (proposals/shock_mode.py)
     # --------------------------------------------------------------- punt executor (BACKLOG 0000, research_notes/punt_plan.md)
     def punt_races(self) -> set:
+        """Races no other path may touch: the punt's and election night's, and those of a live offload sale while it runs."""
+        of = getattr(self, "offload", None)
+        return Bot.punt_held_races(self) | (of.races() if of is not None else set())
+
+    def punt_held_races(self) -> set:
         """Races of every leg with a punt / election fill or order (WD.HOLD_PURPOSES), plus the enabled plan's legs; read at
         most every 30 s. A failed read keeps the last answer."""
         now = time.time()
@@ -3452,6 +3620,16 @@ class Bot:
             except Exception as e:
                 log.exception("punt tick failed: %s", e)
             time.sleep(max(1.0, self.cfg.punt_tick_sec - (time.time() - t0)))
+
+    def offload_loop(self):
+        """Thread: one executor tick every offload_tick_sec; never dies."""
+        while not self.stop:
+            t0 = time.time()
+            try:
+                self.offload.tick()
+            except Exception as e:
+                log.exception("offload tick failed: %s", e)
+            time.sleep(max(0.5, self.cfg.offload_tick_sec - (time.time() - t0)))
 
     def shock_races(self) -> set:
         """Races where shock mode holds a position or has an entry in flight (its ledger plus entry contexts)."""
@@ -4749,6 +4927,9 @@ class Bot:
         if getattr(self, "punt", None) is not None and not once:
             threading.Thread(target=self.punt_loop, name="punt", daemon=True).start()
             log.warning("PUNT executor thread started (%s): every %.0fs", "DRY" if self.dry_run else "LIVE", self.cfg.punt_tick_sec)
+        if getattr(self, "offload", None) is not None and not once:
+            threading.Thread(target=self.offload_loop, name="offload", daemon=True).start()
+            log.warning("OFFLOAD executor thread started: every %.0fs", self.cfg.offload_tick_sec)
         if self.shock is not None and not self.dry_run and not once:
             threading.Thread(target=self.shock_loop, name="shock", daemon=True).start()
             log.info("shock mode thread started: every %.0fs", self.cfg.shock_poll_sec)

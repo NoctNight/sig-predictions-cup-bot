@@ -337,7 +337,7 @@ class Venue:
         tag = f"{key} {ex} {side} q={qty} px={price} exp={expiration}"
         if ex not in self.ex_market:
             raise self.ApiError(404, "NOT_FOUND", f"exchange {ex}")
-        if action != "buy":
+        if action != "buy" and not (aon and action == "sell"):     # a conventional sell only in a basket (the offload executor)
             self._violate("non_buy_order", tag)
         if not isinstance(qty, int) or isinstance(qty, bool) or qty <= 0:
             self._violate("bad_quantity", tag)
@@ -419,6 +419,9 @@ class Venue:
             except self.ApiError as e:
                 e.details = {"leg": i}
                 raise
+        # a fully-backed sell closes like its complement buy (openapi: `sell yes q@p` = `buy no q@(1-p)`)
+        legs = [l if l.get("action", "buy") == "buy" else dict(l, side="no" if l["side"] == "yes" else "yes", action="buy",
+                                                                price=round(1.0 - float(l["price"]), 3)) for l in legs]
         if self.reject_aon is not None and self.reject_aon(legs, prefix):
             rec["reason"] = "rejected (scenario)"
             raise self.ApiError(400, "VALIDATION_ERROR", "all-or-none basket not filled",
@@ -714,7 +717,7 @@ class FakeClient:
                 c["touch_at_send"] = sent[c["ex"]]
         return {"results": res}
 
-    def place_multi_leg(self, legs, all_or_none=True, key=None) -> dict:
+    def place_multi_leg(self, legs, all_or_none=True, key=None, retries=None) -> dict:
         self._w()
         return self.v.multi_leg(legs[:10], all_or_none, key)
 

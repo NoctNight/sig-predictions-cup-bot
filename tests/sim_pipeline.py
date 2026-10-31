@@ -98,7 +98,7 @@ def install_network_guard():
 
 LIVE_STATE = ("churn_state.json", "catchup_state.json", "wind_down_state.json", "strategy_kill.json", "strategy_stops_state.json",
               "strategy_monitor_state.json", "shock_state.json", "raise_state.json", "cheapfav_state.json", "punt_state.json",
-              "punt_plan.json", "punt_abort")
+              "punt_plan.json", "punt_abort", "offload_state.json", "offload_state_dry.json", "offload_abort")
 
 
 def make_sandbox() -> str:
@@ -417,7 +417,7 @@ def set_race_bids_sum(sim, race_name, total, spread_ticks=1):
 
 
 # ======================================================================================== invariants
-EXEMPT_ADD = {"exit", "offload", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm", "punt"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct); punt: only with an approved plan's cap_exempt
+EXEMPT_ADD = {"exit", "offload", "off", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm", "punt"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct); punt: only with an approved plan's cap_exempt
 RATE_LIMITS = {
     # category: [(window_sec, max events per object), ...]   object = exchange or race
     "requote": [(60, 5)],            # MM/tilt/inside cancel-all per exchange: 1 per 30-s cycle + fast requotes (3/min total)
@@ -2596,9 +2596,109 @@ def WD_ts(s):
 for _c in (ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, RecycleOversize):
     _c.cfg = {**(getattr(_c, "cfg", None) or {}), "shock_enabled": False}
 
+class OffloadSale(Scenario):
+    name, cycles, seed = "offload_sale", 60, 59
+    doc = ("offload executor ON (live config otherwise): an approved list of a NO set, a YES set and a single leg sells on the fake venue "
+           "around the other sleeves: YES set test basket first, then 5 baskets per race; our MM quotes are pulled, no other sleeve "
+           "sends an order on those races, nothing passes the partisan cap or a leg through zero, and the sale ends itself")
+
+    def venue_setup(self, sim):
+        WD = sys.modules["sigbot.proposals.wind_down"]
+        CLOCK.t = WD.et_ts(2026, 11, 2, 9, 55)
+        mids = two_leg_mid_races(sim, 0.3, 0.7)
+        self.rn, self.ry, self.rl = mids[0], mids[1], mids[2]
+        self.t0, self.t1 = CLOCK.t, CLOCK.t + 1800.0     # from the first tick: the wind-down clips these races until the sale starts
+        self.qty = 2500
+        self.ex_leg = sim.legs(self.rl)[0]
+
+    def bot_setup(self, sim):
+        v, b = sim.v, sim.bot
+        sim.seed_set(self.rn, self.qty)
+        for ex in sim.legs(self.ry):
+            sim.seed_holding(ex, "yes", self.qty, "arb", round(SV.P(v.ask_t[ex]), 3))
+        sim.seed_holding(self.ex_leg, "yes", 300, "tilt")
+        ask = sum(SV.P(v.ask_t[e]) for e in sim.legs(self.rn))
+        bid = sum(SV.P(v.bid_t[e]) for e in sim.legs(self.ry))
+        pn, py = len(sim.legs(self.rn)) - ask, bid
+        lb = SV.P(v.bid_t[self.ex_leg])
+        wn = {e: round(1.0 - SV.P(v.ask_t[e]) - 0.02, 3) for e in sim.legs(self.rn)}
+        wy = {e: round(SV.P(v.bid_t[e]) - 0.02, 3) for e in sim.legs(self.ry)}
+        order = [dict(step=1, holding=self.rn, type="set_late", qty=self.qty, cash=self.qty * pn, legs=sim.legs(self.rn), worst_cash_per_share=wn),
+                 dict(step=2, holding=self.ry, type="set_early", qty=self.qty, cash=self.qty * py, legs=sim.legs(self.ry), worst_cash_per_share=wy),
+                 dict(step=3, holding=self.rl + " D YES", type="leg", qty=300, cash=300 * (lb - 0.03), legs=[self.ex_leg],
+                      worst_cash_per_share={self.ex_leg: round(lb - 0.03, 3)})]
+        self.target = int(self.qty * (pn + py))
+        plan = {"built": datetime.fromtimestamp(self.t0 - 60, timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+                "holdings": [dict(name=self.rn, race=self.rn, kind="sell_set", legs=sim.legs(self.rn)),
+                             dict(name=self.ry, race=self.ry, kind="buy_set", legs=sim.legs(self.ry)),
+                             dict(name=self.rl + " D YES", race=self.rl, kind="yes", legs=[self.ex_leg])],
+                "speeds": {"5 min": [dict(target=self.target, reached=True, order=order)]}}
+        path = os.path.join(sim.sb, "data", "offload_plan.json")
+        open(path, "w").write(json.dumps(plan))
+        OE = sys.modules["sigbot.proposals.offload_executor"]
+        R_ = sys.modules["sigbot.run"]
+        b.cfg.offload_dry_run = False
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
+        st = os.path.join(sim.sb, "params", "offload_state.json")
+        if os.path.exists(st):
+            os.remove(st)
+        b.offload = OE.OffloadExecutor(path, st, hashlib.sha256(open(path, "rb").read()).hexdigest(), R_._OffloadAdapter(b), self.target, "5 min",
+                                       iso(self.t0), iso(self.t1), 20, 2.0)
+        if b.offload.refused:
+            sim.chk.violation("offload_refused", b.offload.refused)
+        b.offload.tick()                             # the start: its races are protected from the first cycle on
+        self.legs = set(sim.legs(self.rn)) | set(sim.legs(self.ry)) | set(sim.legs(self.rl))
+
+    def before_cycle(self, sim, i):
+        sim.bot.mm_need_xv = True
+
+    def on_tick(self, sim):
+        if sim.bot.offload is not None:
+            sim.step("offload tick", sim.bot.offload.tick)
+            pos = sim.v.signed_positions()
+            if any(pos.get(e, 0.0) > 0.5 for e in sim.legs(self.rn)) or any(pos.get(e, 0.0) < -0.5 for e in sim.legs(self.ry)):
+                if not getattr(self, "flip", False):
+                    self.flip = True
+                    sim.chk.violation("offload_flip", f"a set leg went through zero: { {e: pos.get(e) for e in self.legs} }")
+
+    def final_checks(self, sim):
+        v, off = sim.v, sim.bot.offload
+        st = off.state
+        pos = v.signed_positions()
+        def V(kind, detail):
+            sim.chk.viol.append({"scenario": self.name, "step": "end", "t": CLOCK.t, "kind": kind, "detail": detail, "trace": ""})
+        if st["status"] == "waiting":
+            V("offload_never_ran", str(st.get("log"))[:300])
+        if st["status"] == "aborted":
+            V("offload_aborted", str(st.get("why")))
+        if any(abs(pos.get(e, 0.0)) >= 50 for e in sim.legs(self.ry) + sim.legs(self.rn)):     # (an MM fill before the pull can leave a few)
+            V("offload_unsold", f"{ {e: pos.get(e) for e in sim.legs(self.ry) + sim.legs(self.rn)} }; {st.get('why')}; {str(st.get('log'))[-400:]}")
+        first = min((c for c in v.calls if c.get("kind") == "multileg" and c.get("prefix") == "off"), key=lambda c: c["t"], default=None)
+        if first is None or str(first["legs"][0]["exchangeId"]) not in sim.legs(self.ry):
+            V("offload_no_test", "the first basket is not the YES set")
+        other = [o for o in v.orders.values() if o.ex in sim.legs(self.ry) + sim.legs(self.rn) and o.prefix not in ("off", "seed", "mm", "qt")
+                 and off.t0 + 5 <= o.t <= CLOCK.t and st.get("started") and o.t >= st["started"] + 5 and (st.get("ended") is None or o.t < st["ended"])]
+        if other:
+            V("offload_race_touched", "; ".join(f"{o.key} {o.ex} {o.side}" for o in other[:4]))
+
+
+class OffloadSaleSell(OffloadSale):
+    name, cycles, seed = "offload_sell", 60, 61
+    doc = "offload_sale with too little cash for the baskets' gross: they go as conventional sells, and the checks are the same"
+
+    def bot_setup(self, sim):
+        sim.v.cash = 900.0
+        super().bot_setup(sim)
+
+    def final_checks(self, sim):
+        super().final_checks(sim)
+        if not any(c.get("kind") == "multileg" and c.get("prefix") == "off" and c["legs"][0].get("action") == "sell" for c in sim.v.calls):
+            sim.chk.viol.append({"scenario": self.name, "step": "end", "t": CLOCK.t, "kind": "offload_no_sell", "detail": "no conventional sell", "trace": ""})
+
+
 SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, Shock, ShockMaker, ShockMakerPostOnly, CheapFav, GapPilotSim, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
              ChurnMany, ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, ShockReserve, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
-             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Punt, Day]
+             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Punt, OffloadSale, OffloadSaleSell, Day]
 
 
 # ======================================================================================== main
