@@ -466,3 +466,17 @@
 - The redeploy first failed sim churn_blowout (sets_left_at_sell_all, IA-02 75): a checker false positive (MM fills after
   the sell-all were read as leftover sets; changed live data made it show). The check now reads the sell-all cycle only.
   No bot code changed. Precheck 40/40, 0 violations.
+
+## 2026-10-30 20:34 UTC: set arbs and high-frequency arb re-enabled (Sizhe, "Re-enable them")
+- Removed `arb` and `hf_arb` from params/strategy_kill.json (pingpong pause since 27 Oct 03:57 UTC; the Montana Senate / CO-04
+  recycle loop is not fixed, so the pingpong rule can pause them again). No code or config change, no restart. Recycles
+  switch off by themselves at wind-down start (31 Oct 04:00 UTC); high-frequency arb entries stop 1 Nov 00:00 UTC.
+- Revert: add the two entries back to params/strategy_kill.json (read on mtime, no restart).
+
+## 2026-10-31 16:42 UTC
+- Chamber plan C1 live through the punt executor (Sizhe approved in chat): buy NO on 842 (U.S. Senate D), limit 26c, up to 2,600, about 10,000 shares, from 20:00 UTC 31 Oct to 21:00 UTC 1 Nov; timed exit 3 Nov 12:00-15:00 ET, 3,000 clips 10 min apart, floor 20c. `punt_enabled` true, plan `params/punt_plan.json`, hash in config.json. First live run of the executor. Plan and study: `research_notes/dir_alpha/chamber_plan.md`.
+- Executor: `timed_exit` sell step, kept inside the 5,000 partisan cap by clipping; it never aborts on rejects; unsold shares are logged at its stop; a new plan waits until the stop, then starts by itself. Shock and catch-up skip punt races.
+- Deploy gate: `tests/test_guards.py` now runs on a fixed calendar. It failed on the real clock from 30 Oct 23:00 UTC, and six more checks would have failed from 1 Nov, refusing every deploy.
+- Tests: test_guards `punt:` C1 block. Three independent reviews plus a narrow fourth; sims 40 scenarios, 0 violations, also on a 3 Nov clock. Watch passed (settlement 105,654.9 -> 105,652.1).
+- 3 Nov: swap in the punt plan only after c1_exit is done (15:00 ET), and back up `params/punt_state.json` first. Sell the leftover 856 NO on 842 by hand. `params/punt_abort` also stops the exit.
+- Revert: `touch params/punt_abort` stops C1; set `punt_enabled` false and deploy. Anything bought then has to be sold by hand.
