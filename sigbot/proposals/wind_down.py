@@ -258,9 +258,8 @@ def floor_clip(kind: str, books: dict, exs: list, want: int, min_clip: int, floo
 
 
 def worst_set_price(kind: str, wq: dict, exs: list) -> float:
-    """What the last set of a clip sells for at its leg limits."""
-    lim = sum(wq["limits"][e] for e in exs)
-    return len(exs) - lim if kind == "sell_set" else lim
+    """What the last set of a clip sells for at its leg limits: YES prices paid on NO sets, NO prices paid on YES sets."""
+    return len(exs) - sum(wq["limits"][e] for e in exs)
 
 
 def locked_return(kind: str, cost_basis: dict, positions: dict, exs: list, sets: int) -> float:

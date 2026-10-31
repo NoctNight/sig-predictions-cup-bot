@@ -132,13 +132,18 @@
   "churn_kill": -200.0,
   "churn_skip_holding": 4000.0,
   "cheapfav_enabled": true,
-  "cheapfav_budget": 21000.0,
+  "cheapfav_budget": 41000.0,
   "cheapfav_min_edge": 0.04,
-  "cheapfav_leg_cap": 2000.0,
+  "cheapfav_leg_cap": 3000.0,
   "cheapfav_order_notional": 500.0,
   "cheapfav_cash_floor": 100.0,
   "cheapfav_min_price": 0.9,
   "cheapfav_max_price": 0.92,
+  "cheapfav_rotation_from": "2026-10-31T22:42:00+00:00",
+  "cheapfav_rotation_exit_start": "2026-11-02T12:00:00-05:00",
+  "cheapfav_rotation_exit_stop": "2026-11-03T12:00:00-05:00",
+  "cheapfav_rotation_floor": 0.01,
+  "cheapfav_rotation_clip": 2000,
   "cheapfav_net_max": 2000.0,
   "cheapfav_headroom": 1000.0,
   "strategy_monitor_enabled": true,
@@ -153,8 +158,14 @@
   "raise_ri_trim_sets": 4500.0,
   "wind_down_enabled": true,
   "wind_down_set_floor": {
-    "Rhode Island Governor": 1.905
+    "Rhode Island Governor": 1.905,
+    "MN-05 House race": 0.96
   },
+  "wind_down_floor_clip": 3000,
+  "wind_down_force_late": [
+    "Rhode Island Governor",
+    "MN-05 House race"
+  ],
   "shock_enabled": true,
   "shock_per_shock": 40000.0,
   "shock_total": 40000.0,

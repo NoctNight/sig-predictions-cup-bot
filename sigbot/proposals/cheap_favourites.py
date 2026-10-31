@@ -217,6 +217,20 @@ class CheapFavourites:
         return out
 
     # ------------------------------------------------------------------ exits
+    @staticmethod
+    def rotation_exit(q: float, avg_cost: float, book: dict, floor: float, clip: int) -> Optional[tuple]:
+        """Timed sale of a rotation lot (Sizhe 31 Oct: sell by 2 Nov): (side to buy, limit, shares) at the touch, or None when
+        the touch pays under avg_cost - floor (the lot waits; held to the result it still has its edge). q: lot, YES-signed."""
+        lv = (book.get("bids") if q > 0 else book.get("asks")) or []
+        if not lv:
+            return None
+        touch, size = float(lv[0]["price"]), float(lv[0]["quantity"])
+        sale = touch if q > 0 else 1.0 - touch                # cash per share sold
+        n = int(min(abs(q), clip, 0.8 * size))
+        if n < 1 or sale < avg_cost - floor - 1e-9:
+            return None
+        return ("no", round(1.0 - touch, 3), n) if q > 0 else ("yes", round(touch, 3), n)
+
     def exit_reason(self, ex: str, qty: float, row: Optional[dict], race: str, now: float) -> Optional[str]:
         """Close a held position only when SIG now prices the held side >= 2c above the outside fair (edge reversed:
         selling beats holding in expectation), with both venues agreeing, and only before the state's polls close."""

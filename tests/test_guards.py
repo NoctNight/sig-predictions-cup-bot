@@ -2024,10 +2024,10 @@ check("cheapfav bot: restart-safe: the held position is rebuilt from fills, not 
       not any(x[4] == "cfx" for x in _sent) and _b.cheapfav_open == {"r1": -600.0}
       and R.Bot.mm_positions(types.SimpleNamespace(catchup_open={}, cheapfav_open={"r1": -600.0}), {"r1": -650.0}) == {"r1": -50.0}, str(_sent))
 check("cheapfav: off by default", __import__("sigbot.config", fromlist=["BotConfig"]).BotConfig().cheapfav_enabled is False)
-check("cheapfav: live config.json runs as Sizhe set it 31 Oct: budget 21k, edge 4c, side priced 0.90-0.92, 2,000 per leg, 500 orders, floor 100",
-      _live.get("cheapfav_enabled") is True and _live.get("cheapfav_budget") == 21000.0 and _live.get("cheapfav_min_edge") == 0.04
+check("cheapfav: live config.json runs as Sizhe set it 31 Oct: budget 41k, edge 4c, side priced 0.90-0.92, 3,000 per leg, 500 orders, floor 100",
+      _live.get("cheapfav_enabled") is True and _live.get("cheapfav_budget") == 41000.0 and _live.get("cheapfav_min_edge") == 0.04
       and _live.get("cheapfav_min_price") == 0.9 and _live.get("cheapfav_max_price") == 0.92
-      and _live.get("cheapfav_leg_cap") == 2000.0 and _live.get("cheapfav_order_notional") == 500.0 and _live.get("cheapfav_cash_floor") == 100.0)
+      and _live.get("cheapfav_leg_cap") == 3000.0 and _live.get("cheapfav_order_notional") == 500.0 and _live.get("cheapfav_cash_floor") == 100.0)
 # review 24 Oct (Fable): holes found in the first draft
 check("cheapfav bot: positions read failed (empty map): no entries, the 4,000-share / no-crossing / partisan guards would be blind",
       _cfbot([], _RI, {}, 0.0)[1] == [] and _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, {}, 0.0) == [])
@@ -5087,6 +5087,25 @@ check("ri floor: the clip is sized by floor_clip, the gate and schedule are skip
 _rw = _rt[_rt.index("def wind_down_cycle"):_rt.index("def snapshot_books")]
 check("ri floor: the floored sale goes first and does not wait for the hourly exit-cost budget; cheapfav's cash need uses the same punt room as its orders",
       'out.sort(key=lambda c: (0 if c.get("floor") else 1' in _rc and 'not c.get("floor") and used + c["est_cost"]' in _rw and _rt.count("net_d_ex=nd_ex") == 2)
+_ys = {"a": {"bids": [{"price": 0.90, "quantity": 500}, {"price": 0.895, "quantity": 5000}]}, "b": {"bids": [{"price": 0.07, "quantity": 5000}]}}
+_q4, _w4 = WD.floor_clip("buy_set", _ys, ["a", "b"], 400, 100, 0.965)
+_q5, _ = WD.floor_clip("buy_set", _ys, ["a", "b"], 1000, 100, 0.97)
+_q6, _ = WD.floor_clip("buy_set", _ys, ["a", "b"], 1000, 100, 0.96)
+check("ri floor: a YES set's worst price is the sum of the bids it reaches (MN-05): 400 at 0.90+0.07 clears 0.965; 1,000 sets reach 0.965 so a 0.97 floor halves to 500; 0.96 takes 1,000",
+      _q4 == 400 and abs(WD.worst_set_price("buy_set", _w4, ["a", "b"]) - 0.97) < 1e-9 and _q5 == 500 and _q6 == 1000, f"{_q4} {_q5} {_q6}")
+_cl = CF.CheapFavourites.rotation_exit
+_bk = {"bids": [{"price": 0.895, "quantity": 5000}], "asks": [{"price": 0.09, "quantity": 2000}]}
+check("rotation exit: a YES lot sells at the bid, as a NO buy, inside the clip, 80% of the touch and the lot; under cost less the floor it waits; a NO lot sells at the ask as a YES buy",
+      _cl(1110.0, 0.90, _bk, 0.01, 2000) == ("no", 0.105, 1110) and _cl(9000.0, 0.90, _bk, 0.01, 2000) == ("no", 0.105, 2000)
+      and _cl(1110.0, 0.91, _bk, 0.01, 2000) is None and _cl(-1000.0, 0.915, _bk, 0.01, 2000) == ("yes", 0.09, 1000)
+      and _cl(1110.0, 0.90, {"asks": []}, 0.01, 2000) is None and _cl(-5000.0, 0.915, _bk, 0.01, 5000)[2] == 1600)
+_rr = open(R.__file__).read()
+_rx = _rr[_rr.index("def cheapfav_rotation_exit"):_rr.index("def _cheapfav_trade")]
+check("rotation exit: only lots since cheapfav_rotation_from, own quotes netted, positions re-read, cap checked, tagged cheapfav_exit; no new buys once it starts; live times set with offsets, exit before stop",
+      "ingested_at >= ?" in _rx and "own_levels(self).net" in _rx and "fresh_positions()" in _rx and "wind_down_partisan_ok" in _rx and '"cheapfav_exit"' in _rx
+      and 'rot_start = cfg_ts(self.cfg, "cheapfav_rotation_exit_start")' in _rr and _rr.index("Bot.cheapfav_rotation_exit(self, cf") < _rr.index("rot_start = cfg_ts")
+      and datetime.fromisoformat(_live["cheapfav_rotation_from"]).tzinfo is not None
+      and datetime.fromisoformat(_live["cheapfav_rotation_exit_start"]).timestamp() < datetime.fromisoformat(_live["cheapfav_rotation_exit_stop"]).timestamp())
 _cb = CF.CheapFavourites(budget=21000, min_edge=0.04, same_terms={"w", "x", "y"}, min_price=0.90, max_price=0.92, states={"WY": 19.0, "TN": 19.0, "RI": 19.0})
 _cr = [dict(race="Wyoming Senate", party="R", exchange_id="w", fair=0.985, sig_bid=0.89, sig_ask=0.895, pm=0.985, kalshi=0.985),
        dict(race="Wyoming Senate", party="D", exchange_id="wd", fair=0.015, sig_bid=None, sig_ask=None, pm=0.015, kalshi=0.015),
