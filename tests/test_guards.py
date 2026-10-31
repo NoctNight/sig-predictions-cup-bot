@@ -5099,10 +5099,55 @@ check("rotation exit: a YES lot sells at the bid, as a NO buy, inside the clip, 
       _cl(1110.0, 0.90, _bk, 0.01, 2000) == ("no", 0.105, 1110) and _cl(9000.0, 0.90, _bk, 0.01, 2000) == ("no", 0.105, 2000)
       and _cl(1110.0, 0.91, _bk, 0.01, 2000) is None and _cl(-1000.0, 0.915, _bk, 0.01, 2000) == ("yes", 0.09, 1000)
       and _cl(1110.0, 0.90, {"asks": []}, 0.01, 2000) is None and _cl(-5000.0, 0.915, _bk, 0.01, 5000)[2] == 1600)
+_T0 = datetime.fromisoformat("2026-10-31T22:42:00+00:00").timestamp()
+_T1 = datetime.fromisoformat("2026-11-02T12:00:00-05:00").timestamp()
+
+
+class _RotStore:
+    def __init__(self, fills, recent=()):
+        self.f, self.r, self.rec = fills, recent, []
+
+    def rows(self, sql, args=()):
+        return [dict(x) for x in (self.f if "FROM fills" in sql else [{"exchange_id": e} for e in self.r])]
+
+    def record_order(self, *a, **k):
+        self.rec.append(a)
+
+
+def _rot(fills, open_pos, pos, exited=(), resting=(), recent=(), gap=(), now=_T1 + 60, bid=0.895):
+    sent = []
+    bk = {"bids": [{"price": bid, "quantity": 9000}], "asks": [{"price": 0.91, "quantity": 9000}]}
+    b = types.SimpleNamespace(cfg=types.SimpleNamespace(cheapfav_rotation_from="2026-10-31T22:42:00+00:00", cheapfav_rotation_exit_start="2026-11-02T12:00:00-05:00",
+                                                        cheapfav_rotation_exit_stop="2026-11-03T12:00:00-05:00", cheapfav_rotation_floor=0.01, cheapfav_rotation_clip=2000),
+                              store=_RotStore(fills, recent), fresh_book=lambda ex, a=None: bk, fresh_positions=lambda: dict(pos), wind_down_partisan_ok=lambda f, a, p: True,
+                              api=types.SimpleNamespace(place_order=lambda ex, s, ac, n, px, expiration=None, key=None: sent.append((ex, s, n, px)) or {"orderId": 1}, new_key=lambda p: p))
+    _sp, _ol = R.strategy_paused, R.own_levels
+    R.strategy_paused, R.own_levels = (lambda *a: False), (lambda s: types.SimpleNamespace(net=lambda e, k: k))
+    try:
+        R.Bot.cheapfav_rotation_exit(b, None, now, set(exited), set(resting), {}, open_pos, set(gap))
+    finally:
+        R.strategy_paused, R.own_levels = _sp, _ol
+    return sent
+
+
+_f1 = [{"exchange_id": "t", "quantity": 1000.0, "price": 0.90}]
+check("rotation exit: the lot sells in the window, not before it, and only down to the venue's holding",
+      _rot(_f1, {"t": 1000.0}, {"t": 1000.0}) == [("t", "no", 1000, 0.105)] and _rot(_f1, {"t": 1000.0}, {"t": 1000.0}, now=_T1 - 60) == []
+      and _rot(_f1, {"t": 1000.0}, {"t": 600.0})[0][2] == 600)
+check("rotation exit: an exit of an OLD holding is not a lot: it is never bought back, even though the fills since the start show it as a short",
+      _rot([{"exchange_id": "o", "quantity": -1000.0, "price": 0.90}], {"o": 3000.0}, {"o": 3000.0}) == [])
+check("rotation exit: a leg the reversal exit just sold, one with an exit in the last 15 min, a resting order or a gap pilot leg is left alone; a lot past the sleeve's holding is cut to it",
+      _rot(_f1, {"t": 1000.0}, {"t": 1000.0}, exited={"t"}) == [] and _rot(_f1, {"t": 1000.0}, {"t": 1000.0}, recent={"t"}) == []
+      and _rot(_f1, {"t": 1000.0}, {"t": 1000.0}, resting={"t"}) == [] and _rot(_f1, {"t": 1000.0}, {"t": 1000.0}, gap={"t"}) == []
+      and _rot(_f1, {"t": 400.0}, {"t": 1000.0})[0][2] == 400)
+check("rotation exit: under cost less the floor nothing sells", _rot(_f1, {"t": 1000.0}, {"t": 1000.0}, bid=0.885) == [])
 _rr = open(R.__file__).read()
+check("rotation exit: the reversal exit marks its leg; the gap pilot stops buying when the rotation is sold; a floored sale stays out of the hourly budget",
+      "exited.add(ex)                             # the rotation" in _rr and _rr.count('"cheapfav_rotation_exit_start")') == 2
+      and 'spent += 0.0 if c.get("floor") else got' in _rr and '0.0 if c.get("floor") else cost' in _rr)
 _rx = _rr[_rr.index("def cheapfav_rotation_exit"):_rr.index("def _cheapfav_trade")]
 check("rotation exit: only lots since cheapfav_rotation_from, own quotes netted, positions re-read, cap checked, tagged cheapfav_exit; no new buys once it starts; live times set with offsets, exit before stop",
-      "ingested_at >= ?" in _rx and "own_levels(self).net" in _rx and "fresh_positions()" in _rx and "wind_down_partisan_ok" in _rx and '"cheapfav_exit"' in _rx
+      "price IS NOT NULL AND ingested_at >= ?" in _rx and "own_levels(self).net" in _rx and "fresh_positions()" in _rx and "wind_down_partisan_ok" in _rx and '"cheapfav_exit"' in _rx
       and '"cheapfav_rotation_exit_start")' in _rr and _rr.index("Bot.cheapfav_rotation_exit(self, cf") < _rr.index("rot_start = cfg_ts")
       and datetime.fromisoformat(_live["cheapfav_rotation_from"]).tzinfo is not None
       and datetime.fromisoformat(_live["cheapfav_rotation_exit_start"]).timestamp() < datetime.fromisoformat(_live["cheapfav_rotation_exit_stop"]).timestamp())

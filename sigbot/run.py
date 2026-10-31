@@ -2786,7 +2786,7 @@ class Bot:
             self.refresh_snapshot({e: sgn * q for e in exs})
             payout = (len(exs) - 1.0) if kind == "sell_set" else 1.0
             cost = q * (payout - res["proceeds"])
-            wd.book(now, f"{kind} {race.name}", q, res["proceeds"], cost)
+            wd.book(now, f"{kind} {race.name}", q, res["proceeds"], 0.0 if c.get("floor") else cost)   # a floored sale is outside the hourly budget
             self.wind_down_save()
         held_s = time.time() - t_lock
         if held_s > 5.0:
@@ -2921,7 +2921,7 @@ class Bot:
                 break
             if got is not None:
                 done += 1
-                spent += got
+                spent += 0.0 if c.get("floor") else got
 
     def snapshot_books(self, every: float = 3600.0, history_every: float = 6 * 3600.0):
         """Hourly copy of every order book the feed holds (no API reads) to data/books_latest.json, the format of
@@ -3286,31 +3286,42 @@ class Bot:
         with lock:                                   # the scanner thread trades sets between cycles: read its snapshot here
             self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, positions, prices, killed, dir_summary)
 
-    def cheapfav_rotation_exit(self, cf, now, exited, resting, prices):
+    def cheapfav_rotation_exit(self, cf, now, exited, resting, prices, open_pos, gap_own):
         """Sell what the sleeve bought since cheapfav_rotation_from (Sizhe 31 Oct: rotate into 90-92c favourites, sell by 2 Nov),
         between cheapfav_rotation_exit_start and _stop: one clip per leg per 5 min at the touch, never under the lot's average
-        cost less cheapfav_rotation_floor. What is unsold at the stop stays to the result. The older holdings are not touched."""
+        cost less cheapfav_rotation_floor. What is unsold at the stop stays to the result. The older holdings and the gap pilot's
+        legs are not touched: a lot is clamped to the sleeve's whole ledger and to the venue's position, same sign, and one clip
+        per leg per 15 min covers the fill ingest's lag (review 31 Oct)."""
         cfg = getattr(self, "cfg", None)
         t0, t1, t2 = (cfg_ts(cfg, k) for k in ("cheapfav_rotation_from", "cheapfav_rotation_exit_start", "cheapfav_rotation_exit_stop"))
         if None in (t0, t1, t2) or not t1 <= now < t2 or strategy_paused(self, "exit:cheapfav"):
             return
         fills = [dict(r) for r in self.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('cheapfav','cheapfav_exit') "
-                                                  "AND ingested_at >= ? ORDER BY id", (t0,))]
+                                                  "AND price IS NOT NULL AND ingested_at >= ? ORDER BY id", (t0,))]
         lots, cost, _, _ = CF.ledger(fills, {})
+        recent = {str(r["exchange_id"]) for r in self.store.rows(
+            "SELECT exchange_id FROM orders WHERE purpose='cheapfav_exit' AND placed_at > ?", (now - 900,))}
         for ex, q in lots.items():
-            if ex in resting or ex in exited:
+            h = open_pos.get(ex, 0.0)
+            if ex in resting or ex in exited or ex in recent or ex in gap_own or q * h <= 0:
                 continue
+            lot = q
+            q = min(abs(q), abs(h)) * (1 if q > 0 else -1)
             bk = self.fresh_book(ex, 10.0)
             if not bk:
                 continue
             bk = own_levels(self).net(ex, bk)            # our own quotes are not liquidity
-            o = CF.CheapFavourites.rotation_exit(q, cost.get(ex, 0.0) / abs(q), bk, cfg.cheapfav_rotation_floor, cfg.cheapfav_rotation_clip)
+            o = CF.CheapFavourites.rotation_exit(q, cost.get(ex, 0.0) / abs(lot), bk, cfg.cheapfav_rotation_floor, cfg.cheapfav_rotation_clip)
             if o is None:
                 continue
             side, px, n = o
             fr = self.fresh_positions()
             if fr is None:
                 return
+            v = fr.get(ex, 0.0)
+            if v * q <= 0:
+                continue                                 # the venue does not hold this side now: wait
+            n = min(n, int(abs(v)))
             after = dict(fr)
             after[ex] = after.get(ex, 0.0) + (n if side == "yes" else -n)
             if not self.wind_down_partisan_ok(fr, after, prices):
@@ -3319,7 +3330,7 @@ class Bot:
                 resp = self.api.place_order(ex, side, "buy", n, px, expiration=expiry_in(60), key=self.api.new_key("cfx"))
                 self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, n, "cheapfav_exit", response=resp)
                 exited.add(ex)
-                log.info("CHEAPFAV rotation exit %s %s x%d @%.3f (lot %.0f at %.3f)", ex, side, n, px, q, cost.get(ex, 0.0) / abs(q))
+                log.info("CHEAPFAV rotation exit %s %s x%d @%.3f (lot %.0f at %.3f)", ex, side, n, px, q, cost.get(ex, 0.0) / abs(lot))
             except ApiError as e:
                 log.warning("cheapfav rotation exit %s: %s", ex, e)
 
@@ -3356,7 +3367,8 @@ class Bot:
                 log.info("CHEAPFAV exit %s %s x%d @%.3f (%s)", ex, side, n, px, why)
             except ApiError as e:
                 log.warning("cheapfav exit %s: %s", ex, e)
-        Bot.cheapfav_rotation_exit(self, cf, now, exited, resting, prices)
+            exited.add(ex)                             # the rotation exit runs next: not on this leg this cycle
+        Bot.cheapfav_rotation_exit(self, cf, now, exited, resting, prices, open_pos, gap_own)
         rot_start = cfg_ts(getattr(self, "cfg", None), "cheapfav_rotation_exit_start")
         if rot_start is not None and now >= rot_start:
             return                                   # the rotation is being sold: no new buys
@@ -3631,6 +3643,9 @@ class Bot:
         pend_cf = sum(max(0.0, float(o["quantity"]) - filled_by_order.get(str(o.get("order_id")), 0.0)) * float(o["price"])
                       for o in recent if o["purpose"] == "cheapfav")
         room_all = self.cfg.cheapfav_budget - deployed_all - pend_cf        # the 15k stays shared across favourites and the pilot
+        rot_start = cfg_ts(getattr(self, "cfg", None), "cheapfav_rotation_exit_start")
+        if rot_start is not None and now >= rot_start:
+            return                                   # the rotation is being sold: the pilot shares its budget and stops buying with it
         orders = gp.entries(cands, levels, cost, sum(cost.values()), min(spendable_cash(self) - max(self.cfg.cheapfav_cash_floor, getattr(self.cfg, "churn_cash_floor", 0.0) or 0.0), room_all),
                             now, positions, expo.net_d_notional, own_net, cap=self.cfg.mm.portfolio_max_partisan_notional,
                             blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()), pend=(pend_d, pend_r),

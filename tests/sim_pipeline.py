@@ -2308,8 +2308,9 @@ class WindDown(Scenario):
             sim.chk.violation("wind_down_sold_punt", f"punt leg {self.punt_ex}: {pos.get(self.punt_ex)} held (seeded 800)")
         by_race = collections.defaultdict(list)
         for t, what, q, px, cost in sold:
-            if q > 1000:
-                sim.chk.violation("wind_down_clip_size", f"{what}: {q} in one clip (> 1,000)")
+            floored = any(what.endswith(r) for r in (sim.cfg.wind_down_set_floor or {}))     # Sizhe's floored sales clip larger
+            if q > (sim.cfg.wind_down_floor_clip if floored else 1000):
+                sim.chk.violation("wind_down_clip_size", f"{what}: {q} in one clip")
             if what.startswith(("sell_set", "buy_set")):
                 by_race[what.split(" ", 1)[1]].append(t)
         for race, ts in by_race.items():
