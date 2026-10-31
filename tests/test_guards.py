@@ -5103,7 +5103,7 @@ _rr = open(R.__file__).read()
 _rx = _rr[_rr.index("def cheapfav_rotation_exit"):_rr.index("def _cheapfav_trade")]
 check("rotation exit: only lots since cheapfav_rotation_from, own quotes netted, positions re-read, cap checked, tagged cheapfav_exit; no new buys once it starts; live times set with offsets, exit before stop",
       "ingested_at >= ?" in _rx and "own_levels(self).net" in _rx and "fresh_positions()" in _rx and "wind_down_partisan_ok" in _rx and '"cheapfav_exit"' in _rx
-      and 'rot_start = cfg_ts(self.cfg, "cheapfav_rotation_exit_start")' in _rr and _rr.index("Bot.cheapfav_rotation_exit(self, cf") < _rr.index("rot_start = cfg_ts")
+      and '"cheapfav_rotation_exit_start")' in _rr and _rr.index("Bot.cheapfav_rotation_exit(self, cf") < _rr.index("rot_start = cfg_ts")
       and datetime.fromisoformat(_live["cheapfav_rotation_from"]).tzinfo is not None
       and datetime.fromisoformat(_live["cheapfav_rotation_exit_start"]).timestamp() < datetime.fromisoformat(_live["cheapfav_rotation_exit_stop"]).timestamp())
 _cb = CF.CheapFavourites(budget=21000, min_edge=0.04, same_terms={"w", "x", "y"}, min_price=0.90, max_price=0.92, states={"WY": 19.0, "TN": 19.0, "RI": 19.0})

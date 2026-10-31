@@ -3290,7 +3290,7 @@ class Bot:
         """Sell what the sleeve bought since cheapfav_rotation_from (Sizhe 31 Oct: rotate into 90-92c favourites, sell by 2 Nov),
         between cheapfav_rotation_exit_start and _stop: one clip per leg per 5 min at the touch, never under the lot's average
         cost less cheapfav_rotation_floor. What is unsold at the stop stays to the result. The older holdings are not touched."""
-        cfg = self.cfg
+        cfg = getattr(self, "cfg", None)
         t0, t1, t2 = (cfg_ts(cfg, k) for k in ("cheapfav_rotation_from", "cheapfav_rotation_exit_start", "cheapfav_rotation_exit_stop"))
         if None in (t0, t1, t2) or not t1 <= now < t2 or strategy_paused(self, "exit:cheapfav"):
             return
@@ -3357,7 +3357,7 @@ class Bot:
             except ApiError as e:
                 log.warning("cheapfav exit %s: %s", ex, e)
         Bot.cheapfav_rotation_exit(self, cf, now, exited, resting, prices)
-        rot_start = cfg_ts(self.cfg, "cheapfav_rotation_exit_start")
+        rot_start = cfg_ts(getattr(self, "cfg", None), "cheapfav_rotation_exit_start")
         if rot_start is not None and now >= rot_start:
             return                                   # the rotation is being sold: no new buys
         if killed or not dir_summary.get("polled") or now > cf.last_entry or not positions or strategy_paused(self, "cheapfav"):
