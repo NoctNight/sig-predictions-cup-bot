@@ -480,3 +480,12 @@
 - Tests: test_guards `punt:` C1 block. Three independent reviews plus a narrow fourth; sims 40 scenarios, 0 violations, also on a 3 Nov clock. Watch passed (settlement 105,654.9 -> 105,652.1).
 - 3 Nov: swap in the punt plan only after c1_exit is done (15:00 ET), and back up `params/punt_state.json` first. Sell the leftover 856 NO on 842 by hand. `params/punt_abort` also stops the exit.
 - Revert: `touch params/punt_abort` stops C1; set `punt_enabled` false and deploy. Anything bought then has to be sold by hand.
+
+## 2026-10-31 21:00 UTC
+- Catch-up upgrade live (Sizhe: "Deploy it", on a recommendation that included the stop change): `catchup_notional` 300 -> 2,500, tilted to 5,000 (`catchup_notional_max`), built in clips, 15,000 open-cost limit (`catchup_max_open`), 6 positions. Exits follow the dir_alpha research: fast 8 h, slow 20 h, slow +3c take-profit, revert kept, no convergence exit.
+- Stop: `catchup_kill` -50 -> -400, approved by Sizhe.
+- Partisan room is judged against the book after the punt's timed exit, so catch-up cannot use up what C1's exit needs. Each clip re-reads positions and counts other sleeves' unfilled orders and its own. Own MM quotes are netted out of books. No clip after `LAST_ENTRY` (3 Nov 04:30 UTC). The exit throttle is saved across restarts.
+- Deploy gate: `churn_blowout` in `tests/sim_pipeline.py` now counts only sets beyond the MM's own inventory. Main's unchanged code failed that check on the current data files (IA-02, 19 sets, all purpose mm), so the gate would have refused every deploy.
+- Tests: test_guards `catchup room`, `catchup punt`, `catchup own quotes`, `catchup exit throttle`; precheck passed; sims 40 scenarios, 0 violations. Two independent reviews of the rebased code, the second narrow. Watch passed (settlement 105,372.7 -> 105,367.1), no tracebacks, no catch-up trade yet.
+- Known and left: a filled clip not yet ingested can be re-clipped once per 90 s, bounded by the cash and 15,000 limits.
+- Revert: set `catchup_enabled` false and deploy. A stop: add `catchup` to `params/strategy_kill.json` (read on mtime, no restart).
