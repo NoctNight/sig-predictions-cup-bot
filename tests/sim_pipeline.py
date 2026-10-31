@@ -1579,8 +1579,10 @@ class CashRaiseCheapfav(CheapFav):
 
 class ShockReserve(CheapFav):
     name, cycles, seed = "shock_reserve", 240, 45
-    cfg = {"cheapfav_enabled": True, "cheapfav_budget": 6000.0, "cheapfav_leg_cap": 1500.0, "raise_enabled": True,
-           "raise_sets_enabled": False, "shock_enabled": True, "shock_reserve": 15000.0}
+    # the sleeve at its broad settings, not the live 0.90-0.92 band: the raise needs its trades to leave holdings to refill from
+    cfg = {"cheapfav_enabled": True, "cheapfav_budget": 6000.0, "cheapfav_leg_cap": 1500.0, "cheapfav_min_edge": 0.02, "cheapfav_min_price": 0.0,
+           "cheapfav_max_price": 1.0, "cheapfav_cash_floor": 1000.0, "raise_enabled": True, "raise_sets_enabled": False, "shock_enabled": True,
+           "shock_reserve": 15000.0}
     doc = ("shock reserve (shock mode stubbed on): cheap favourites trade on 30k cash; at cycle 120 a shock buys enough to leave "
            "~12k free, under the 15k reserve: the raise refills it from MM leftovers (tier 1, < 1%, never the shock position, "
            "never more than deficit + buffer per cycle), and no cheap-favourite entry takes cash under its 1k floor + 15k")
