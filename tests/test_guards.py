@@ -541,13 +541,14 @@ def _cbot(fills, sigs, net_d, fresh=True):
     races = {"R%d" % i: types.SimpleNamespace(legs={}) for i in range(4)}
     uni = types.SimpleNamespace(by_exchange={str(i): ("R%d" % i, "D") for i in range(4)}, races=races)
     bk = {"bids": [{"price": 0.50, "quantity": 5000}], "asks": [{"price": 0.505, "quantity": 5000}]}
-    b = types.SimpleNamespace(catchup=cs, dry_run=False, store=_CStore(fills), direction=types.SimpleNamespace(rows=[{"exchange_id": "0", "race": "R0", "party": "D", "sig_mid": 0.5025}]),
+    b = types.SimpleNamespace(catchup=cs, dry_run=False, cash=1e9, store=_CStore(fills), direction=types.SimpleNamespace(rows=[{"exchange_id": "0", "race": "R0", "party": "D", "sig_mid": 0.5025}]),
                               universe=uni, open_orders_cache={}, cfg=types.SimpleNamespace(mm=types.SimpleNamespace(portfolio_max_partisan_notional=5000.0)),
                               fresh_book=(lambda ex, age=None: bk) if fresh else (lambda ex, age=None: None),
                               get_book=lambda ex, depth=50, client=None, max_age=None: {"bids": [{"price": 0.48, "quantity": 5000}], "asks": [{"price": 0.485, "quantity": 5000}]},
                               api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: sent.append((ex, side, q, px)) or {"orderId": len(sent)},
                                                         new_key=lambda p: p),
                               catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"))
+    b.catchup_save = lambda: R.Bot.catchup_save(b)
     _orig = R.risk.exposure
     R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=net_d)
     try:
@@ -679,12 +680,15 @@ class _Cyc:
                                          get_book=lambda ex, depth=50, client=None, max_age=None: {"bids": [{"price": 0.48, "quantity": 5000}], "asks": [{"price": 0.485, "quantity": 5000}]},
                                          api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: self.sent.append((ex, side, q, px, key)) or {"orderId": len(self.sent)},
                                                                    new_key=lambda p: p),
-                                         catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"))
+                                         catchup_state_path=os.path.join(tempfile.mkdtemp(), "cs.json"), cash=1e9)
+        self.bot.catchup_save = lambda: R.Bot.catchup_save(self.bot)
         if cash is not None:
             self.bot.cash, self.bot.cfg.shock_enabled, self.bot.cfg.shock_reserve = cash, True, 15000.0
         if sig:
             self.cs.signals = lambda rows, now: [self.sig] if self.sig else []
-    def run(self, t):
+    def run(self, t, **attrs):
+        for k_, v_ in attrs.items():
+            setattr(self.bot, k_, v_)
         _orig, _ot = R.risk.exposure, time.time
         R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=self.net_d)
         time.time = lambda: t
@@ -743,6 +747,7 @@ check("catchup cap: at net D +4,965 the 8 h fast exit of a NO on a D leg (the ex
 _c = _Cyc(None, net_d=-4965.0); _c.fills.append({"exchange_id": "1", "quantity": 3000.0, "price": 0.50})
 _c.cs.ctx["1"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03, "kind": "slow"}
 _c.rows.append({"exchange_id": "1", "race": "R1", "party": "D", "sig_mid": 0.535, "pm": 0.55, "kalshi": 0.55, "sig_bid": 0.53, "sig_ask": 0.54})
+_c.touch = (0.53, 0.535, 5000)
 _o = _c.run(T0 + 3600)
 check("catchup cap: ... and at net D -4,965 the slow take-profit of a YES on a D leg (the exit sells D, buying NO) is sent", len(_o) == 1 and _o[0][1] == "no" and _o[0][2] == 3000, str(_o))
 # open-cost limit and cash
@@ -759,6 +764,53 @@ _c = _Cyc(_sg, max_positions=1)
 _c.fills.append({"exchange_id": "1", "quantity": 500.0, "price": 0.50})
 _c.cs.ctx["1"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03, "kind": "slow"}
 check("catchup limit: max positions still blocks a NEW trade (1 open, max 1) but not the clips of the trade already open", _c.run(T0 + 60) == [])
+# review 31 Oct (Opus): unread account / fills, timeouts, fresh-book take-profit, MM ledger, cash with the reserve off, points off the line
+_c = _Cyc(_sg, net_d=-4000.0)
+check("catchup review: a failed positions read (positions_ok False: net D would read 0 and the room look full) places no clip and no entry",
+      _c.run(T0, positions_ok=False) == [] and _c.cs.ctx == {} and [x[2] for x in _c.run(T0 + 5, positions_ok=True)] == [4000])
+_c = _Cyc(None, net_d=0.0); _c.fills.append({"exchange_id": "1", "quantity": 3000.0, "price": 0.50})
+_c.cs.ctx["1"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03, "kind": "fast"}
+_c.rows.append({"exchange_id": "1", "race": "R1", "party": "D", "sig_mid": 0.50, "pm": 0.50, "kalshi": 0.50, "sig_bid": 0.4975, "sig_ask": 0.5025})
+check("catchup review: positions_ok False still sells (exits are not gated by the account read), but a failed FILLS read sends nothing (a stale ledger would repeat or flip the exit)",
+      len(_c.run(T0 + 28800, positions_ok=False)) == 1 and len(_c.run(T0 + 28900, positions_ok=True, fills_read_ok=False)) == 0 and len(_c.run(T0 + 29000, fills_read_ok=True)) == 1)
+_c = _Cyc(_sg, net_d=-4000.0); _c.run(T0, fills_read_ok=False)
+check("catchup review: ... and no clip or entry while the fills read is down", _c.sent == [] and _c.cs.ctx == {})
+def _boom(*a, **k): raise TimeoutError("timed out")
+_c = _Cyc(_sg, net_d=-4000.0); _ok_po = _c.bot.api.place_order; _c.bot.api.place_order = _boom
+_c.run(T0)                                                    # raises inside place_order: caught, counted as placed
+_c.bot.api.place_order = _ok_po
+check("catchup review: a TIMEOUT on a first clip is caught, counts as placed (context + clip clock written), and the next poll does not send a second clip within 90 s",
+      "0" in _c.cs.ctx and _c.cs.ctx["0"]["ordered"] == 4000 and _c.run(T0 + 5) == [], str(_c.cs.ctx))
+_c = _Cyc(None, net_d=0.0); _c.fills.append({"exchange_id": "1", "quantity": 3000.0, "price": 0.50})
+_c.cs.ctx["1"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03, "kind": "fast"}
+_c.rows.append({"exchange_id": "1", "race": "R1", "party": "D", "sig_mid": 0.50, "pm": 0.50, "kalshi": 0.50, "sig_bid": 0.4975, "sig_ask": 0.5025})
+_ok_po = _c.bot.api.place_order; _c.bot.api.place_order = _boom
+_c.run(T0 + 28800); _c.bot.api.place_order = _ok_po
+check("catchup review: a TIMEOUT on an exit is not re-sent blind for 90 s (it could flip the position), then it is", _c.run(T0 + 28830) == [] and len(_c.run(T0 + 28800 + 95)) == 1)
+_c = _Cyc(None, net_d=0.0); _c.fills.append({"exchange_id": "1", "quantity": 3000.0, "price": 0.50})
+_c.cs.ctx["1"] = {"ts": T0, "d": 1, "f_then": 0.50, "move": 0.03, "mid0": 0.50, "gap": 0.03, "kind": "slow"}
+_c.rows.append({"exchange_id": "1", "race": "R1", "party": "D", "sig_mid": 0.535, "pm": 0.55, "kalshi": 0.55, "sig_bid": 0.53, "sig_ask": 0.54})
+_c.touch = (0.51, 0.515, 5000)                                # the direction row is stale: the live bid is 51c, +1c only
+check("catchup review: the take-profit is confirmed on the fresh book the exit is priced off: row says +3c, book says +1c -> held; book at +3c -> sold",
+      _c.run(T0 + 3600) == [] and (setattr(_c, "touch", (0.53, 0.535, 5000)), len(_c.run(T0 + 3700)))[1] == 1)
+_c = _Cyc(_sg, net_d=-4000.0, cash=17000.0)
+_c.bot.cfg.shock_enabled = False                              # the reserve is off: the cash check still applies (cash 17,000 here; below with 900 only)
+_c.bot.cash = 900.0
+_o = _c.run(T0)
+check("catchup review: with the shock reserve off the clip is still cut to the cash on hand (900 / 0.505 = 1,782 shares)", _o and _o[0][2] == int(900 / 0.505), str(_o))
+_c = _Cyc(_sg, net_d=-4000.0); _c.bot.universe.by_exchange.pop("0")
+_o = _c.run(T0)
+check("catchup review: a leg unknown to the universe (risk.adds None -> room unlimited) does not crash the cycle (inf / px)", len(_o) == 1, str(_o))
+_mb = types.SimpleNamespace(catchup=OS.CatchupSweep(), dry_run=False, catchup_open={}, store=_CStore([{"exchange_id": "9", "quantity": 700.0, "price": 0.5}]))
+R.Bot.catchup_ledger_refresh(_mb)
+check("catchup review: catchup_open is rebuilt from the fills right after they are ingested (before the MM runs), so a fresh clip is not MM inventory", _mb.catchup_open == {"9": 700.0})
+_rsrc = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("catchup review: ... and that refresh sits right after ingest_fills in the cycle, before the MM", "fills_count = self.ingest_fills()\n        self.catchup_ledger_refresh()" in _rsrc)
+_cf, sg = _hist([_row(T0, 0.33, 0.33, 0.33)], _row(T0 + 3600, 0.30, 0.30, 0.33))
+_cf2, sg2 = _hist([_row(T0, 0.50, 0.50, 0.50)], _row(T0 + 3600, 0.53, 0.53, 0.50))
+check("catchup review: the slow upper-two-thirds point is the distance beyond the MM line: a sell with outside 30c / SIG 33c has a 3.0c raw gap but is only 1.4c beyond the line -> no point; at 50c the gap and the line distance (2.76c) both count",
+      len(sg) == 1 and sg[0]["pts"] == 0 and abs(sg[0]["gap"] - 0.03) < 1e-9 and len(sg2) == 1 and sg2[0]["pts"] == 1, str((sg, sg2)))
+
 # wind-down: legs of an open position and of a trade being built are exempt; the exits run under the wind-down
 _wb2 = types.SimpleNamespace(churn=None, store=None, wind_down_hold_path="/nonexistent/hold.json", cheapfav_races=lambda: set(), shock_races=lambda: set(),
                              catchup_open={"4": 3000.0, "5": 0.0}, cheapfav_open={}, shock_open={}, catchup=types.SimpleNamespace(ctx={"6": {"ts": T0}}))
@@ -1993,7 +2045,7 @@ _cfs = open(os.path.join(ROOT, "sigbot", "run.py")).read()
 check("shock reserve: cheap favourites, arbs, recycles, offload, catch-up and the MM / tilt / news / direction budgets read the "
       "spendable cash (only the value log reads raw cash)",
       "cf.entries(cands, held, deployed, spendable_cash(self)" in _cfs and "b.arb.plan(cand_books, spendable_cash(b))" in _cfs
-      and "fills_count, max(0.0, spendable_cash(self)), cycle_id" in _cfs and "if shock_reserve(self) > 0:\n                    q = min(q, int(max(0.0, spendable_cash(self)) / max(px, 0.01)))" in _cfs
+      and "fills_count, max(0.0, spendable_cash(self)), cycle_id" in _cfs and "int(max(0.0, spendable_cash(self)) / max(px, 0.01)))" in _cfs
       and _cfs.count("spendable_cash(") >= 20)
 # the raise refills the reserve after a shock spent it, tier 1 only, capped at deficit + buffer
 _b, _v = _rbot(_rpos, _rbooks, {})

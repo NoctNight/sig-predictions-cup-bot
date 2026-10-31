@@ -48,7 +48,7 @@ FAST_MID_RANGE = (0.25, 0.75)
 SLOW_OWN_MAX = 0.70        # slow: skip when the side we would buy costs 70c+ (13 trades -0.1c, rest +2.0c)
 # conviction points, one each (nothing fitted): no public polls, toss-up rating, leg quote unchanged 2 h+, signal in the upper two thirds
 UNCHANGED_SECS = 2 * 3600.0
-UPPER_GAP = 0.0218         # slow: gap in the upper two thirds of slow signals
+UPPER_GAP = 0.0218         # slow: the leg's distance beyond the market maker's line (the gap less its built-in compression) in the upper two thirds
 UPPER_MOVE = 0.0228        # fast: 30-min outside move in the upper two thirds of fast signals
 # the market maker prices about 0.92 of the way from 50c to the outside; a leg 2c+ on the right side of that line starts better
 MM_K = 0.92
@@ -125,7 +125,9 @@ class CatchupSweep:
 
     # ------------------------------------------------------------------ entries
     def points(self, race: str, kind: str, unchanged: float, gap: float, move30: Optional[float]) -> int:
-        """Conviction points, one each: no public polls, toss-up rating, SIG's quote unchanged 2 h+, signal in the upper two thirds."""
+        """Conviction points, one each: no public polls, toss-up rating, SIG's quote unchanged 2 h+, signal in the upper two thirds.
+        gap (slow) is the distance beyond the market maker's line, (line - mid) * d: research measured the gap against its own
+        48 h norm, and the raw gap carries the maker's compression (2.4c at an outside of 80c) towards the favourite for free."""
         ip = self.inputs.get(race) or {}
         pts = 1 if ip.get("n_polls") == 0 else 0
         rm = ip.get("rating_margin")
@@ -186,10 +188,11 @@ class CatchupSweep:
             if kind == "slow" and own >= SLOW_OWN_MAX - 1e-9:
                 continue
             line = 0.5 + MM_K * (f_now - 0.5)
-            right = (line - mid) * d >= LINE_RIGHT - 1e-9
+            line_dist = (line - mid) * d
+            right = line_dist >= LINE_RIGHT - 1e-9
             out.append({"exchange_id": ex, "race": race, "party": r.get("party"), "d": d, "move": move, "f_now": f_now,
                         "f_then": f_then, "mid": mid, "gap": gap, "bid": bid, "ask": ask, "kind": kind, "right": right,
-                        "move30": move30, "pts": self.points(race, kind, self.unchanged_for(ex, now), gap, move30)})
+                        "move30": move30, "pts": self.points(race, kind, self.unchanged_for(ex, now), line_dist, move30)})
         return out
 
     def target_notional(self, sig: dict) -> float:

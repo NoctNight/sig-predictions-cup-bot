@@ -49,7 +49,7 @@ from .proposals.dmm_lag_follow import LagFollower
 from .proposals.inside_quoter import InsideQuoter
 from .proposals.volatile_moves import MoveDetector, VolatileMoves
 from .proposals.outside_sweep import (CatchupSweep, avg_yes_from_fills, inputs_from_model, pnl_from_fills, rows_from_venue_quotes,
-                                      BUILD_WINDOW_FAST, BUILD_WINDOW_SLOW, CLIP_SLIPPAGE, CLIP_WAIT)
+                                      BUILD_WINDOW_FAST, BUILD_WINDOW_SLOW, CLIP_SLIPPAGE, CLIP_WAIT, TAKE_PROFIT_SLOW)
 from .proposals import cheap_favourites as CF
 from .proposals import gap_pilot as GP
 from .proposals import cash_raise as CR
@@ -2771,6 +2771,10 @@ class Bot:
         pnl, open_pos = pnl_from_fills(fills, marks)
         avg = avg_yes_from_fills(fills)
         self.catchup_open = dict(open_pos)           # the MM excludes these from its inventory
+        # a failed fills read leaves the ledger behind the venue: an exit or a clip off it would repeat or flip an order (review 31 Oct)
+        fills_ok = getattr(self, "fills_read_ok", True) is not False
+        if not fills_ok:
+            log.warning("CATCHUP: fills read failed this cycle: no exits, clips or entries until the ledger is current")
         if not cs.killed and cs.check_kill(pnl):
             log.warning("CATCHUP: sleeve P&L %.1f at or below %.0f: switched off; open positions are being closed", pnl, cs.kill_pnl)
         resting = {str(r["exchange_id"]) for r in self.store.rows(
@@ -2782,8 +2786,10 @@ class Bot:
                 resting.add(str(ex_o))                 # the venue still shows one of our catchup orders resting here
         changed = False
         for ex, q in open_pos.items():
-            if ex in resting:
+            if ex in resting or not fills_ok:
                 continue
+            if now - (cs.ctx.get(ex) or {}).get("exit_try", 0.0) < CLIP_WAIT:
+                continue                               # an exit went out (or timed out unanswered) a moment ago
             why = cs.exit_reason(ex, byex.get(ex), now, avg.get(ex), q)
             if not why:
                 continue
@@ -2799,29 +2805,40 @@ class Bot:
             if q > 0 and bid is None or q < 0 and ask is None:
                 log.warning("CATCHUP exit %s waits: no %s in the book (%s)", ex, "bid" if q > 0 else "ask", why)
                 continue
+            if why.startswith("slow take-profit"):     # the trigger read a direction row: confirm on the book the order is priced off
+                live_v = (bid - avg[ex]) if q > 0 and ex in avg else (avg[ex] - ask) if q < 0 and ex in avg else None
+                if live_v is None or live_v < TAKE_PROFIT_SLOW - 1e-9:
+                    continue
             side, px = ("no", round(1 - bid, 3)) if q > 0 else ("yes", round(ask, 3))
+            if ex in cs.ctx:
+                cs.ctx[ex]["exiting"] = True           # no more clips of a trade that is being closed
+                cs.ctx[ex]["exit_try"] = now           # set before the call: a timeout leaves the outcome unknown, never re-sent blind
+                changed = True
+                self.catchup_save()
             try:
                 resp = self.api.place_order(ex, side, "buy", int(abs(q)), px, expiration=expiry_in(60), key=self.api.new_key("cux"))
                 self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, int(abs(q)), "catchup_exit", response=resp)
                 log.info("CATCHUP exit %s %s x%d @%.3f (%s)", ex, side, int(abs(q)), px, why)
-                if ex in cs.ctx:
-                    cs.ctx[ex]["exiting"] = True       # no more clips of a trade that is being closed
-                    changed = True
             except ApiError as e:
                 log.warning("catchup exit %s: %s", ex, e)
+            except Exception as e:                     # timeout / connection reset: the order may be live; the ledger will show it
+                log.warning("catchup exit %s: unknown outcome (%s): not re-sent for %.0f s", ex, e, CLIP_WAIT)
         for ex in list(cs.ctx):
             if ex not in open_pos and ex not in resting and now - cs.ctx[ex].get("ts", now) > 300:
                 cs.ctx.pop(ex)                      # flat and settled: forget the entry context
                 changed = True
-        can_trade = not killed and not cs.killed and dir_summary.get("polled") and not strategy_paused(self, "catchup")
+        # an unread account is not an empty one: net D would read 0 and the clip would take the whole room again
+        can_trade = (not killed and not cs.killed and dir_summary.get("polled") and not strategy_paused(self, "catchup") and fills_ok
+                     and getattr(self, "positions_ok", True) is not False)
         building = [ex for ex, c in cs.ctx.items() if can_trade and c.get("target") and not c.get("exiting") and ex not in resting
                     and now < c.get("build_until", 0.0)]
         sigs = [s for s in cs.signals(rows, now) if s["race"] not in punt_races_of(self)] if can_trade else []
         if building or sigs:
             cap = self.cfg.mm.portfolio_max_partisan_notional
             expo = risk.exposure(self.universe, positions, prices)
-            n_open = len(open_pos) + len([e for e in resting if e not in open_pos])
+            n_open = len(set(open_pos) | set(resting) | set(cs.ctx))
             open_cost = sum(abs(q) * (avg[e] if q > 0 else 1.0 - avg[e]) for e, q in open_pos.items() if e in avg)
+            open_cost += sum(max(0.0, c.get("ordered", 0) - abs(open_pos.get(e, 0.0))) * c.get("px0", 0.5) for e, c in cs.ctx.items())   # ordered, not yet held
 
             def clip(ex, s, remaining, first):
                 """One clip on ex for signal s: priced at the fresh touch, cut to the partisan room, the sleeve's open-cost limit
@@ -2840,19 +2857,20 @@ class Bot:
                 if not first and px > cs.ctx[ex]["px0"] + CLIP_SLIPPAGE + 1e-9:
                     return 0.0                             # the touch ran away from the first clip
                 adds_dir = risk.adds(self.universe, ex, side)
-                q = min(q, int(cs.room(adds_dir, expo.net_d_notional, cap) / max(px, 0.01)),
-                        int(max(0.0, cs.max_open_notional - open_cost) / max(px, 0.01)))
-                if shock_reserve(self) > 0:
-                    q = min(q, int(max(0.0, spendable_cash(self)) / max(px, 0.01)))     # the shock reserve is not catch-up's to spend
+                q = min(q, int(min(cs.room(adds_dir, expo.net_d_notional, cap), 1e9) / max(px, 0.01)),
+                        int(max(0.0, cs.max_open_notional - open_cost) / max(px, 0.01)),
+                        int(max(0.0, spendable_cash(self)) / max(px, 0.01)))     # cash above the shock reserve is all catch-up may spend
                 if q < cs.min_shares or not cs.can_enter(n_open if first else 0, adds_dir, expo.net_d_notional, q * px, cap=cap):
                     return 0.0
                 try:
                     resp = self.api.place_order(ex, side, "buy", q, px, expiration=expiry_in(60), key=self.api.new_key("cu"))
                     self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, q, "catchup", response=resp)
-                    self.cash = getattr(self, "cash", 0.0) - q * px   # the next entry this cycle sees it (shock reserve)
                 except ApiError as e:
                     log.warning("catchup entry %s: %s", ex, e)
                     return 0.0
+                except Exception as e:                     # timeout / reset: the order may be live. Count it as placed (context, clip clock),
+                    log.warning("catchup entry %s: unknown outcome (%s): counted as placed", ex, e)   # so the next poll cannot send a second one
+                self.cash = getattr(self, "cash", 0.0) - q * px   # the next entry this cycle sees it (shock reserve)
                 open_cost += q * px
                 expo.net_d_notional += q * px if adds_dir == "D" else (-q * px if adds_dir == "R" else 0.0)   # next clip sees it
                 if first:
@@ -2869,6 +2887,7 @@ class Bot:
                 log.info("CATCHUP %s %s %s %s x%d @%.3f (%s %d pts%s, clip %d of target %d): outside moved %+.3f, SIG gap %.1f ticks",
                          "enter" if first else "clip", s["race"], ex, side, q, px, s["kind"], s["pts"], ", right of the line" if s["right"] else "",
                          cs.ctx[ex]["clips"], cs.ctx[ex]["target"], s["move"], s["gap"] / TICK)
+                self.catchup_save()                        # a restart now must not lose the context (the leg would be sold as "no entry context")
                 return q * px
 
             for ex in building:                            # more clips of the trades being built
@@ -2894,13 +2913,27 @@ class Bot:
                     n_open += 1
                     changed = True
         if changed or cs.killed:
-            try:
-                tmp = self.catchup_state_path + ".tmp"
-                with open(tmp, "w") as f:
-                    json.dump({"ctx": cs.ctx, "last_signal": cs.last_signal, "killed": cs.killed}, f)
-                os.replace(tmp, self.catchup_state_path)
-            except OSError as e:
-                log.warning("catchup state: %s", e)
+            self.catchup_save()
+
+    def catchup_ledger_refresh(self):
+        """catchup_open from the fills just ingested (catchup_cycle runs after the MM; without this the MM sees last cycle's ledger)."""
+        if self.catchup is None or self.store is None or self.dry_run:
+            return
+        try:
+            fills = [dict(r) for r in self.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('catchup','catchup_exit') ORDER BY filled_at")]
+            self.catchup_open = dict(pnl_from_fills(fills, {})[1])
+        except Exception as e:
+            log.warning("catchup ledger refresh: %s", e)
+
+    def catchup_save(self):
+        cs = self.catchup
+        try:
+            tmp = self.catchup_state_path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump({"ctx": cs.ctx, "last_signal": cs.last_signal, "killed": cs.killed}, f)
+            os.replace(tmp, self.catchup_state_path)
+        except OSError as e:
+            log.warning("catchup state: %s", e)
 
     def cheapfav_races(self) -> set:
         """Races where the cheap-favourites sleeve holds a position (its ledger, rebuilt from fills)."""
@@ -4326,6 +4359,7 @@ class Bot:
 
         # ---- fills and tape
         fills_count = self.ingest_fills()
+        self.catchup_ledger_refresh()          # the MM below must not count a fresh catch-up clip as its own inventory (review 31 Oct)
         quoted = self.mm.quoted or self.pick_markets(prices)
         arb_exs = [ex for r in self.universe.races.values() for ex in r.exchange_ids if r.name in self.arb.committed]
         self.election_fills()
