@@ -3292,12 +3292,52 @@ _cs = _f.sent[len(_cbuys):]
 check("punt: a timed exit sells with the outside feed down, all of what the plan bought, in clips, and leaves the 856 NO it never bought",
       _f.pos["842"] == -856.0 and _cs and all(o["side"] == "yes" and o["qty"] <= 3000 for o in _cs), f"{_f.pos} {[(o['side'], o['qty'], o['price']) for o in _cs][:6]}")
 check("punt: every timed-exit order is floored at min_price (YES limit 1 - 0.20)", all(abs(o["price"] - 0.80) < 1e-9 for o in _cs), str([o["price"] for o in _cs]))
-_f = _PuntFake(_cT, _cb, cash=16000.0)
+_f = _PuntFake(_cT, _cb, cash=1000.0)         # the adapter's cash() is already net of shock's reserve
 _e, _, _ = _pmk(_cplan(), _f)
-_e.cash_floor = 15000.0
-_f.c0 = 16000.0
 _prun(_e, _f, _cT + 1800, step=30.0)
-check("punt: the cash floor holds the shock reserve (16,000 cash, floor 15,000: at most 1,000 spent)", _f.c >= 15000.0 - 1e-6, str(_f.c))
+check("punt: spending stops at the cash floor, and a step short of cash says so once in its log",
+      _f.c >= 100.0 - 1e-6 and sum("waiting for cash" in x[1] for x in _e.state["log"]) == 1, f"{_f.c} {_e.state['log'][-3:]}")
+
+
+def _cbought(cash=18300.0):
+    f = _PuntFake(_cT, _cb, cash=cash)
+    f.pos["842"] = -856.0
+    f.out["842"] = (0.72, 0.69)
+    e, _, _ = _pmk(_cplan(), f)
+    _prun(e, f, _cT + 1800, step=30.0)
+    f.t = _cx0 - 60
+    return e, f, len(f.sent)
+
+
+_e, _f, _n = _cbought()
+_f.fq_on, _f.fq_lag = True, 300.0            # fills reach the store minutes after the position falls
+_prun(_e, _f, _cx0 + 3600, step=30.0)
+check("punt: with fills lagging 5 minutes a timed exit never sells the 856 NO it did not buy", _f.pos["842"] == -856.0, str(_f.pos))
+_e, _f, _n = _cbought()
+_f.exit_cap_ok = lambda ex, side, qty: False
+_prun(_e, _f, _cx0 + 1800, step=30.0)
+_cheld = len(_f.sent) - _n
+_f.exit_cap_ok = lambda ex, side, qty: True
+_prun(_e, _f, _cx0 + 7200, step=30.0)
+check("punt: a timed exit waits while the sale would break the partisan cap, then sells once there is room, inside its window",
+      _cheld == 0 and _f.pos["842"] == -856.0 and _e.st("x")["status"] != "aborted", f"{_cheld} {_f.pos} {_e.st('x')}")
+_e, _f, _n = _cbought()
+_f.terminal = False
+_rej = {"n": 0}
+_place0 = _f.place
+
+
+def _reject(ex, side, qty, price, key, expires_at, purpose="punt"):
+    if _rej["n"] < 5:
+        _rej["n"] += 1
+        raise R.ApiError(400, "BAD", "fake reject")
+    return _place0(ex, side, qty, price, key, expires_at, purpose)
+
+
+_f.place = _reject
+_prun(_e, _f, _cx0 + 7200, step=30.0)
+check("punt: five rejected orders in a row never abort a timed exit: it backs off and still gets flat", _rej["n"] == 5 and _f.pos["842"] == -856.0 and _e.st("x")["status"] != "aborted",
+      f"{_rej} {_f.pos} {_e.st('x').get('status')}")
 _f = _PuntFake(_T0, _books, cash=15000.0)
 _f.out["1007"] = (0.60, 0.60)
 _p = _pplan()
@@ -3808,8 +3848,12 @@ check("punt: every set / exit / quote path excludes punt races (free unwinds x2,
       and _rsp.count("Bot.punt_legs(self)") >= 4 and "ex in punt_ex" in _rsp)
 import sigbot.config as _pcfg  # noqa: E402
 _live = _pj.load(open(os.path.join(ROOT, "config.json")))
-check("punt: off by default in config.py and in config.json", _pcfg.BotConfig.__dataclass_fields__["punt_enabled"].default is False
-      and _live.get("punt_enabled") is False)
+check("punt: off by default in config.py; on in config.json only with a plan whose bytes match the approved hash",
+      _pcfg.BotConfig.__dataclass_fields__["punt_enabled"].default is False
+      and (_live.get("punt_enabled") is False or PE.sha256_file(os.path.join(ROOT, "params", "punt_plan.json")) == _live.get("punt_plan_sha256")))
+check("punt: shock mode and the catch-up sweep never enter a punt race", 'g["race"] not in punt_races_of(self)' in _rsp and 's["race"] not in punt_races_of(self)' in _rsp)
+check("punt: the live cash read already leaves out shock's reserve, so config keeps no second 15,000 floor",
+      "- shock_reserve(self.b)" in _rsp and float(_live.get("punt_cash_floor", _pcfg.BotConfig.__dataclass_fields__["punt_cash_floor"].default)) < 1000.0)
 from sigbot import strategy_stops as _pss  # noqa: E402
 check("punt: strategy stops attribute punt / punt_exit fills to 'punt' and give it no P&L stop (a punt loss pauses nothing)",
       _pss.PURPOSE_LEDGER.get("punt") == "punt" and _pss.PURPOSE_LEDGER.get("punt_exit") == "punt" and "punt" not in _pss.DEFAULT_LIMITS)

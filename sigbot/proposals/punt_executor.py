@@ -62,6 +62,7 @@ MAX_STEPS = 8
 ORDER_TTL = 30.0                     # seconds a chunk order rests before it expires on the venue
 MIN_ORDER_CASH = 50.0
 MAX_ERRORS = 3
+EXIT_BACKOFF = 300.0              # a timed exit after MAX_ERRORS rejects in a row: seconds before the next try
 RECOVER_AFTER = 10.0                 # review R2-2: look a placeholder order up this long after its expiry
 FILL_LAG_WAIT = 180.0                # review R3-1: a finished sale waits this long after its last order for the fill store to catch up
 RECOVER_GIVE_UP = 600.0              # ... and stop looking this long after it
@@ -497,11 +498,15 @@ class PuntExecutor:
             v["n"] += 1
             v["errors"] += 1
             self.note(f"{s['id']}: {p['what']} rejected ({e}); {v['errors']} in a row")
-            if v["errors"] >= MAX_ERRORS:
-                v["status"] = "aborted"
-                v["why"] = "3 rejected orders"
-                self.note(f"{s['id']}: ABORTED after {MAX_ERRORS} rejected orders")
             v["last"] = now
+            if v["errors"] >= MAX_ERRORS:
+                if s.get("timed_exit") is True:      # a position has to come out by the clock: wait and retry, never give up on it
+                    v["last"] = now + EXIT_BACKOFF
+                    self.note(f"{s['id']}: {v['errors']} rejected orders in a row: retrying in {EXIT_BACKOFF:.0f} s")
+                else:
+                    v["status"] = "aborted"
+                    v["why"] = "3 rejected orders"
+                    self.note(f"{s['id']}: ABORTED after {MAX_ERRORS} rejected orders")
             return None
         if oid is None:
             # review R3-4: a 200 with orderId null is the venue's no-op (nothing placed or traded; a resend replays it)
@@ -551,6 +556,9 @@ class PuntExecutor:
             if max_cash - used < MIN_ORDER_CASH or budget < MIN_ORDER_CASH:
                 v["status"] = "done"
                 self.note(f"{s['id']}: complete: {filled:.0f} shares for ~{used:.0f}")
+            elif not v.get("short_noted"):
+                v["short_noted"] = True              # cash is what is holding it: say so once, it retries every tick
+                self.note(f"{s['id']}: waiting for cash: only {room:.0f} can be spent")
             return None
         book = self.a.book(ex)
         if not book:
@@ -588,7 +596,9 @@ class PuntExecutor:
             sold = min(drop, float(fq))
         sold = max(sold, float(v.get("sold") or 0.0))            # a measured sale never shrinks
         v["sold"] = sold
-        return sold, min(v.get("bought", bought) - sold, have)   # never more than the venue position on that side
+        ours = v.get("bought", bought)
+        not_ours = max(0.0, v["base"] - ours)                    # shares on that side the plan did not buy: `sold` lags the fills
+        return sold, min(ours - sold, have - not_ours)           # by minutes, so the position itself keeps a sale off them
 
     def _sell(self, s, v, pos, now):
         src = next(x for x in self.plan["steps"] if x["id"] == s["of_step"])
@@ -644,6 +654,12 @@ class PuntExecutor:
         if q < 1:
             return None
         opp = "no" if side == "yes" else "yes"     # selling `side` at >= p = buying the other side at <= 1 - p
+        if s.get("timed_exit") is True and not self.plan.get("cap_exempt") and not getattr(self.a, "exit_cap_ok", lambda *a: True)(ex, opp, q):
+            if not v.get("cap_noted"):               # the 5,000 partisan cap is a hard limit: wait for the wind-down to make room
+                v["cap_noted"] = True
+                self.note(f"{s['id']}: held: selling {q} would take net D past the partisan cap")
+            v["last"] = now
+            return None
         return self._send(s, v, ex, opp, q, round(1 - float(s["min_price"]), 3), "SELL")
 
     def _target_buy(self, s, v, pos, now):

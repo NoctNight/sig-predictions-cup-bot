@@ -137,6 +137,17 @@ class _PuntAdapter:
             c = float(getattr(self.b, "cash", 0.0) or 0.0)
         return c - self.vcash - shock_reserve(self.b)   # shock's reserve is not ours (0 once its last entry has passed, 3 Nov)
 
+    def exit_cap_ok(self, ex, side, qty) -> bool:
+        """Would buying qty of `side` keep |net D| within the partisan cap (or no larger than now)? Unknown means no."""
+        try:
+            before = {str(k): float(v) for k, v in self.positions().items()}
+            after = dict(before)
+            after[str(ex)] = after.get(str(ex), 0.0) + (qty if side == "yes" else -qty)
+            return self.b.wind_down_partisan_ok(before, after, self.b.mm.prices)
+        except Exception as e:
+            log.warning("PUNT exit cap check: %s", e)
+            return False
+
     def _row(self, ex):
         return next((r for r in (getattr(self.b.direction, "rows", None) or []) if str(r.get("exchange_id")) == str(ex)), None)
 
@@ -2785,7 +2796,7 @@ class Bot:
                 cs.ctx.pop(ex)                      # flat and settled: forget the entry context
                 changed = True
         if not killed and not cs.killed and dir_summary.get("polled") and not strategy_paused(self, "catchup"):
-            sigs = cs.signals(rows, now)
+            sigs = [s for s in cs.signals(rows, now) if s["race"] not in punt_races_of(self)]
             if sigs:
                 expo = risk.exposure(self.universe, positions, prices)
                 n_open = len(open_pos) + len([e for e in resting if e not in open_pos])
@@ -3632,7 +3643,7 @@ class Bot:
                 cf_held = cheapfav_races_of(self)    # cheap favourites hold to the call: the two ledgers never share a race
                 # nor a race the wind-down or the cash raise clipped in the last 30 min (shared exit lock): shock would buy
                 # what they just sold (and the wind-down exempts a shock race at once, so it would stop mid-race)
-                for sgl in [g for g in sk.signals(rows, now, open_races) if g["race"] not in cf_held
+                for sgl in [g for g in sk.signals(rows, now, open_races) if g["race"] not in cf_held and g["race"] not in punt_races_of(self)
                             and not Bot.exit_locked(self, g["race"], "shock", now=now)]:
                     todo.append(("new", sgl["exchange_id"], sgl["race"], sgl["d"], min(abs(sgl["move"]), sgl["gap"]), sgl))
                 cleared = set()
