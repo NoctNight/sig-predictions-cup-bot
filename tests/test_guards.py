@@ -520,9 +520,9 @@ check("catchup: a position without entry context (restart) is closed", cs.exit_r
 pnl, op = OS.pnl_from_fills([{"exchange_id": "10", "quantity": 600, "price": 0.50}, {"exchange_id": "10", "quantity": -600, "price": 0.41}], {})
 check("catchup: P&L from fills (buy 600 @0.50, sell @0.41 = -54) and the sleeve switches itself off at -50",
       abs(pnl + 54) < 1e-6 and op == {} and cs.check_kill(pnl) and cs.signals([_row(T0 + 3600, 0.53, 0.53, 0.50)], T0 + 3600) == [])
-check("catchup: live config: on, 2,500 base a trade tilted to at most 5,000, 15k open at most, -50 stop", _live.get("catchup_enabled") is True
+check("catchup: live config: on, 2,500 base a trade tilted to at most 5,000, 15k open at most, -400 stop (sized with the trades: the old -50 is under the spread of one 5k trade)", _live.get("catchup_enabled") is True
       and _live.get("catchup_notional") == 2500.0 and _live.get("catchup_notional_max") == 5000.0 and _live.get("catchup_max_open") == 15000.0
-      and _live.get("catchup_kill") == -50.0)
+      and _live.get("catchup_kill") == -400.0)
 
 # review 23 Oct (catch-up): cap per entry, missing marks, exits off a fresh/REST book, MM inventory
 pnl0, op0 = OS.pnl_from_fills([{"exchange_id": "10", "quantity": 600, "price": 0.50}], {})
