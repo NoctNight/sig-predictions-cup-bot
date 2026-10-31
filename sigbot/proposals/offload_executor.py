@@ -26,8 +26,15 @@ them back as its budget reopens.
 While a live sale runs its races count as punt races (Bot.punt_races), so no other path sells, quotes or enters them; this is
 also why set baskets do not go through arb.unwind_set, which refuses protected and cheap-favourite races. Races a punt, election,
 shock or high-frequency arb position sits in are left alone (Adapter.busy).
-Stops: params/offload_abort (cancels what rests), exit:raise paused or the kill switch (holds), 3 hard rejections in a row
-(abort), the window closing, or the target raised. Progress is the venue position; a lost response is settled by the next read.
+Stops: params/offload_abort (cancels what rests), exit:raise paused or the kill switch (holds; over HELD_MAX the sale ends and its
+races go back), 3 hard rejections in a row (abort), the window closing, or the target raised. All are read again under the lock.
+A row that cannot sell for STUCK_MAX is given up, and a race another sleeve owns is not protected for the sale. Units sold come from
+the venue's responses; the position settles only sends whose outcome was unknown or that rested, so another row of the same leg
+is never mistaken for a sale. Orders of unknown outcome hold every leg until they have expired.
+A list's below_payout_sets near 2,000 can trip rule 1b of the strategy stops (the raise ledger's hourly fall): 60k is about 1,840
+before slack and the wind-down's own costs, 80k is over. The sale then holds and ends: raising that limit is Sizhe's decision.
+A conventional sell has never been sent live (every order on record is a buy): the venue's fill sign for one is unverified, so watch
+the raise ledger if a basket logs "conventional sell".
 
 Dry run, against a book dump (sends nothing; positions come from the plan):
     python3 -m sigbot.proposals.offload_executor --target 20000
@@ -69,7 +76,10 @@ BATCH_ROWS = 25               # rows a batch prices (each a book read, feed firs
 PENDING_MAX = 60.0            # seconds an unconfirmed basket is resent with its key; then the positions settle it
 TEST_WAIT = 15.0              # seconds before the test basket is checked against the venue
 TEST_TIMEOUT = 90.0           # ... and how long the venue gets to show it
-CASH_TOL = (200.0, 0.1)       # the test's cash may miss by the larger of these (S, share): other sleeves trade meanwhile
+CASH_TOL = (20.0, 200.0, 0.5) # the test's cash may miss by min(200, half of it), at least 20: other sleeves trade meanwhile
+HELD_MAX = 300.0              # seconds a hold by the stops may last before the sale ends and gives its races back
+STUCK_MAX = 300.0             # seconds a row may wait (price, cap, nothing read) before it is given up
+FALL_LIMIT = 2000.0           # strategy_stops.WIDE_FALL
 
 
 def tick_down(p: float) -> float:
@@ -126,10 +136,11 @@ class OffloadExecutor:
       blocked() -> why every send waits, or None;  cheapfav_ok() -> why not, or None;  pull(exs, now) -> bool;
       cap_ok(before, after) -> bool;  net_d(pos) -> float or None;  cap -> float;  abort_requested() -> bool;
       basket(race, kind, legs, key, q, proceeds, payout, sgn) -> response (raises with .status/.code/.details);
-      batch(orders, key) -> [{"ok", "status", "data"}, ...] (raises);  record_leg(data, order, purpose);  cancel(ids) -> None (raises)"""
+      batch(orders, key) -> [{"ok", "status", "data"}, ...] (raises);  record_leg(data, order, purpose);  cancel(ids) -> None (raises);
+      optional: pull_cost(exs) -> writes a pull will take;  after_batch() -> None"""
 
     def __init__(self, plan_path: str, state_path: str, expected_sha: str, adapter, target: float, speed: str, start: str, stop: str,
-                 writes_per_min: int = 20, slack_ticks: float = 2.0):
+                 writes_per_min: int = 15, slack_ticks: float = 2.0):
         self.a = adapter
         self.plan_path, self.state_path = plan_path, state_path
         self.target, self.speed = float(target or 0.0), speed
@@ -138,6 +149,7 @@ class OffloadExecutor:
         self.refused = None
         self.rows: list = []
         self.sha = None
+        self.fall = 0.0
         self.t0 = self.t1 = 0.0
         if getattr(adapter, "dry", False) and os.path.basename(state_path) == "offload_state.json":
             self.refused = "dry run with the live state file: use a state file of its own"
@@ -161,6 +173,8 @@ class OffloadExecutor:
                     else:
                         self.rows, why = load_rows(plan, speed, float(target or 0.0))
                         self.refused = why
+                        self.fall = next((float(x.get("below_payout_sets") or 0.0) for x in plan["speeds"].get(speed) or []
+                                          if x.get("target") == float(target or 0.0)), 0.0)
             except (OSError, ValueError, TypeError) as e:
                 self.refused = f"plan unreadable: {e}"
         if self.refused:
@@ -202,17 +216,19 @@ class OffloadExecutor:
 
     def st(self, step: str) -> dict:
         return self.state["steps"].setdefault(step, {"status": "pending", "base": None, "done": 0, "cash": 0.0, "tries": 0, "next": 0.0,
-                                                     "live": None})
+                                                     "live": None, "unk": False, "busy": False, "stuck": None})
 
     def races(self) -> set:
         """The races other sleeves keep off: only while a live sale runs (a dry run changes nothing on the bot)."""
         if self.refused or self.a.dry or self.state.get("status") != "running":
             return set()
         steps = self.state["steps"]                  # other threads call this: read only, st() would add keys under save()
-        return {r["race"] for r in self.rows if (steps.get(r["step"]) or {}).get("status", "pending") == "pending"}
-
-    def legs(self) -> set:
-        return {e for r in self.rows for e in r["legs"]} if self.races() else set()
+        out = set()
+        for r in self.rows:
+            v = steps.get(r["step"]) or {}
+            if v.get("status", "pending") == "pending" and not v.get("busy"):
+                out.add(r["race"])
+        return out
 
     # ---------------------------------------------------------------- end of the sale
     def _live_ids(self) -> list:
@@ -255,8 +271,12 @@ class OffloadExecutor:
             return None
         why = self.a.blocked()
         if why:
+            self.state.setdefault("held_since", now)
             self.once("blocked:" + why, f"held: {why}")
+            if self.state["status"] == "running" and now - self.state["held_since"] > HELD_MAX:
+                self.abort(f"held over {HELD_MAX:.0f} s: {why}")
             return None
+        self.state.pop("held_since", None)
         if self.state["status"] == "waiting" and not self._preflight(now):
             return None
         if self.state.get("pending"):
@@ -280,6 +300,25 @@ class OffloadExecutor:
             return self._set(due[0], now)
         return self._legs([r for r in due if r["type"] in LEG_TYPES][:BATCH_ROWS], now)
 
+    def _gate(self) -> Optional[float]:
+        """Under the lock, right before a send: the stops may have changed while it waited. The time now, or None."""
+        now = self.a.now()
+        if self.a.abort_requested():
+            self.abort("abort file present")
+            return None
+        if now >= self.t1 or self.a.blocked():
+            return None
+        return now
+
+    def _wait(self, r: dict, v: dict, now: float, key: str, msg: str):
+        """A row that cannot go now: tried again shortly, given up after STUCK_MAX."""
+        v["next"] = now + RETRY_GAP
+        if v["stuck"] is None:
+            v["stuck"] = now
+        self.once(f"{key}:{r['step']}", msg)
+        if now - v["stuck"] > STUCK_MAX:
+            self._row_end(r, v, "failed")
+
     def _preflight(self, now: float) -> bool:
         try:
             pos = self.a.positions()
@@ -288,8 +327,14 @@ class OffloadExecutor:
             return False
         view = self.a.sale_view(pos)
         cf = self.a.cheapfav_open()
-        reach = 0.0
+        reach, seen = 0.0, {}
         for r in self.rows:
+            why = self.a.busy(r["race"]) or (self.a.cheapfav_ok() if r["type"] == "cheapfav" else None)
+            if why:
+                if r["type"] == "cheapfav":
+                    self._row_end(r, self.st(r["step"]), "failed")
+                self.once(f"skip:{r['step']}", f"{r['holding']}: left out: {why}")
+                continue
             held = self._held(r, pos, view, cf)[0]
             reach += min(r["qty"], held) * r["plan_cash"] / r["qty"]
         if reach < MIN_REACHABLE * self.target:
@@ -297,6 +342,8 @@ class OffloadExecutor:
             return False
         self.state["status"] = "running"
         self.state["started"] = now
+        if self.fall >= 0.9 * FALL_LIMIT:
+            self.note(f"this list gives up about {self.fall:.0f} against payout: the strategy stops pause exits at {FALL_LIMIT:.0f} in an hour", error=True)
         self.note(f"{'DRY ' if self.a.dry else ''}start: {len(self.rows)} rows, about {reach:.0f} as held now, target {self.target:.0f}")
         self.save()
         return True
@@ -315,16 +362,19 @@ class OffloadExecutor:
         return max(0, int(q)), sign
 
     def _sync(self, r: dict, v: dict, held: int) -> int:
-        """Units left to sell, from the venue's position. What the position shows sold beyond the responses (a lost response) counts
-        at the plan's price."""
+        """Units left to sell. After a send of unknown outcome, or one that rested, the position says what sold (counted at the plan's
+        price); otherwise only the responses do: a cheap-favourites sale on the same leg shrinks this row's view until its fills are
+        read, which is not a sale of this row."""
         if v["base"] is None:
             v["base"] = held
-        sold = max(0, v["base"] - held)
-        if sold > v["done"]:
-            extra = (sold - v["done"]) * r["plan_cash"] / r["qty"]
-            v["cash"] += extra
-            self.state["raised"] += extra
-            v["done"] = sold
+        if v.get("unk"):
+            v["unk"] = False
+            sold = max(0, v["base"] - held)
+            if sold > v["done"]:
+                extra = (sold - v["done"]) * r["plan_cash"] / r["qty"]
+                v["cash"] += extra
+                self.state["raised"] += extra
+                v["done"] = sold
         return max(0, min(r["qty"] - v["done"], held))
 
     def _wrote(self, n: int = 1):
@@ -333,7 +383,7 @@ class OffloadExecutor:
     # ---------------------------------------------------------------- the test basket
     def _test_row(self) -> Optional[dict]:
         yes = [r for r in self.rows if r["type"] in SET_TYPES and r["kind"] == "buy_set"]
-        return next((r for r in yes if r["race"] == TEST_RACE), yes[0] if yes else None)
+        return next((r for r in yes if r["race"] == TEST_RACE), max(yes, key=lambda r: r["qty"]) if yes else None)
 
     def _test_done(self, now: float) -> bool:
         t = self.state.get("test")
@@ -362,7 +412,7 @@ class OffloadExecutor:
         k = self._held(r, pos, self.a.sale_view(pos), {})[0]
         gained = bal - t["bal"]
         ok_pos = t["k"] - k >= t["q"] - 0.5
-        ok_cash = self.a.dry or gained >= t["expect"] - max(CASH_TOL[0], CASH_TOL[1] * t["expect"])
+        ok_cash = self.a.dry or gained >= t["expect"] - max(CASH_TOL[0], min(CASH_TOL[1], CASH_TOL[2] * t["expect"]))
         if ok_pos and ok_cash:
             t["status"] = "passed"
             self.note(f"test basket passed: {t['q']} sets at {t['ps']:.4f} (plan {t['plan']:.4f}), cash up {gained:.0f}")
@@ -375,9 +425,9 @@ class OffloadExecutor:
     def _set(self, r: dict, now: float, test: bool = False) -> Optional[str]:
         v = self.st(r["step"])
         why = self.a.busy(r["race"])
+        v["busy"] = bool(why)
         if why:
-            v["next"] = now + 30.0
-            self.once("busy:" + r["race"], f"{r['holding']}: left alone: {why}")
+            self._wait(r, v, now, "busy", f"{r['holding']}: left alone: {why}")
             return None
         exs = self.a.race_legs(r["race"])
         books = {e: self.a.book(e) for e in exs}
@@ -388,9 +438,12 @@ class OffloadExecutor:
         plan_ps = r["plan_cash"] / r["qty"]
         floor = plan_ps - self.slack
         with self.a.lock():
+            now = self._gate()
+            if now is None:
+                return None
+            self._wrote(self._pull_cost(exs))
             if not self.a.pull(exs, now):
-                v["next"] = now + RETRY_GAP
-                self.once("pull:" + r["race"], f"{r['holding']}: quotes not pulled (an order we did not place, or a cancel failed): waiting")
+                self._wait(r, v, now, "pull", f"{r['holding']}: quotes not pulled (an order we did not place, or a cancel failed): waiting")
                 return None
             try:
                 pos = self.a.positions()
@@ -401,7 +454,10 @@ class OffloadExecutor:
             held, sgn = self._held(r, pos, self.a.sale_view(pos), {})
             left = self._sync(r, v, held)
             if left < 1:
-                self._row_end(r, v, "done")
+                if v["done"] > 0:
+                    self._row_end(r, v, "done")
+                else:
+                    self._wait(r, v, now, "none", f"{r['holding']}: none held now: waiting")
                 return None
             q = min(left, int(math.ceil(r["qty"] / baskets_of(r["qty"]))))
             wq = WD.walk_quote(kind, books, exs, q)
@@ -413,15 +469,13 @@ class OffloadExecutor:
                 if test:
                     self.abort(f"test basket: {q} sets of {r['holding']} would fetch {got}, the plan says {plan_ps:.4f}")
                     return None
-                v["next"] = now + RETRY_GAP
-                self.once(f"px:{r['step']}", f"{r['holding']}: {q} sets at {got}, under the plan's {plan_ps:.4f}: waiting")
+                self._wait(r, v, now, "px", f"{r['holding']}: {q} sets at {got}, under the plan's {plan_ps:.4f}: waiting")
                 return None
             after = dict(pos)
             for e in exs:
                 after[e] = after.get(e, 0.0) + sgn * q
             if not self.a.cap_ok(pos, after):
-                v["next"] = now + RETRY_GAP
-                self.once(f"cap:{r['step']}", f"{r['holding']}: {q} sets would break the partisan cap: waiting")
+                self._wait(r, v, now, "cap", f"{r['holding']}: {q} sets would break the partisan cap: waiting")
                 return None
             buy_side = "yes" if kind == "sell_set" else "no"
             gross = q * sum(wq["limits"].values())
@@ -451,6 +505,7 @@ class OffloadExecutor:
             status, code = int(getattr(e, "status", 0) or 0), str(getattr(e, "code", "") or "")
             det = getattr(e, "details", None)
             if status in TRANSIENT or (status == 409 and code == "REQUEST_IN_FLIGHT"):
+                v["unk"] = True
                 self.note(f"{r['holding']}: basket outcome unknown ({e}): same key next tick")
                 self.save()
                 return None
@@ -479,6 +534,7 @@ class OffloadExecutor:
         ps = self._proceeds(p, data)
         self.state["hard"] = 0
         v["tries"] = 0
+        v["stuck"] = None
         v["done"] += p["q"]
         v["cash"] += p["q"] * ps
         self.state["raised"] += p["q"] * ps
@@ -503,7 +559,10 @@ class OffloadExecutor:
         for leg, d in zip(p["legs"], data):
             tc = d.get("totalCost")
             px = float(tc) / p["q"] if tc is not None else float(leg["price"])
-            tot += px if leg["action"] == "sell" else 1.0 - px
+            if tc is None or d.get("action") is None or d.get("action") == leg["action"]:
+                tot += px if leg["action"] == "sell" else 1.0 - px
+            else:                                     # the venue turned the leg into its complement: its figures are of that order
+                tot += px if d["action"] == "sell" else 1.0 - px
         return tot
 
     def _row_end(self, r: dict, v: dict, status: str):
@@ -516,10 +575,12 @@ class OffloadExecutor:
         dropped and the next position read says what happened."""
         p = self.state["pending"]
         if p["what"] == "batch":
-            if now > p["exp"] - 2.0:
+            if now > p["exp"] + 2.0:
                 self.state["pending"] = None
                 self.note(f"batch {p['key']} expired unconfirmed: the positions settle it")
                 self.save()
+                return None
+            if now > p["exp"] - 2.0:                  # no resend so close to its expiry; the drop waits for the orders to be dead
                 return None
             with self.a.lock():
                 return self._send_batch(now)
@@ -536,42 +597,62 @@ class OffloadExecutor:
             return self._send_basket(now)
 
     # ---------------------------------------------------------------- legs
+    def _pull_cost(self, exs: list) -> int:
+        return int(getattr(self.a, "pull_cost", lambda e: 0)(exs))
+
     def _legs(self, rows: list, now: float) -> Optional[str]:
-        if not rows:
-            return None
+        """Pulls and the send are two lock holds: up to BATCH_ROWS cancels must not stale the expiry, or keep the other sleeves out."""
+        if not rows or now < self.state.get("amb_until", 0.0):
+            return None                               # an order of unknown outcome may rest: it is in no cap check or position yet
         priced = []
+        room = max(1, self.writes_per_min - len(self.state.get("writes") or []))
         for r in rows:
             v = self.st(r["step"])
             why = self.a.busy(r["race"])
+            v["busy"] = bool(why)
             if r["type"] == "cheapfav":
                 why = why or self.a.cheapfav_ok()
             if why:
-                v["next"] = now + 30.0
-                self.once("busy:" + r["holding"], f"{r['holding']}: left alone: {why}")
+                self._wait(r, v, now, "busy", f"{r['holding']}: left alone: {why}")
                 continue
+            cost = self._pull_cost(r["legs"])
+            if priced and cost > room:
+                break                                 # the rest next tick: pulls share the account's writes with the MM
+            room -= cost
             b = self.a.book(r["legs"][0])
             if not b:
-                v["next"] = now + RETRY_GAP
+                self._wait(r, v, now, "book", f"{r['holding']}: no book: waiting")
                 continue
             priced.append((r, v, b))
         if not priced:
             return None
+        pulled = []
         with self.a.lock():
-            pulled = []
+            now = self._gate()
+            if now is None:
+                return None
             for it in priced:
+                self._wrote(self._pull_cost(it[0]["legs"]))
                 if self.a.pull(it[0]["legs"], now):
                     pulled.append(it)
                 else:
-                    it[1]["next"] = now + RETRY_GAP
-            live = [(v["live"][0]) for _, v, _ in pulled if v.get("live")]
-            if live and not self.a.dry:
+                    self._wait(it[0], it[1], now, "pull", f"{it[0]['holding']}: quotes not pulled: waiting")
+        if not pulled:
+            return None
+        with self.a.lock():
+            now = self._gate()
+            if now is None:
+                return None
+            live = self._live_ids()
+            if live and not self.a.dry:               # every remainder, not only this batch's: it would fill outside the cap check
+                self._wrote(len(live))
                 try:
-                    self.a.cancel(live)                   # the last batch's remainders, before the position read
+                    self.a.cancel(live)
                 except Exception as e:
                     if int(getattr(e, "status", 0) or 0) in TRANSIENT:
                         self.note(f"cancel of remainders failed ({e}): next tick")
                         return None
-            for _, v, _ in pulled:
+            for v in self.state["steps"].values():
                 v["live"] = None
             try:
                 pos = self.a.positions()
@@ -585,6 +666,7 @@ class OffloadExecutor:
                 return None
             cap = self.a.cap
             up, down, gross = 0.0, 0.0, 0.0            # net D if only the orders widening it fill, each way
+            now = self.a.now()
             exp = now + TTL
             stamp = datetime.fromtimestamp(exp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             orders, purposes, steps = [], [], []
@@ -593,12 +675,14 @@ class OffloadExecutor:
                 held, sign = self._held(r, pos, view, cf)
                 left = self._sync(r, v, held)
                 if left < 1:
-                    self._row_end(r, v, "done")
+                    if v["done"] > 0:
+                        self._row_end(r, v, "done")
+                    else:
+                        self._wait(r, v, now, "none", f"{r['holding']}: none held now: waiting")
                     continue
                 q, worst = leg_quote(b, sign, left, r["worst"][ex] - self.slack)
                 if q < 1:
-                    v["next"] = now + RETRY_GAP
-                    self.once(f"px:{r['step']}", f"{r['holding']}: nothing at or above the plan's {r['worst'][ex]:.3f}: waiting")
+                    self._wait(r, v, now, "px", f"{r['holding']}: nothing at or above the plan's {r['worst'][ex]:.3f}: waiting")
                     continue
                 price = tick_down(1.0 - worst)
                 after = dict(pos)
@@ -610,8 +694,7 @@ class OffloadExecutor:
                 u, w = up + max(0.0, dd), down + min(0.0, dd)
                 worst_nd = nd + (u if dd > 0 else w)
                 if abs(worst_nd) > cap + 1e-6 and abs(worst_nd) > abs(nd) + 1e-6:
-                    v["next"] = now + RETRY_GAP
-                    self.once(f"cap:{r['step']}", f"{r['holding']}: {q} shares would break the partisan cap: waiting")
+                    self._wait(r, v, now, "cap", f"{r['holding']}: {q} shares would break the partisan cap: waiting")
                     continue
                 if gross + q * price > CASH_MARGIN * bal:
                     v["next"] = now + RETRY_GAP
@@ -630,14 +713,21 @@ class OffloadExecutor:
             self.save()
             return self._send_batch(now)
 
+    def _unknown(self, p: dict):
+        """Orders of this batch may rest with no record of ours: no leg is priced until they are dead."""
+        self.state["amb_until"] = max(self.state.get("amb_until", 0.0), p["exp"] + 5.0)
+        for s in p["steps"]:
+            self.st(s)["unk"] = True
+
     def _send_batch(self, now: float) -> Optional[str]:
         p = self.state["pending"]
         self._wrote()
         try:
             res = self.a.batch(p["orders"], p["key"])
         except Exception as e:
-            status = int(getattr(e, "status", 0) or 0)
-            if status in TRANSIENT:
+            status, code = int(getattr(e, "status", 0) or 0), str(getattr(e, "code", "") or "")
+            if status in TRANSIENT or (status == 409 and code == "REQUEST_IN_FLIGHT"):
+                self._unknown(p)
                 self.note(f"batch {p['key']} outcome unknown ({e}): same key next tick")
                 self.save()
                 return None
@@ -645,7 +735,7 @@ class OffloadExecutor:
             self.state["hard"] += 1
             self.note(f"batch {p['key']} rejected ({e})")
             for s in p["steps"]:
-                self.st(s)["next"] = now + RETRY_GAP
+                self.st(s)["next"] = max(self.st(s)["next"], now + RETRY_GAP)
             if self.state["hard"] >= MAX_HARD:
                 self.abort(f"{MAX_HARD} hard rejections in a row")
             self.save()
@@ -667,11 +757,14 @@ class OffloadExecutor:
                     v["cash"] += got * px
                     self.state["raised"] += got * px
                 v["live"] = [d.get("orderId"), p["exp"]] if d.get("open") and d.get("orderId") is not None else None
+                v["unk"] = bool(d.get("open"))
+                v["stuck"] = None
                 v["next"] = max(now + TTL + 2.0 if d.get("open") else now + RETRY_GAP, v["next"])
                 if v["done"] >= r["qty"]:
                     self._row_end(r, v, "done")
             elif int(x.get("status") or 0) in TRANSIENT:
                 again = True
+                self._unknown(dict(p, steps=[p["steps"][i]]))
             else:
                 seen.append(i)
                 v["tries"] += 1
@@ -679,6 +772,7 @@ class OffloadExecutor:
                 self.note(f"{r['holding']}: order rejected ({d}); try {v['tries']}")
                 if v["tries"] > MAX_RETRIES:
                     self._row_end(r, v, "failed")
+        getattr(self.a, "after_batch", lambda: None)()
         if again:                                     # never a new key here: an unknown item may rest, and a repriced order could
             self.save()                               # then sell through zero. The same key resumes it, until the payload expires
             return "batch"

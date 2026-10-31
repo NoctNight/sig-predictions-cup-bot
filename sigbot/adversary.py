@@ -352,7 +352,7 @@ class FakeApi:
         self.venue.cancel_owner(US, str(exchange_id) if exchange_id else None)
         return {}
 
-    def place_batch(self, orders: list[dict], key=None, max_rounds=6) -> dict:
+    def place_batch(self, orders: list[dict], key=None, max_rounds=6, retries=None) -> dict:
         self.stats["writes"] += 1
         res = []
         for i, o in enumerate(orders):
@@ -366,7 +366,7 @@ class FakeApi:
         oid, filled = self._place(dict(exchangeId=exchange_id, side=side, price=price, quantity=quantity, expirationDate=expiration))
         return {"orderId": oid, "open": oid is not None}
 
-    def place_multi_leg(self, legs: list[dict], all_or_none: bool = True, key=None) -> dict:
+    def place_multi_leg(self, legs: list[dict], all_or_none: bool = True, key=None, retries=None) -> dict:
         """allOrNone: every leg must be fillable for its whole quantity at or better than its limit, else VALIDATION_ERROR
         AllOrNoneNotFilled and nothing trades. With atomic=False the venue fills legs one by one and rests the remainder
         (the failure mode we cannot rule out from outside)."""

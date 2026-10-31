@@ -417,7 +417,7 @@ def set_race_bids_sum(sim, race_name, total, spread_ticks=1):
 
 
 # ======================================================================================== invariants
-EXEMPT_ADD = {"exit", "offload", "off", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm", "punt"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct); punt: only with an approved plan's cap_exempt
+EXEMPT_ADD = {"exit", "offload", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm", "punt"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct); punt: only with an approved plan's cap_exempt
 RATE_LIMITS = {
     # category: [(window_sec, max events per object), ...]   object = exchange or race
     "requote": [(60, 5)],            # MM/tilt/inside cancel-all per exchange: 1 per 30-s cycle + fast requotes (3/min total)
@@ -2646,6 +2646,7 @@ class OffloadSale(Scenario):
                                        iso(self.t0), iso(self.t1), 20, 2.0)
         if b.offload.refused:
             sim.chk.violation("offload_refused", b.offload.refused)
+        b.first_cycle_done = True
         b.offload.tick()                             # the start: its races are protected from the first cycle on
         self.legs = set(sim.legs(self.rn)) | set(sim.legs(self.ry)) | set(sim.legs(self.rl))
 
@@ -2678,6 +2679,8 @@ class OffloadSale(Scenario):
             V("offload_no_test", "the first basket is not the YES set")
         other = [o for o in v.orders.values() if o.ex in sim.legs(self.ry) + sim.legs(self.rn) and o.prefix not in ("off", "seed", "mm", "qt")
                  and off.t0 + 5 <= o.t <= CLOCK.t and st.get("started") and o.t >= st["started"] + 5 and (st.get("ended") is None or o.t < st["ended"])]
+        if sim.bot.strategy_kill.paused("exit:raise") is not None or sim.bot.strategy_kill.paused("all") is not None:
+            V("offload_stopped", "the strategy stops paused exits or entries over the sale's own orders")
         if other:
             V("offload_race_touched", "; ".join(f"{o.key} {o.ex} {o.side}" for o in other[:4]))
 
@@ -2688,7 +2691,7 @@ class OffloadSaleSell(OffloadSale):
 
     def bot_setup(self, sim):
         super().bot_setup(sim)
-        sim.v.cash = 900.0                            # (after the seeds, which pay for themselves)
+        sim.v.cash = 300.0                            # (after the seeds, which pay for themselves)
 
     def final_checks(self, sim):
         super().final_checks(sim)

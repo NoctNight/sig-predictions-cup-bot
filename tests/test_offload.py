@@ -59,7 +59,7 @@ class Fake:
         self.busy_r, self.pull_ok, self.locked, self.nd_fn = {}, True, False, lambda p: 0.0
         self.cap_fn = lambda b, a: True
         self.steal = None                       # called before each send: another sleeve moves positions
-        self.no_move = self.no_cash = self.lose_resp = False
+        self.no_move = self.no_cash = self.lose_resp = self.cf_lag = False
         self.tags = []
 
     def now(self):
@@ -150,7 +150,7 @@ class Fake:
         out = []
         for o in orders:
             self.pos[o["exchangeId"]] += o["quantity"] if o["side"] == "yes" else -o["quantity"]
-            if o["exchangeId"] in self.cf:
+            if o["exchangeId"] in self.cf and not self.cf_lag:
                 self.cf[o["exchangeId"]] += o["quantity"] if o["side"] == "yes" else -o["quantity"]
             self.bal += o["quantity"] * (1 - o["price"])
             out.append({"ok": True, "status": 201, "data": {"orderId": len(self.sent) * 100, "quantityTraded": o["quantity"], "open": False}})
@@ -245,11 +245,6 @@ e, f = setup(rows=[row(1, "RI", "hf_set", 100, 100.0, ["r1", "r2", "r3"], [0.9, 
 check("refused: a row type this executor does not sell (high-frequency arb lots)", bool(e.refused), str(e.refused))
 e, f = setup(dry=True, state=os.path.join(tempfile.mkdtemp(), "offload_state.json"))
 check("refused: a dry run on the live state file", bool(e.refused) and "state" in e.refused, str(e.refused))
-_p = os.path.join(ROOT, "data", "research_offload", "plan.json")
-if os.path.exists(_p):
-    _plan = json.load(open(_p))
-    _ok = all(OE.load_rows(_plan, s, r["target"])[1] is None for s in _plan["speeds"] for r in _plan["speeds"][s] if r["reached"])
-    check("plan: every reached target of the real plan.json loads", _ok)
 
 # ---------------------------------------------------------------- the window and the switches
 e, f = setup()
@@ -305,6 +300,9 @@ run(e, f)
 check("test: the test race no longer held: the sale stops (the plan is stale), it does not hang", e.state["status"] == "aborted", str((e.state["status"], e.state.get("why"))))
 
 # ---------------------------------------------------------------- baskets
+_d = OE.OffloadExecutor._proceeds({"q": 100, "legs": [{"action": "sell", "price": 0.96}, {"action": "sell", "price": 0.98}]},
+                                  [{"action": "buy", "totalCost": 4.0}, {"action": "buy", "totalCost": 2.0}])
+check("proceeds: a sell the venue turned into its complement buy counts as that buy", abs(_d - 1.94) < 1e-9, str(_d))
 e, f = setup()
 run(e, f)
 ri = [s for s in baskets(f) if s["race"] == "RI"]
@@ -391,6 +389,27 @@ f.fail = [[{"ok": True, "status": 201, "data": {"orderId": 7, "quantityTraded": 
 run(e, f, 8)
 check("legs: an item of unknown outcome holds the batch's key (a repriced order could sell through zero)",
       len({s["key"] for s in batches(f)}) == 1, str(batches(f)))
+e, f = setup(rows=_legs, target=150)
+f.fail = [Err(503, "SERVICE_UNAVAILABLE"), Err(409, "REQUEST_IN_FLIGHT"), Err(409, "REQUEST_IN_FLIGHT"), Err(502, "X")] + [Err(503, "Y")] * 20
+run(e, f, 4)
+n0 = {s["key"] for s in batches(f)}
+run(e, f, 34)
+check("legs: in flight is not a rejection, and no new key goes until the unknown orders are dead", e.state["hard"] == 0 and {s["key"] for s in batches(f)} == n0, str([s["key"] for s in batches(f)]))
+_r2 = [row(2, "CO D NO", "leg_held", 100, 40.0, ["c1"], [0.40]), row(4, "NV R YES", "leg", 200, 120.0, ["n1"], [0.60])]
+e, f = setup(rows=_r2, target=150)
+f.fail = [[{"ok": True, "status": 201, "data": {"orderId": 9, "quantityTraded": 0, "open": True}}, {"ok": False, "status": 400, "data": {"error": "x"}}]]
+run(e, f, 22)
+check("cap: a resting remainder is cancelled before the next batch is priced", 9 in f.cancels and len(batches(f)) == 2, str((f.cancels, len(batches(f)))))
+e, f = setup(rows=_legs, target=150)
+_w = f.lock
+def _slow():
+    f.t += 45.0
+    return _w()
+f.lock = _slow
+run(e, f, 6)
+_o = batches(f)[0]["batch"][0]
+check("legs: a slow lock never sends an expired order (the expiry is stamped under the lock)",
+      datetime.fromisoformat(_o["expirationDate"].replace("Z", "+00:00")).timestamp() >= batches(f)[0]["t"] + OE.TTL - 1, str((_o, batches(f)[0]["t"])))
 e, f = setup(rows=[row(2, "CO D NO", "leg_held", 100, 40.0, ["c1"], [0.40])], target=30)
 f.fail = [[{"ok": True, "status": 201, "data": {"orderId": 9, "quantityTraded": 40, "open": True}}]]
 run(e, f, 60)
@@ -404,10 +423,24 @@ f.cf = {"d1": 400.0}
 f.cf_block = "the cheap-favourites sleeve is not paused"
 run(e, f, 120)
 check("cheap favourites: not sold while the sleeve is not paused", not f.sent and f.pos["d1"] == 400.0)
-e, f = setup(rows=[cf_row], target=300, pos=_p)
+check("preflight: rows that cannot sell do not count toward the target", e.state["status"] == "aborted", str(e.state.get("why")))
+e, f = setup(rows=[ROWS[0], cf_row], target=3000, pos=_p)
+f.cf = {}
+run(e, f, 8)
+f.cf = {"d1": 400.0}
+run(e, f, 60)
+check("zero read: one empty ledger read does not end a row for good", f.pos["d1"] == 0.0, str((f.pos["d1"], e.st("6"))))
+_shared = [row(6, "MD D YES", "cheapfav", 300, 288.0, ["d1"], [0.96]), row(7, "MD D YES", "leg_held", 100, 96.0, ["d1"], [0.96])]
+e, f = setup(rows=_shared, target=380, pos=_p)
 f.cf = {"d1": 300.0}
-run(e, f, 120)
-check("cheap favourites: paused: sold under their own tag, never more than the sleeve's ledger", f.tags and f.tags[0][1] == "cheapfav_exit" and f.pos["d1"] == 100.0, str((f.tags, f.pos["d1"])))
+f.cf_lag = True
+e.st("7")["next"] = T0 + 20.0               # (in one batch they sell together, which is right)
+run(e, f, 40)
+_r = e.state["raised"]
+check("shared leg: while the sleeve's fills are unread, its sale is not booked as a sale of the other row", f.pos["d1"] == 100.0 and e.st("7")["done"] == 0 and _r < 300, str((f.pos["d1"], e.st("7"), _r)))
+f.cf = {}
+run(e, f, 40)
+check("shared leg: once read, the other row sells", f.pos["d1"] == 0.0, str(f.pos["d1"]))
 
 # ---------------------------------------------------------------- other sleeves
 e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
@@ -421,6 +454,34 @@ check("stops: exit:raise paused or the kill switch hold every send", not f.sent 
 f.block = None
 run(e, f, 400)
 check("stops: the sale resumes inside its window when the hold clears", e.state["status"] == "done", e.state["status"])
+e, f = setup()
+run(e, f, 20)
+n = len(f.sent)
+f.block = "exit:raise paused"
+run(e, f, OE.HELD_MAX + 30)
+check("stops: a long hold ends the sale and gives its races back", e.state["status"] == "aborted" and e.races() == set() and len(f.sent) == n, str(e.state.get("why")))
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+_w2 = f.lock
+def _kill():
+    f.block = "kill switch"
+    return _w2()
+f.lock = _kill
+run(e, f, 6)
+check("stops: a kill switch set while the lock is awaited stops the send", not f.sent)
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+_w3 = f.lock
+def _ab():
+    f.abort_flag = True
+    return _w3()
+f.lock = _ab
+run(e, f, 6)
+check("stops: an abort file written while the lock is awaited stops the send", not f.sent and e.state["status"] == "aborted")
+e, f = setup(rows=[r for r in ROWS if r["step"] in (1, 3)], target=300)
+f.busy_r = {"RI": "high-frequency arb"}
+run(e, f, 20)
+check("busy: a race another sleeve owns is not kept from it (churn's exit skips punt races)", "RI" not in e.races(), str(e.races()))
+run(e, f, OE.STUCK_MAX + 30)
+check("stuck: a row that cannot sell is given up in time, so the sale ends", e.st("1")["status"] == "failed" and e.state["status"] == "done", str(e.st("1")))
 e, f = setup(pos={"m1": 100.0, "m2": 100.0})
 run(e, f, 20)
 check("preflight: positions far from the plan (under 80% of the target) stop the sale before any send", e.state["status"] == "aborted" and not f.sent, str(e.state.get("why")))

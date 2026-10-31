@@ -283,7 +283,7 @@ class BotConfig:
     offload_start: str = ""              # ISO with offset: no sale outside this window (at most 2 h)
     offload_stop: str = ""
     offload_tick_sec: float = 2.0        # executor thread cadence
-    offload_writes_per_min: int = 20     # baskets and batches a minute: the account's writes are shared with the other sleeves
+    offload_writes_per_min: int = 15     # sends, pulls and cancels a minute: the account's writes are shared with the other sleeves
     offload_price_slack_ticks: float = 2.0   # a basket or leg may price this far under the plan (books in the plan are up to an hour old)
     strategy_stops_enabled: bool = False     # strategy_stops.py: per-strategy P&L stops replace the bot-wide kill switch
     stop_limits: dict = field(default_factory=dict)   # {strategy: P&L floor since armed}; defaults in strategy_stops.DEFAULT_LIMITS

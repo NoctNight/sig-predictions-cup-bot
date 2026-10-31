@@ -297,7 +297,7 @@ class SuperMarketClient:
             body["expirationDate"] = expiration
         return self._request("POST", "/orders", body=body, max_retries=retries)
 
-    def place_batch(self, orders: list[dict], key: Optional[str] = None, max_rounds: int = 6) -> dict:
+    def place_batch(self, orders: list[dict], key: Optional[str] = None, max_rounds: int = 6, retries: Optional[int] = None) -> dict:
         """orders: dicts with exchangeId, side, action, quantity, price?, expirationDate?, tournamentId?
         The engine throttles serial placement inside a batch (per-item 429 RATE_LIMITED / 503). Retrying the same
         idempotency key replays terminal items and resumes only the throttled ones, so we loop until no item is
@@ -307,7 +307,7 @@ class SuperMarketClient:
         last: dict = {"results": []}
         for rnd in range(max_rounds):
             try:
-                resp = self.post("/orders/batch", body)
+                resp = self._request("POST", "/orders/batch", body=body, max_retries=retries)
                 status, retry_after = 200, None
             except ApiError as e:
                 if not (isinstance(e.details, dict) and "results" in e.details):
@@ -317,7 +317,7 @@ class SuperMarketClient:
             last = resp
             transient = [r for r in resp.get("results", []) if not r.get("ok") and (r.get("status") in (429, 503) or
                          (isinstance(r.get("data"), dict) and r["data"].get("code") in ("RATE_LIMITED", "SERVICE_UNAVAILABLE")))]
-            if not transient or status in (200, 422):
+            if not transient or status in (200, 422) or rnd == max_rounds - 1:
                 return resp
             wait = (retry_after if retry_after else 2.0) * (1 + 0.5 * rnd) + random.random()
             log.info("batch %s: %d throttled items, retrying same key in %.1fs", key[-8:], len(transient), wait)

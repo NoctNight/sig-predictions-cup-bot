@@ -3502,6 +3502,23 @@ check("offload: a live sale's races count as punt races, so every other path kee
 _bo.offload = types.SimpleNamespace(races=lambda: set())
 _bo._punt_races_c = None
 check("offload: and they go back when it ends", R.Bot.punt_races(_bo) == set())
+import tempfile as _tf  # noqa: E402
+from sigbot.store import Store as _St  # noqa: E402
+_sto = _St(os.path.join(_tf.mkdtemp(prefix="off_g_"), "t.sqlite"))
+_sto.ingest_fills([{"id": 1, "orderId": 77, "exchangeId": "9", "marketId": 1, "side": "yes", "price": 0.5, "quantity": -10, "filledAt": "2026-10-31T00:00:00Z"}])
+_ad = R._OffloadAdapter(types.SimpleNamespace(dry_run=False, cfg=types.SimpleNamespace(offload_dry_run=False), store=_sto,
+                                              universe=types.SimpleNamespace(race_of=lambda e: types.SimpleNamespace(name="MD")), exit_lock={}))
+_ad.record_leg({"orderId": 77, "open": False}, {"exchangeId": "9", "side": "no", "price": 0.5, "quantity": 10, "expirationDate": "2026-10-31T00:00:30Z"}, "cheapfav_exit")
+check("offload: a fill ingested before its order was recorded still gets its tag (the cheap-favourites ledger reads fills.purpose)",
+      _sto.one("SELECT purpose FROM fills WHERE id=1")["purpose"] == "cheapfav_exit")
+_kb = types.SimpleNamespace(first_cycle_done=False, killed_until=0.0, strategy_kill=None, monitor_logged=set())
+_ad2 = R._OffloadAdapter(_kb)
+check("offload: nothing runs before the first cycle has built the ledgers", _ad2.blocked() == "first cycle not finished")
+_kb.first_cycle_done, _kb.killed_until = True, time.time() + 60
+check("offload: the kill switch holds the sale", _ad2.blocked() == "kill switch")
+_kb.killed_until = 0.0
+_kb.strategy_kill = types.SimpleNamespace(paused=lambda n: "stop" if n == "exit:raise" else None)
+check("offload: exit:raise paused holds the sale; the cheap-favourites sleeve not paused keeps its legs out", _ad2.blocked() == "exit:raise paused" and "not paused" in str(_ad2.cheapfav_ok()))
 check("offload: its own race check does not see itself (a sale's race is not 'busy' with the sale)", R.Bot.punt_held_races(types.SimpleNamespace(store=None, universe=None, punt=None, offload=_bo.offload)) == set())
 
 # ---------------------------------------------------------------- punt executor (BACKLOG 0000 / 0c; research_notes/punt_plan.md)

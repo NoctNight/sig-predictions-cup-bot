@@ -326,10 +326,21 @@ class _OffloadAdapter:
             return "shock mode"
         if b.churn is not None and any(l["race"] == race for l in b.churn.lots):
             return "high-frequency arb"
+        c = getattr(self, "_ex", None)
+        if c is None or time.time() - c[0] > 5.0:
+            c = self._ex = (time.time(), Bot.wind_down_exempt(b))
+        ex_r, ex_l = c[1]
+        if "*" in ex_r or ex_r.get(race) == "hold file":
+            return "hold file"
+        for e in b.universe.races[race].exchange_ids:
+            if ex_l.get(e) in ("hold file", "catch-up sweep"):
+                return ex_l[e]
         return None
 
     def blocked(self) -> Optional[str]:
         b = self.b
+        if not getattr(b, "first_cycle_done", False):
+            return "first cycle not finished"          # the ledgers the sale takes out of the positions are not built yet
         if time.time() < b.killed_until:
             return "kill switch"
         if strategy_paused(b, "exit:raise"):
@@ -343,6 +354,9 @@ class _OffloadAdapter:
 
     def pull(self, exs: list, now: float) -> bool:
         return True if self.dry else Bot.wind_down_pause_legs(self.b, exs, now)
+
+    def pull_cost(self, exs: list) -> int:
+        return 0 if self.dry else sum(1 for e in exs if (self.b.open_orders_cache or {}).get(e))
 
     def cap_ok(self, before: dict, after: dict) -> bool:
         prices = self.b.mm.prices
@@ -376,9 +390,26 @@ class _OffloadAdapter:
             d = r.get("data") or {}
             b.store.record_order(d.get("orderId"), l["exchangeId"], None, l["side"], l["action"], l["price"], q, "raise_set",
                                  status="filled" if not d.get("open") else "open", response=d)
+            self._tag_fills(d.get("orderId"), "raise_set")
         b.cash += q * proceeds
-        b.refresh_snapshot({e["exchangeId"]: sgn * q for e in legs})
+        self.after_basket({e["exchangeId"]: sgn * q for e in legs})
         return resp
+
+    def _tag_fills(self, oid, purpose: str):
+        """The main thread ingests fills outside the trade lock: one read before the order was recorded has no purpose, and the
+        cheap-favourites ledger and the exit sizing read fills.purpose (the strategy stops join the orders table)."""
+        if oid is not None:
+            self.b.store.exec("UPDATE fills SET purpose=? WHERE order_id=? AND purpose IS NULL", (purpose, oid))
+
+    def after_basket(self, deltas: dict):
+        try:
+            self.b.refresh_snapshot(deltas)
+        except Exception as e:                          # the basket traded: this must not read as a failed send
+            log.warning("OFFLOAD snapshot refresh: %s", e)
+
+    def after_batch(self):
+        if not self.dry:
+            self.after_basket({})
 
     def batch(self, orders: list, key: str) -> list:
         b = self.b
@@ -392,9 +423,7 @@ class _OffloadAdapter:
                 out.append({"ok": True, "status": 201, "data": {"orderId": None, "quantityTraded": o["quantity"], "open": False}})
             return out
         tid = b.api.tournament_id
-        resp = b.api.place_batch([dict(o, tournamentId=tid) for o in orders], key=key, max_rounds=1)
-        b.refresh_snapshot()
-        return resp.get("results", [])
+        return b.api.place_batch([dict(o, tournamentId=tid) for o in orders], key=key, max_rounds=1, retries=0).get("results", [])
 
     def record_leg(self, data: dict, order: dict, purpose: str):
         if self.dry:
@@ -402,6 +431,7 @@ class _OffloadAdapter:
         b, ex = self.b, order["exchangeId"]
         b.store.record_order(data.get("orderId"), ex, None, order["side"], "buy", order["price"], order["quantity"], purpose,
                              expires_at=order["expirationDate"], status="open" if data.get("open") else "filled", response=data)
+        self._tag_fills(data.get("orderId"), purpose)
         Bot.stamp_exit(b, b.universe.race_of(ex).name, "offload")
 
     def cancel(self, ids: list):
@@ -4937,6 +4967,7 @@ class Bot:
             start = time.time()
             try:
                 self.cycle()
+                self.first_cycle_done = True
             except Exception as e:
                 log.exception("cycle failed: %s", e)
             if once:

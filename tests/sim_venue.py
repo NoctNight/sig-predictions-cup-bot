@@ -695,7 +695,7 @@ class FakeClient:
         self._w()
         return self.v.place(str(exchange_id), side, action, quantity, price, expiration, key or self.new_key("ord"))
 
-    def place_batch(self, orders, key=None, max_rounds=6) -> dict:
+    def place_batch(self, orders, key=None, max_rounds=6, retries=None) -> dict:
         # the touch each order was priced against, BEFORE the write latency: lets the checker tell a bot bug (quote
         # already crossing when sent) from the market moving while the order was in flight
         sent = {str(o["exchangeId"]): (P(self.v.bid_t[str(o["exchangeId"])]), P(self.v.ask_t[str(o["exchangeId"])]))
