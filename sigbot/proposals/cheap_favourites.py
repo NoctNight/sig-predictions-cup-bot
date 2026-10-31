@@ -78,7 +78,8 @@ class CheapFavourites:
     def __init__(self, budget: float = 15000.0, min_edge: float = 0.02, leg_cap: float = 2000.0, min_fav: float = 0.80,
                  order_notional: float = 500.0, hold_limit: float = 4000.0, cash_floor: float = 1000.0,
                  same_terms: Optional[set] = None, exclude_races=PUNT_RACES, states: Optional[dict] = None,
-                 last_entry: float = LAST_ENTRY, min_shares: int = 20, net_max: float = 2000.0, headroom: float = 1000.0):
+                 last_entry: float = LAST_ENTRY, min_shares: int = 20, net_max: float = 2000.0, headroom: float = 1000.0,
+                 min_price: float = 0.0, max_price: float = 1.0):
         self.budget, self.min_edge, self.leg_cap, self.min_fav = budget, min_edge, leg_cap, min_fav
         self.order_notional, self.hold_limit, self.cash_floor = order_notional, hold_limit, cash_floor
         self.same_terms = same_terms
@@ -89,6 +90,7 @@ class CheapFavourites:
         # own net D cost stays within +-net_max whatever the book, and the book stays within +-(cap - headroom) in the
         # direction of each add
         self.net_max, self.headroom = net_max, headroom
+        self.min_price, self.max_price = min_price, max_price     # the side's price band (Sizhe 31 Oct: 90-92%)
 
     # ------------------------------------------------------------------ candidates
     def candidates(self, rows: list[dict], positions: dict, race_legs: Optional[dict] = None) -> list[dict]:
@@ -130,7 +132,7 @@ class CheapFavourites:
                     routes.append(("no", round(1 - bid, 3), 1 - fair, "R" if r["party"] == "D" else "D"))
                 for side, px, p_win, win in routes:
                     edge = p_win - px
-                    if p_win < self.min_fav or edge < need - 1e-9:
+                    if p_win < self.min_fav or edge < need - 1e-9 or not self.min_price - 1e-9 <= px <= self.max_price + 1e-9:
                         continue
                     c = {"race": race, "state": st, "win_party": win, "exchange_id": ex, "party": r["party"], "side": side,
                          "price": px, "p_win": p_win, "edge": edge, "need": need, "fair": fair,
@@ -157,7 +159,7 @@ class CheapFavourites:
     # ------------------------------------------------------------------ entries
     def entries(self, cands: list[dict], held: dict, deployed: float, cash: float, now: float, touch: dict,
                 positions: dict, net_d: float, cap: float = 5000.0, max_orders: int = 3, blocked=(),
-                pend: tuple = (0.0, 0.0), own: Optional[tuple] = None) -> list[dict]:
+                pend: tuple = (0.0, 0.0), own: Optional[tuple] = None, net_d_ex: Optional[float] = None) -> list[dict]:
         """Orders to send now. held: (race, win_party) -> cost already in the sleeve (fills plus orders not yet filled);
         deployed: total of the same; touch: exchange_id -> (best price for our side, quantity there) from a fresh book;
         positions: venue positions (empty = the positions read failed: no entries, every holding guard would be blind).
@@ -167,7 +169,8 @@ class CheapFavourites:
                   counted one-sided: pending D only against D adds, pending R only against R adds, so an order that
                   expired unfilled can never make room;
           own     (filled net D cost of this sleeve, its pending D, its pending R); default: held as filled;
-          blocked directions the bot itself blocked this cycle (risk.blocked_directions): never added to.
+          blocked directions the bot itself blocked this cycle (risk.blocked_directions): never added to;
+          net_d_ex the book's net D without the punt's legs: D adds count the larger, the punt's timed exit needs that room.
         A D add needs net_d + pend_D + n <= cap - headroom and own_net + own_pend_D + n <= net_max; an R add the mirror."""
         if now > self.last_entry or not positions:
             return []
@@ -188,8 +191,8 @@ class CheapFavourites:
             if want < 1 or not t:
                 continue
             px, tq = t
-            if px is None or c["p_win"] - px < c.get("need", self.min_edge) - 1e-9:
-                continue                                       # the fresh book no longer offers the edge
+            if px is None or c["p_win"] - px < c.get("need", self.min_edge) - 1e-9 or not self.min_price - 1e-9 <= px <= self.max_price + 1e-9:
+                continue                                       # the fresh book no longer offers the edge, or left the band
             q = int(min(want / px, 0.8 * (tq or 0)))
             pos = positions.get(c["exchange_id"], 0.0)
             q = min(q, int(self.hold_limit - abs(pos)))      # never take a leg past 4,000 shares
@@ -200,7 +203,7 @@ class CheapFavourites:
             if adds in blocked:
                 continue
             if adds == "D":
-                if net_d + pend_d + notional > lim + 1e-9 or own_net + own_pd + notional > self.net_max + 1e-9:
+                if (max(net_d, net_d_ex) if net_d_ex is not None else net_d) + pend_d + notional > lim + 1e-9 or own_net + own_pd + notional > self.net_max + 1e-9:
                     continue
                 pend_d += notional
                 own_pd += notional

@@ -242,6 +242,24 @@ def clip_quote(kind: str, books: dict, exs: list, want: int, max_walk: float, mi
     return (q, wq) if wq else (0, None)
 
 
+def floor_clip(kind: str, books: dict, exs: list, want: int, min_clip: int, floor: float) -> tuple[int, Optional[dict]]:
+    """The largest clip <= want (halving) whose every set sells at or above `floor`: the set price at the worst level walked,
+    which is what the leg limits guarantee (Sizhe 31 Oct: "please dont sell it at horrible prices"). (0, None) if none."""
+    q = int(want)
+    while q >= max(1, min_clip):
+        wq = walk_quote(kind, books, exs, q)
+        if wq is not None and worst_set_price(kind, wq, exs) >= floor - 1e-9:
+            return q, wq
+        q //= 2
+    return 0, None
+
+
+def worst_set_price(kind: str, wq: dict, exs: list) -> float:
+    """What the last set of a clip sells for at its leg limits."""
+    lim = sum(wq["limits"][e] for e in exs)
+    return len(exs) - lim if kind == "sell_set" else lim
+
+
 def locked_return(kind: str, cost_basis: dict, positions: dict, exs: list, sets: int) -> float:
     """The set's locked return from the venue's cost basis (payout - cost) / cost, in [0, CAP_END_FRAC]. Only when every
     leg holds exactly the sets (a leg's basis then is the set's); 0 otherwise (review 1: residual NO bought at other

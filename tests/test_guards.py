@@ -2024,9 +2024,10 @@ check("cheapfav bot: restart-safe: the held position is rebuilt from fills, not 
       not any(x[4] == "cfx" for x in _sent) and _b.cheapfav_open == {"r1": -600.0}
       and R.Bot.mm_positions(types.SimpleNamespace(catchup_open={}, cheapfav_open={"r1": -600.0}), {"r1": -650.0}) == {"r1": -50.0}, str(_sent))
 check("cheapfav: off by default", __import__("sigbot.config", fromlist=["BotConfig"]).BotConfig().cheapfav_enabled is False)
-check("cheapfav: live config.json runs it at the approved 15k (24 Oct): edge 2c, 2,000 per leg, 500 orders, floor 1,000",
-      _live.get("cheapfav_enabled") is True and _live.get("cheapfav_budget") == 15000.0 and _live.get("cheapfav_min_edge") == 0.02
-      and _live.get("cheapfav_leg_cap") == 2000.0 and _live.get("cheapfav_order_notional") == 500.0 and _live.get("cheapfav_cash_floor") == 1000.0)
+check("cheapfav: live config.json runs as Sizhe set it 31 Oct: budget 21k, edge 4c, side priced 0.90-0.92, 2,000 per leg, 500 orders, floor 100",
+      _live.get("cheapfav_enabled") is True and _live.get("cheapfav_budget") == 21000.0 and _live.get("cheapfav_min_edge") == 0.04
+      and _live.get("cheapfav_min_price") == 0.9 and _live.get("cheapfav_max_price") == 0.92
+      and _live.get("cheapfav_leg_cap") == 2000.0 and _live.get("cheapfav_order_notional") == 500.0 and _live.get("cheapfav_cash_floor") == 100.0)
 # review 24 Oct (Fable): holes found in the first draft
 check("cheapfav bot: positions read failed (empty map): no entries, the 4,000-share / no-crossing / partisan guards would be blind",
       _cfbot([], _RI, {}, 0.0)[1] == [] and _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, {}, 0.0) == [])
@@ -5007,6 +5008,38 @@ check("sim churn_blowout: sets_left_at_sell_all reads the sell-all cycle only (M
       _b0 is None and _b1 == {} and _b2 == {} and _b3 == {"A": 50}, f"{_b0} {_b1} {_b2} {_b3}")
 check("sim churn_blowout: MM inventory at the sell-all cycle (mm-purpose fills on both legs) is not counted as sets, a churn set next to it still is, and an MM long on one leg never turns a flat race into a set",
       _b4 == {} and _b5 == {"IA": 100} and _b6 == {}, f"{_b4} {_b5} {_b6}")
+
+# RI sale with a floor and the 90-92% buys (Sizhe 31 Oct): limits are the guarantee, so the floor is judged on the worst level walked
+_fb = {"a": {"asks": [{"price": 0.04, "quantity": 5000}]}, "b": {"asks": [{"price": 0.93, "quantity": 600}, {"price": 0.935, "quantity": 2522}, {"price": 0.94, "quantity": 3000}]},
+       "c": {"asks": [{"price": 0.12, "quantity": 2887}, {"price": 0.125, "quantity": 9000}]}}
+_q1, _w1 = WD.floor_clip("sell_set", _fb, ["a", "b", "c"], 1000, 100, 1.905)
+_q2, _w2 = WD.floor_clip("sell_set", _fb, ["a", "b", "c"], 4000, 100, 1.905)
+_q3, _ = WD.floor_clip("sell_set", _fb, ["a", "b", "c"], 500, 100, 1.92)
+check("ri floor: a 1,000-set clip that reaches 1.905 at its worst level goes; 4,000 sets would reach 1.90 and halve to 2,000; a floor above the touch sells nothing",
+      _q1 == 1000 and abs(WD.worst_set_price("sell_set", _w1, ["a", "b", "c"]) - 1.905) < 1e-9 and _q2 == 2000 and _q3 == 0, f"{_q1} {_q2} {_q3}")
+_rt = open(R.__file__).read()
+_rc = _rt[_rt.index("def wind_down_candidates"):_rt.index("def wind_down_foreign")]
+_rk = _rt[_rt.index("def wind_down_set_clip"):_rt.index("def wind_down_leg_clip")]
+check("ri floor: the clip is sized by floor_clip, the gate and schedule are skipped only for a floored race, and the send re-checks the floor on the re-clamped quote",
+      "WD.floor_clip(kind, books" in _rc and 'ok, gwhy, cap = True, f"floor' in _rc and "WD.worst_set_price(kind, wq, exs) < floor" in _rk)
+_cb = CF.CheapFavourites(budget=21000, min_edge=0.04, same_terms={"w", "x", "y"}, min_price=0.90, max_price=0.92, states={"WY": 19.0, "TN": 19.0, "RI": 19.0})
+_cr = [dict(race="Wyoming Senate", party="R", exchange_id="w", fair=0.985, sig_bid=0.89, sig_ask=0.895, pm=0.985, kalshi=0.985),
+       dict(race="Wyoming Senate", party="D", exchange_id="wd", fair=0.015, sig_bid=None, sig_ask=None, pm=0.015, kalshi=0.015),
+       dict(race="Tennessee Senate", party="R", exchange_id="x", fair=0.975, sig_bid=0.90, sig_ask=0.91, pm=0.975, kalshi=0.975),
+       dict(race="Tennessee Senate", party="D", exchange_id="xd", fair=0.025, sig_bid=None, sig_ask=None, pm=0.025, kalshi=0.025),
+       dict(race="Rhode Island Senate", party="D", exchange_id="y", fair=0.989, sig_bid=0.92, sig_ask=0.925, pm=0.989, kalshi=0.989),
+       dict(race="Rhode Island Senate", party="R", exchange_id="yr", fair=0.011, sig_bid=None, sig_ask=None, pm=0.011, kalshi=0.011)]
+_cc = _cb.candidates(_cr, {"z": 1.0})
+check("cheapfav band: Tennessee at 0.91 is in, Wyoming at 0.895 and RI Senate at 0.925 are out; the default band keeps all three",
+      [c["exchange_id"] for c in _cc] == ["x"] and len(CF.CheapFavourites(budget=21000, min_edge=0.04, same_terms={"w", "x", "y"}, states={"WY": 19.0, "TN": 19.0, "RI": 19.0}).candidates(_cr, {"z": 1.0})) == 3, str(_cc))
+_ct = dict(_cc[0]); _ct["win_party"] = "D"
+_ce = lambda **kw: _cb.entries([_ct], {}, 0.0, 5000.0, 0.0, {"x": (0.91, 5000)}, {"z": 1.0}, 2300.0, cap=5000.0, own=(0.0, 0.0, 0.0), **kw)
+check("cheapfav punt room: net D +2,300 with a punt short, +4,900 without it: a D add is refused, it would use the room the punt's exit needs; without that view it goes",
+      _ce(net_d_ex=4900.0) == [] and len(_ce()) == 1 and len(_ce(net_d_ex=2300.0)) == 1)
+_cs = dict(_ct, win_party="R")
+check("cheapfav punt room: an R add is not held back by the punt view; a touch that left the band sends nothing",
+      len(_cb.entries([_cs], {}, 0.0, 5000.0, 0.0, {"x": (0.91, 5000)}, {"z": 1.0}, 2300.0, cap=5000.0, own=(0.0, 0.0, 0.0), net_d_ex=4900.0)) == 1
+      and _cb.entries([_cs], {}, 0.0, 5000.0, 0.0, {"x": (0.93, 5000)}, {"z": 1.0}, 2300.0, cap=5000.0, own=(0.0, 0.0, 0.0)) == [])
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

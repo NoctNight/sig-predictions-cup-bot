@@ -211,6 +211,8 @@ class BotConfig:
     cheapfav_cash_floor: float = 1000.0  # never spend cash below this
     cheapfav_net_max: float = 2000.0     # the sleeve's own net D cost stays within +-this whatever the book
     cheapfav_headroom: float = 1000.0    # an add that widens the book's |net D| keeps it this far under the partisan cap
+    cheapfav_min_price: float = 0.0      # the bought side's price band (Sizhe 31 Oct: 0.90-0.92)
+    cheapfav_max_price: float = 1.0
     gap_enabled: bool = False            # gap-trade pilot (proposals/gap_pilot; needs cheapfav_enabled): buy the side SIG prices >= gap_min_edge
     gap_budget: float = 900.0           # under the outside fair on any same-terms leg; total cost cap (inside cheapfav_budget),
     gap_min_edge: float = 0.03           # edge at the touch (+1c on single-venue legs), levels walked while each share keeps it,
@@ -231,6 +233,7 @@ class BotConfig:
     wind_down_clips_per_cycle: int = 1
     wind_down_fallback_buffer_sec: float = 7200.0   # a race drops the timing gate when only clips x gap + this is left
     wind_down_force_late: list = field(default_factory=lambda: ["Rhode Island Governor"])   # sold even if called early
+    wind_down_set_floor: dict = field(default_factory=dict)   # race -> lowest price per set (Sizhe 31 Oct): sold now at or above it, never under, no timing gate, no deadline
     wind_down_sell_at_call: bool = False  # backlog 000c: selling early-call sets at their call stays report-only until Sizhe approves
     strategy_monitor_enabled: bool = False   # strategy_monitor.py: test each sleeve on its own results every strategy_monitor_sec
     strategy_monitor_sec: float = 900.0      # and pause a losing one's new entries (params/strategy_kill.json; a human re-enables)

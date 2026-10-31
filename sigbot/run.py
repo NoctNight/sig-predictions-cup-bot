@@ -801,7 +801,8 @@ class Bot:
                 self.cheapfav = CF.CheapFavourites(budget=cfg.cheapfav_budget, min_edge=cfg.cheapfav_min_edge, leg_cap=cfg.cheapfav_leg_cap,
                                                    order_notional=cfg.cheapfav_order_notional, cash_floor=cfg.cheapfav_cash_floor,
                                                    hold_limit=getattr(cfg, "churn_skip_holding", 4000.0) or 4000.0, same_terms=same,
-                                                   net_max=cfg.cheapfav_net_max, headroom=cfg.cheapfav_headroom)
+                                                   net_max=cfg.cheapfav_net_max, headroom=cfg.cheapfav_headroom,
+                                                   min_price=cfg.cheapfav_min_price, max_price=cfg.cheapfav_max_price)
                 log.warning("CHEAPFAV sleeve enabled: budget %.0f, min edge %.3f, %.0f per leg, %d same-terms legs",
                             cfg.cheapfav_budget, cfg.cheapfav_min_edge, cfg.cheapfav_leg_cap, len(same))
         self.gap = None
@@ -2397,8 +2398,12 @@ class Bot:
                         cost_left += k * 0.03 * payout             # not quoted this cycle: a typical 3% exit cost
                         continue
                     raw, books = bb
-                    q, wq = WD.clip_quote(kind, books, exs, min(k, cfg.wind_down_clip_sets), cfg.wind_down_max_walk_ticks * TICK,
-                                          min(cfg.wind_down_min_clip, k))
+                    floor = (getattr(cfg, "wind_down_set_floor", None) or {}).get(race.name)
+                    if floor:
+                        q, wq = WD.floor_clip(kind, books, exs, min(k, cfg.wind_down_clip_sets), min(cfg.wind_down_min_clip, k), floor)
+                    else:
+                        q, wq = WD.clip_quote(kind, books, exs, min(k, cfg.wind_down_clip_sets), cfg.wind_down_max_walk_ticks * TICK,
+                                              min(cfg.wind_down_min_clip, k))
                     cost_left += k * (wq["forgone"] if wq else 0.03 * payout)
                     sets.append((race, kind, k, raw, books, q, wq, why))
             for e, r in res.items():
@@ -2452,6 +2457,9 @@ class Bot:
             m12, m24 = (self.wd_med.get(race.name) or {}).get(kind, (None, None))
             ok, gwhy = WD.gate_ok(now, WD.touch_cost(kind, raw, exs), m12, m24, fb)
             cap = WD.set_cost_cap(now, WD.locked_return(kind, getattr(self, "cost_basis", {}) or {}, venue, exs, k))
+            floor = (getattr(cfg, "wind_down_set_floor", None) or {}).get(race.name)
+            if floor:                                      # sold now at or above the floor, never under it: no schedule, no deadline
+                ok, gwhy, cap = True, f"floor {floor:.3f} a set", wq["cost_frac"] if wq else 0.0
             if wq is not None and q >= 1 and ok and wq["cost_frac"] <= cap + 1e-9:
                 out.append({"type": "set", "race": race, "kind": kind, "qty": q, "held": k, "books": books, "quote": wq,
                             "cap": cap, "cost_frac": wq["cost_frac"], "est_cost": q * wq["forgone"], "fallback": fb,
@@ -2535,6 +2543,9 @@ class Bot:
             q = min(c["qty"], k2)
             wq = WD.walk_quote(kind, c["books"], exs, q)
             if wq is None or wq["cost_frac"] > c["cap"] + 1e-9:
+                return None
+            floor = (getattr(self.cfg, "wind_down_set_floor", None) or {}).get(race.name)
+            if floor and WD.worst_set_price(kind, wq, exs) < floor - 1e-9:
                 return None
             sgn = 1 if kind == "sell_set" else -1               # NO sets: every leg's short shrinks; YES sets: every long
             after = dict(fresh)
@@ -3143,8 +3154,11 @@ class Bot:
             if left >= 1 and d in ("D", "R"):
                 n = left * float(o["price"])
                 pend_d, pend_r = (pend_d + n, pend_r) if d == "D" else (pend_d, pend_r + n)
+        # the punt's timed exit adds D back: a D add is judged on the book without the punt's legs, so it cannot use that room (31 Oct)
+        pl = self.punt_legs() if callable(getattr(self, "punt_legs", None)) else set()
+        nd_ex = risk.exposure(self.universe, {e: q for e, q in positions.items() if str(e) not in pl}, prices).net_d_notional if pl else None
         orders = cf.entries(cands, held, deployed, spendable_cash(self), now, touch, positions, expo.net_d_notional,
-                            cap=self.cfg.mm.portfolio_max_partisan_notional, pend=(pend_d, pend_r), own=cf_pend,
+                            cap=self.cfg.mm.portfolio_max_partisan_notional, pend=(pend_d, pend_r), own=cf_pend, net_d_ex=nd_ex,
                             blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()))   # the bot's block this cycle
         if getattr(self.cfg, "raise_enabled", False):  # what it would buy with unlimited cash: the shortfall is a cash need
             free = cf.entries(cands, held, deployed, 1e12, now, touch, positions, expo.net_d_notional,
