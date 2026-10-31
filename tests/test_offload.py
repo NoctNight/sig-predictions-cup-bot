@@ -544,6 +544,7 @@ run(e, f, 58)
 check("pacing: pulls count against the write limit", len(e.state["writes"]) <= 3 + 1, str(len(e.state["writes"])))
 e, f = setup(rows=_legs, target=150)
 run(e, f, 8)
+check("snapshot: after_batch runs", f.after == 1, str(f.after))
 e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
 f.pull_writes = 2
 run(e, f, 2)
@@ -551,7 +552,6 @@ check("pacing: a pull's cancels are counted as writes, with the send", len(e.sta
 e, f = setup()
 e.rows = [dict(r, type="set_late", kind="buy_set", race=n, qty=q) for r, n, q in zip(ROWS, ("TX", "NV"), (2, 318))]
 check("test: without MN-05 the list's largest YES set is the test", e._test_row()["qty"] == 318, str(e._test_row()))
-check("snapshot: after_batch runs", f.after == 1, str(f.after))
 e, f = setup(rows=_legs, target=150)
 f.fail = [Err(503, "X"), None]
 run(e, f, 2)
