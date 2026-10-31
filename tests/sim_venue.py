@@ -464,7 +464,7 @@ class Venue:
                    order_ids=[r["data"]["orderId"] for r in results])
         return {"results": results}
 
-    def cancel_all(self, exchange_id=None, market_id=None) -> dict:
+    def cancel_all(self, exchange_id=None, market_id=None, retries=None) -> dict:
         rec = {"t": self.now, "step": self.step, "kind": "cancel_all", "ex": str(exchange_id) if exchange_id else None}
         self.calls.append(rec)
         n = 0
@@ -476,7 +476,7 @@ class Venue:
         rec["cancelled"] = n
         return {"cancelled": n}
 
-    def cancel_order(self, order_id) -> dict:
+    def cancel_order(self, order_id, retries=None) -> dict:
         o = self.orders.get(int(order_id))
         if o is not None and o.open:
             self._close(o, "Cancelled")
@@ -721,11 +721,11 @@ class FakeClient:
         self._w()
         return self.v.multi_leg(legs[:10], all_or_none, key)
 
-    def cancel_order(self, order_id) -> dict:
+    def cancel_order(self, order_id, retries=None) -> dict:
         self._w()
         return self.v.cancel_order(order_id)
 
-    def cancel_all(self, exchange_id=None, market_id=None, tournament_id=None) -> dict:
+    def cancel_all(self, exchange_id=None, market_id=None, tournament_id=None, retries=None) -> dict:
         self._w()
         return self.v.cancel_all(exchange_id, market_id)
 

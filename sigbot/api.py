@@ -331,11 +331,11 @@ class SuperMarketClient:
             body["executionMode"] = "allOrNone"
         return self._request("POST", "/orders/multi-leg", body=body, max_retries=retries)
 
-    def cancel_order(self, order_id: int) -> dict:
-        return self.delete(f"/orders/{order_id}")
+    def cancel_order(self, order_id: int, retries: Optional[int] = None) -> dict:
+        return self._request("DELETE", f"/orders/{order_id}", max_retries=retries)
 
     def cancel_all(self, exchange_id: Optional[str] = None, market_id: Optional[str] = None,
-                   tournament_id: Optional[str] = None) -> dict:
+                   tournament_id: Optional[str] = None, retries: Optional[int] = None) -> dict:
         body: dict = {"tournamentId": self._tid(tournament_id)}
         if exchange_id:
             body["exchangeId"] = str(exchange_id)
@@ -343,9 +343,9 @@ class SuperMarketClient:
             body["marketId"] = str(market_id)
         for attempt in range(6):
             try:
-                return self.post("/orders/cancel-all", body)
+                return self._request("POST", "/orders/cancel-all", body=body, max_retries=retries)
             except ApiError as e:
-                if e.status == 503 and attempt < 5:
+                if e.status == 503 and attempt < 5 and retries != 0:
                     time.sleep(e.retry_after or (2 ** attempt))
                     continue
                 raise

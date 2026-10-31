@@ -3519,6 +3519,39 @@ check("offload: the kill switch holds the sale", _ad2.blocked() == "kill switch"
 _kb.killed_until = 0.0
 _kb.strategy_kill = types.SimpleNamespace(paused=lambda n: "stop" if n == "exit:raise" else None)
 check("offload: exit:raise paused holds the sale; the cheap-favourites sleeve not paused keeps its legs out", _ad2.blocked() == "exit:raise paused" and "not paused" in str(_ad2.cheapfav_ok()))
+_calls = []
+class _Cl:
+    tournament_id = "t"
+    def cancel_order(self, i, retries=None):
+        _calls.append(("cancel_order", retries))
+    def cancel_all(self, exchange_id=None, retries=None):
+        _calls.append(("cancel_all", retries))
+        return {}
+    def place_multi_leg(self, legs, all_or_none=True, key=None, retries=None):
+        _calls.append(("basket", retries))
+        return {"results": []}
+    def place_batch(self, orders, key=None, max_rounds=6, retries=None):
+        _calls.append(("batch", retries))
+        return {"results": []}
+_sb = types.SimpleNamespace(dry_run=False, cfg=types.SimpleNamespace(offload_dry_run=False), store=_sto, api=_Cl(), cash=0.0, mm=types.SimpleNamespace(raise_pause={}),
+                            open_orders_cache={"9": [{"id": 5}]}, open_orders_ts=0.0, exit_lock={}, refresh_snapshot=lambda d=None: True,
+                            wind_down_foreign=lambda e: False)
+_ad3 = R._OffloadAdapter(_sb)
+_ad3.cancel([5]); _ad3.pull(["9"], time.time())
+_ad3.basket("MD", "sell_set", [{"exchangeId": "9", "side": "yes", "action": "buy", "quantity": 1, "price": 0.5}], "k", 1, 0.5, 1.0, 1)
+_ad3.batch([{"exchangeId": "9", "side": "yes", "action": "buy", "quantity": 1, "price": 0.5, "expirationDate": "x"}], "k2")
+check("offload: every write the adapter sends under the lock has no client retries (they sleep with the lock held)",
+      {c[0] for c in _calls} == {"cancel_order", "cancel_all", "basket", "batch"} and all(c[1] == 0 for c in _calls), str(_calls))
+_sb.refresh_snapshot = lambda d=None: (_ for _ in ()).throw(OSError("timeout"))
+_n0 = len(_calls)
+_ad3.basket("MD", "sell_set", [{"exchangeId": "9", "side": "yes", "action": "buy", "quantity": 1, "price": 0.5}], "k3", 1, 0.5, 1.0, 1)
+check("offload: a basket that traded does not read as failed when the snapshot read after it times out", len(_calls) == _n0 + 1)
+_hb = types.SimpleNamespace(store=None, universe=types.SimpleNamespace(races={"MD": types.SimpleNamespace(exchange_ids=["9", "8"])}), punt=None, churn=None,
+                            wind_down_hold_path=os.path.join(_tf.mkdtemp(), "h.json"), catchup_open={"8": 5.0})
+check("offload: a leg in the catch-up sweep keeps the sale off its race", R._OffloadAdapter(_hb).busy("MD") == "catch-up sweep", str(R._OffloadAdapter(_hb).busy("MD")))
+_hb.catchup_open = {}
+open(_hb.wind_down_hold_path, "w").write('{"races": ["MD"]}')
+check("offload: the hold file keeps the sale off its race", R._OffloadAdapter(_hb).busy("MD") == "hold file")
 check("offload: its own race check does not see itself (a sale's race is not 'busy' with the sale)", R.Bot.punt_held_races(types.SimpleNamespace(store=None, universe=None, punt=None, offload=_bo.offload)) == set())
 
 # ---------------------------------------------------------------- punt executor (BACKLOG 0000 / 0c; research_notes/punt_plan.md)

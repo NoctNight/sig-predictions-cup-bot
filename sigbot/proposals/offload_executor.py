@@ -73,7 +73,11 @@ MAX_PLAN_AGE = 6 * 3600.0     # seconds from the plan's build to the sale's star
 MAX_WINDOW = 2 * 3600.0
 MAX_HARD = 3                  # hard rejections in a row that abort the sale
 BATCH_ROWS = 25               # rows a batch prices (each a book read, feed first)
-PENDING_MAX = 60.0            # seconds an unconfirmed basket is resent with its key; then the positions settle it
+PENDING_MAX = 100.0           # seconds an unconfirmed basket is resent with its key (past the venue's 90 s lease of a key)
+LEASE = 95.0                  # a timed-out or in-flight request may still be running this long after it was sent
+IN_FLIGHT_WAIT = 90.0         # the spec's wait before an in-flight key is retried
+BACKOFF_MAX = 16.0
+SETTLE_SEC = 4.0              # a position that must say what sold is read twice this far apart, and must agree
 TEST_WAIT = 15.0              # seconds before the test basket is checked against the venue
 TEST_TIMEOUT = 90.0           # ... and how long the venue gets to show it
 CASH_TOL = (20.0, 200.0, 0.5) # the test's cash may miss by min(200, half of it), at least 20: other sleeves trade meanwhile
@@ -220,7 +224,11 @@ class OffloadExecutor:
 
     def races(self) -> set:
         """The races other sleeves keep off: only while a live sale runs (a dry run changes nothing on the bot)."""
-        if self.refused or self.a.dry or self.state.get("status") != "running":
+        if self.refused or self.a.dry:
+            return set()
+        if self.state.get("status") != "running":
+            if self.state.get("status") in ("done", "aborted") and self.a.now() < self.state.get("amb_until", 0.0):
+                return {r["race"] for r in self.rows}    # an order of unknown outcome may still rest on these legs
             return set()
         steps = self.state["steps"]                  # other threads call this: read only, st() would add keys under save()
         out = set()
@@ -276,7 +284,11 @@ class OffloadExecutor:
             if self.state["status"] == "running" and now - self.state["held_since"] > HELD_MAX:
                 self.abort(f"held over {HELD_MAX:.0f} s: {why}")
             return None
-        self.state.pop("held_since", None)
+        since = self.state.pop("held_since", None)
+        if since is not None:                        # a hold is not a row's own wait
+            for v in self.state["steps"].values():
+                if v.get("stuck") is not None:
+                    v["stuck"] += now - since
         if self.state["status"] == "waiting" and not self._preflight(now):
             return None
         if self.state.get("pending"):
@@ -361,14 +373,21 @@ class OffloadExecutor:
             q = float(WD.decompose(self.a.race_legs(r["race"]), view)[2].get(ex, 0.0)) * sign
         return max(0, int(q)), sign
 
-    def _sync(self, r: dict, v: dict, held: int) -> int:
-        """Units left to sell. After a send of unknown outcome, or one that rested, the position says what sold (counted at the plan's
-        price); otherwise only the responses do: a cheap-favourites sale on the same leg shrinks this row's view until its fills are
+    def _sync(self, r: dict, v: dict, held: int, now: float) -> Optional[int]:
+        """Units left to sell, or None while a position must be read again. After a send of unknown outcome, or one that rested, the
+        position says what sold (at the plan's price), once two reads SETTLE_SEC apart agree: a read that lags a fill would resell it.
+        Otherwise only the responses count: a cheap-favourites sale on the same leg shrinks this row's view until its fills are
         read, which is not a sale of this row."""
         if v["base"] is None:
             v["base"] = held
         if v.get("unk"):
-            v["unk"] = False
+            rd = v.get("rd")
+            if rd is None or rd[0] != held:
+                v["rd"] = [held, now]
+                return None
+            if now - rd[1] < SETTLE_SEC:
+                return None
+            v["unk"], v["rd"] = False, None
             sold = max(0, v["base"] - held)
             if sold > v["done"]:
                 extra = (sold - v["done"]) * r["plan_cash"] / r["qty"]
@@ -398,7 +417,7 @@ class OffloadExecutor:
         v = self.st(r["step"])
         if t["status"] == "pending":
             if v["status"] != "pending":
-                self.abort(f"test basket: {r['holding']} holds no sets of the plan's kind: re-run the plan")
+                self.abort(f"test basket: {r['holding']} cannot be sold ({v['status']}): see the log above; re-run the plan")
                 return None
             return self._set(r, now, test=True) if v["next"] <= now else None
         if now - t["t"] < TEST_WAIT:
@@ -452,7 +471,11 @@ class OffloadExecutor:
                 log.warning("OFFLOAD %s: read failed (%s): next tick", r["holding"], e)
                 return None
             held, sgn = self._held(r, pos, self.a.sale_view(pos), {})
-            left = self._sync(r, v, held)
+            left = self._sync(r, v, held, now)
+            if left is None:
+                v["next"] = now + SETTLE_SEC
+                self.save()
+                return None
             if left < 1:
                 if v["done"] > 0:
                     self._row_end(r, v, "done")
@@ -506,7 +529,8 @@ class OffloadExecutor:
             det = getattr(e, "details", None)
             if status in TRANSIENT or (status == 409 and code == "REQUEST_IN_FLIGHT"):
                 v["unk"] = True
-                self.note(f"{r['holding']}: basket outcome unknown ({e}): same key next tick")
+                self._backoff(p, e, now, status == 409)
+                self.note(f"{r['holding']}: basket outcome unknown ({e}): same key at +{p['at'] - now:.0f} s")
                 self.save()
                 return None
             self.state["pending"] = None
@@ -570,30 +594,43 @@ class OffloadExecutor:
         self.note(f"{r['holding']}: {status}: {v['done']} of {r['qty']} for {v['cash']:.0f}")
         self.save()
 
+    def _backoff(self, p: dict, e, now: float, in_flight: bool):
+        """The next resend of an unknown send: the venue's Retry-After, else doubling; the spec's 90 s for a key in flight."""
+        p["tries"] = p.get("tries", 0) + 1
+        ra = getattr(e, "retry_after", None)
+        p["at"] = now + (IN_FLIGHT_WAIT if in_flight else float(ra) if ra else min(BACKOFF_MAX, 2.0 ** p["tries"]))
+
     def _resend(self, now: float) -> Optional[str]:
-        """A send whose outcome is unknown: the same key and payload; past PENDING_MAX (or a leg payload near its expiry) it is
-        dropped and the next position read says what happened."""
+        """A send whose outcome is unknown: the same key and payload, paced. Past PENDING_MAX, or for a leg payload past its expiry, it
+        is dropped: the row is marked unknown, so a position that agrees twice says what happened."""
         p = self.state["pending"]
         if p["what"] == "batch":
             if now > p["exp"] + 2.0:
                 self.state["pending"] = None
+                self._unknown(p)
                 self.note(f"batch {p['key']} expired unconfirmed: the positions settle it")
                 self.save()
                 return None
-            if now > p["exp"] - 2.0:                  # no resend so close to its expiry; the drop waits for the orders to be dead
-                return None
-            with self.a.lock():
-                return self._send_batch(now)
-        if now - p["t"] > PENDING_MAX:
+        elif now - p["t"] > PENDING_MAX:
             self.state["pending"] = None
-            self.st(p["step"])["next"] = now + RETRY_GAP
+            v = self.st(p["step"])
+            v["unk"] = True
+            v["next"] = now + RETRY_GAP
             if p["test"]:
                 self.abort("test basket never confirmed")
                 return None
             self.note(f"basket {p['key']} never confirmed: the positions settle it")
             self.save()
             return None
+        w = [t for t in self.state.get("writes") or [] if now - t < 60.0]
+        if now < p.get("at", 0.0) or len(w) >= self.writes_per_min:
+            return None
         with self.a.lock():
+            now = self._gate()
+            if now is None:
+                return None
+            if p["what"] == "batch":
+                return self._send_batch(now) if now <= p["exp"] - 2.0 else None
             return self._send_basket(now)
 
     # ---------------------------------------------------------------- legs
@@ -615,7 +652,7 @@ class OffloadExecutor:
             if why:
                 self._wait(r, v, now, "busy", f"{r['holding']}: left alone: {why}")
                 continue
-            cost = self._pull_cost(r["legs"])
+            cost = self._pull_cost(r["legs"]) + (1 if v.get("live") else 0)
             if priced and cost > room:
                 break                                 # the rest next tick: pulls share the account's writes with the MM
             room -= cost
@@ -643,8 +680,8 @@ class OffloadExecutor:
             now = self._gate()
             if now is None:
                 return None
-            live = self._live_ids()
-            if live and not self.a.dry:               # every remainder, not only this batch's: it would fill outside the cap check
+            live = [v["live"][0] for _, v, _ in pulled if v.get("live")]
+            if live and not self.a.dry:               # these rows' remainders: their expiry has passed, the venue's sweep may lag
                 self._wrote(len(live))
                 try:
                     self.a.cancel(live)
@@ -652,7 +689,7 @@ class OffloadExecutor:
                     if int(getattr(e, "status", 0) or 0) in TRANSIENT:
                         self.note(f"cancel of remainders failed ({e}): next tick")
                         return None
-            for v in self.state["steps"].values():
+            for _, v, _ in pulled:
                 v["live"] = None
             try:
                 pos = self.a.positions()
@@ -667,13 +704,25 @@ class OffloadExecutor:
             cap = self.a.cap
             up, down, gross = 0.0, 0.0, 0.0            # net D if only the orders widening it fill, each way
             now = self.a.now()
+            for v in self.state["steps"].values():     # other rows' remainders may still fill: they count as orders of this batch
+                lv = v.get("live")
+                if lv and now < lv[1] + 10.0:
+                    after = dict(pos)
+                    after[lv[2]] = after.get(lv[2], 0.0) + lv[3]
+                    d = self.a.net_d(after)
+                    if d is None:
+                        return None
+                    up, down = up + max(0.0, d - nd), down + min(0.0, d - nd)
             exp = now + TTL
             stamp = datetime.fromtimestamp(exp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             orders, purposes, steps = [], [], []
             for r, v, b in pulled:
                 ex = r["legs"][0]
                 held, sign = self._held(r, pos, view, cf)
-                left = self._sync(r, v, held)
+                left = self._sync(r, v, held, now)
+                if left is None:
+                    v["next"] = now + SETTLE_SEC
+                    continue
                 if left < 1:
                     if v["done"] > 0:
                         self._row_end(r, v, "done")
@@ -697,7 +746,7 @@ class OffloadExecutor:
                     self._wait(r, v, now, "cap", f"{r['holding']}: {q} shares would break the partisan cap: waiting")
                     continue
                 if gross + q * price > CASH_MARGIN * bal:
-                    v["next"] = now + RETRY_GAP
+                    self._wait(r, v, now, "cash", f"{r['holding']}: {q} shares would gross above the cash: waiting")
                     continue
                 up, down, gross = u, w, gross + q * price
                 orders.append({"exchangeId": ex, "side": "no" if sign > 0 else "yes", "action": "buy", "quantity": q, "price": price,
@@ -713,10 +762,13 @@ class OffloadExecutor:
             self.save()
             return self._send_batch(now)
 
-    def _unknown(self, p: dict):
-        """Orders of this batch may rest with no record of ours: no leg is priced until they are dead."""
-        self.state["amb_until"] = max(self.state.get("amb_until", 0.0), p["exp"] + 5.0)
-        for s in p["steps"]:
+    def _unknown(self, p: dict, lease: bool = False, steps: Optional[list] = None):
+        """Orders of this batch may rest with no record of ours: no leg is priced until they are dead (lease: the request itself may
+        still be running at the venue)."""
+        p.setdefault("amb0", self.state.get("amb_until", 0.0))
+        until = max(p["exp"] + 10.0, p["t"] + LEASE) if lease else p["exp"] + 10.0
+        self.state["amb_until"] = max(self.state.get("amb_until", 0.0), until)
+        for s in steps if steps is not None else p["steps"]:
             self.st(s)["unk"] = True
 
     def _send_batch(self, now: float) -> Optional[str]:
@@ -727,8 +779,10 @@ class OffloadExecutor:
         except Exception as e:
             status, code = int(getattr(e, "status", 0) or 0), str(getattr(e, "code", "") or "")
             if status in TRANSIENT or (status == 409 and code == "REQUEST_IN_FLIGHT"):
-                self._unknown(p)
-                self.note(f"batch {p['key']} outcome unknown ({e}): same key next tick")
+                inflight = status == 409
+                self._unknown(p, lease=status == 0 or inflight)
+                self._backoff(p, e, now, inflight)
+                self.note(f"batch {p['key']} outcome unknown ({e}): same key at +{p['at'] - now:.0f} s")
                 self.save()
                 return None
             self.state["pending"] = None
@@ -756,15 +810,21 @@ class OffloadExecutor:
                     v["done"] += got
                     v["cash"] += got * px
                     self.state["raised"] += got * px
-                v["live"] = [d.get("orderId"), p["exp"]] if d.get("open") and d.get("orderId") is not None else None
+                v["live"] = None
+                if d.get("open") and d.get("orderId") is not None:
+                    left = int(o["quantity"]) - got
+                    v["live"] = [d["orderId"], p["exp"], o["exchangeId"], left if o["side"] == "yes" else -left]
                 v["unk"] = bool(d.get("open"))
-                v["stuck"] = None
                 v["next"] = max(now + TTL + 2.0 if d.get("open") else now + RETRY_GAP, v["next"])
                 if v["done"] >= r["qty"]:
                     self._row_end(r, v, "done")
+                elif got or d.get("open"):
+                    v["stuck"] = None
+                else:                                 # accepted, nothing traded or rests (orderId null, self-trade prevented)
+                    self._wait(r, v, now, "nofill", f"{r['holding']}: accepted with no fill: waiting")
             elif int(x.get("status") or 0) in TRANSIENT:
                 again = True
-                self._unknown(dict(p, steps=[p["steps"][i]]))
+                self._unknown(p, steps=[p["steps"][i]])
             else:
                 seen.append(i)
                 v["tries"] += 1
@@ -773,6 +833,13 @@ class OffloadExecutor:
                 if v["tries"] > MAX_RETRIES:
                     self._row_end(r, v, "failed")
         getattr(self.a, "after_batch", lambda: None)()
+        if len(res) < len(p["orders"]):               # a 2xx that does not cover the batch: what it left out is unknown
+            again = True
+            self._unknown(p, steps=[p["steps"][i] for i in range(len(p["steps"])) if i not in seen])
+        if again:
+            self._backoff(p, None, now, False)
+        elif "amb0" in p:                             # every item settled: nothing of this batch is unknown any more
+            self.state["amb_until"] = p["amb0"]
         if again:                                     # never a new key here: an unknown item may rest, and a repriced order could
             self.save()                               # then sell through zero. The same key resumes it, until the payload expires
             return "batch"

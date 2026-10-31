@@ -48,7 +48,8 @@ def lad(*lv):
 
 
 class Fake:
-    """Baskets fill all-or-none within their limits against static books; `fail` is a list of exceptions raised by the next sends."""
+    """Baskets fill all-or-none within their limits against static books; `fail` is a list of exceptions raised by the next sends. Keys are
+    idempotent: a replay returns the first response and moves nothing. `rest`: batch orders rest and fill only at fill_resting()."""
 
     def __init__(self, pos, races, books, dry=False, bal=20000.0):
         self.dry, self.cap = dry, 5000.0
@@ -61,6 +62,9 @@ class Fake:
         self.steal = None                       # called before each send: another sleeve moves positions
         self.no_move = self.no_cash = self.lose_resp = self.cf_lag = False
         self.tags = []
+        self.keys, self.rest, self.resting, self.lag, self.lag_pos, self.lag_left = {}, False, [], 0, None, 0
+        self.pull_writes, self.after = 0, 0
+        self.lose_batch = False
 
     def now(self):
         return self.t
@@ -74,7 +78,21 @@ class Fake:
         return cm()
 
     def positions(self):
+        if self.lag_left > 0:                   # /positions behind the fills for this many reads
+            self.lag_left -= 1
+            return dict(self.lag_pos)
         return dict(self.pos)
+
+    def fill_resting(self):
+        for o in self.resting:
+            self.pos[o["exchangeId"]] += o["quantity"] if o["side"] == "yes" else -o["quantity"]
+        self.resting = []
+
+    def pull_cost(self, exs):
+        return self.pull_writes
+
+    def after_batch(self):
+        self.after += 1
 
     def sale_view(self, p):
         return {e: q - self.cf.get(e, 0.0) for e, q in p.items()}
@@ -123,11 +141,15 @@ class Fake:
             e = self.fail.pop(0)
             if e is not None:
                 raise e
-        if self.lose_resp:                      # it traded, the response was lost
+        if key in self.keys:
+            return self.keys[key]
+        if self.lose_resp:                      # it traded, the response was lost; a resend replays it
             self.lose_resp = False
             for l in legs:
                 self.pos[l["exchangeId"]] += sgn * q
             self.bal += q * proceeds
+            self.keys[key] = {"results": [{"data": {"exchangeId": l["exchangeId"], "quantityTraded": q, "open": False,
+                                                    "totalCost": q * l["price"]}} for l in legs]}
             raise Err(502, "ORDER_STATUS_UNKNOWN")
         if not self.no_move:
             for l in legs:
@@ -147,7 +169,19 @@ class Fake:
                 return e
             if e is not None:
                 raise e
+        if self.lose_batch:                     # the orders landed, the response was lost
+            self.lose_batch = False
+            self.keys[key] = True
+            if self.rest:
+                self.resting.extend(dict(o) for o in orders)
+            else:
+                for o in orders:
+                    self.pos[o["exchangeId"]] += o["quantity"] if o["side"] == "yes" else -o["quantity"]
+            raise Err(502, "ORDER_STATUS_UNKNOWN")
         out = []
+        if self.rest:
+            self.resting.extend(dict(o) for o in orders)
+            return [{"ok": True, "status": 201, "data": {"orderId": 500 + i, "quantityTraded": 0, "open": True}} for i in range(len(orders))]
         for o in orders:
             self.pos[o["exchangeId"]] += o["quantity"] if o["side"] == "yes" else -o["quantity"]
             if o["exchangeId"] in self.cf and not self.cf_lag:
@@ -394,12 +428,7 @@ f.fail = [Err(503, "SERVICE_UNAVAILABLE"), Err(409, "REQUEST_IN_FLIGHT"), Err(40
 run(e, f, 4)
 n0 = {s["key"] for s in batches(f)}
 run(e, f, 34)
-check("legs: in flight is not a rejection, and no new key goes until the unknown orders are dead", e.state["hard"] == 0 and {s["key"] for s in batches(f)} == n0, str([s["key"] for s in batches(f)]))
-_r2 = [row(2, "CO D NO", "leg_held", 100, 40.0, ["c1"], [0.40]), row(4, "NV R YES", "leg", 200, 120.0, ["n1"], [0.60])]
-e, f = setup(rows=_r2, target=150)
-f.fail = [[{"ok": True, "status": 201, "data": {"orderId": 9, "quantityTraded": 0, "open": True}}, {"ok": False, "status": 400, "data": {"error": "x"}}]]
-run(e, f, 22)
-check("cap: a resting remainder is cancelled before the next batch is priced", 9 in f.cancels and len(batches(f)) == 2, str((f.cancels, len(batches(f)))))
+check("legs: in flight is not a rejection, and it keeps the key", e.state["hard"] == 0 and {s["key"] for s in batches(f)} == n0, str([s["key"] for s in batches(f)]))
 e, f = setup(rows=_legs, target=150)
 _w = f.lock
 def _slow():
@@ -414,6 +443,145 @@ e, f = setup(rows=[row(2, "CO D NO", "leg_held", 100, 40.0, ["c1"], [0.40])], ta
 f.fail = [[{"ok": True, "status": 201, "data": {"orderId": 9, "quantityTraded": 40, "open": True}}]]
 run(e, f, 60)
 check("legs: a remainder is cancelled before the row is sent again", 9 in f.cancels, str(f.cancels))
+
+# ---------------------------------------------------------------- double sales: a fake with idempotent keys and resting orders
+_one = [row(4, "NV R YES", "leg", 200, 120.0, ["n1"], [0.60])]
+_big = dict(pos0(), n1=500.0)
+e, f = setup(rows=_one, target=100, pos=_big)
+f.rest, f.lose_batch = True, True
+f.fail = [None, Err(403, "FORBIDDEN")]
+run(e, f, 6)
+k0 = {s["key"] for s in batches(f)}
+run(e, f, 20)
+f.fill_resting()
+run(e, f, 8)
+check("unknown then rejected while it rests: no new order until it is dead (the gate on amb_until)", {s["key"] for s in batches(f)} == k0, str([s["t"] - T0 for s in batches(f)]))
+f.rest = False
+run(e, f, 120)
+check("unknown then rejected: the fill is read and the row is not sold again: 200 of 200, 300 left", f.pos["n1"] == 300.0 and e.st("4")["done"] == 200, str((f.pos["n1"], e.st("4"))))
+e, f = setup(rows=_one, target=100, pos=_big)
+f.lose_batch = True
+f.fail = [None] + [Err(503, "X")] * 40
+run(e, f, 200)
+check("a lost batch that filled, dropped at expiry: the row marked unknown is not sold again", f.pos["n1"] == 300.0, str((f.pos["n1"], e.st("4"))))
+e, f = setup(rows=_one, target=100, pos=_big)
+f.rest = True
+run(e, f, 6)
+f.fill_resting()
+f.rest = False
+run(e, f, 100)
+check("a remainder that filled after its response: not sold again", f.pos["n1"] == 300.0 and e.st("4")["done"] == 200, str((f.pos["n1"], e.st("4"))))
+e, f = setup(rows=_one, target=100, pos=_big)
+f.rest = True
+run(e, f, 6)
+f.lag_pos, f.lag_left = dict(f.pos), 1      # the fill lands, the first read after it does not show it
+f.fill_resting()
+f.rest = False
+f.t = T0 + 34
+run(e, f, 100)
+check("a position read that lags a fill by one read does not resell it (two reads must agree)", f.pos["n1"] == 300.0, str((f.pos["n1"], e.st("4"))))
+_two = [row(4, "NV R YES", "leg", 200, 120.0, ["n1"], [0.60]), row(2, "CO D NO", "leg_held", 100, 40.0, ["c1"], [0.40])]
+e, f = setup(rows=_two, target=150, pos=dict(_big))
+f.fail = [[{"ok": True, "status": 201, "data": {"orderId": 9, "quantityTraded": 200, "open": False}}, {"ok": False, "status": 503, "data": {}}],
+          [{"ok": True, "status": 201, "data": {"orderId": 9, "quantityTraded": 200, "open": False}}, {"ok": True, "status": 201, "data": {"orderId": 10, "quantityTraded": 0, "open": True}}]]
+run(e, f, 8)
+check("a resend replays settled items: they are counted once", abs(e.state["raised"] - 120.0) < 1e-6 and len({s["key"] for s in batches(f)}) == 1, str((e.state["raised"], [s["key"] for s in batches(f)])))
+e, f = setup(rows=_one, target=100, pos=_big)
+f.fail = [[]] + [Err(503, "X")] * 40
+run(e, f, 20)
+check("a 2xx that leaves items out is unknown, not done", len({s["key"] for s in batches(f)}) == 1 and e.st("4")["unk"], str(e.st("4")))
+e, f = setup(rows=_one, target=100, pos=_big)
+_at_send = {}
+_b0 = f.batch
+def _crash(orders, key):
+    _at_send["state"] = open(e.state_path).read()        # the file as it stood when the process died inside the POST
+    return _b0(orders, key)
+f.batch = _crash
+e.tick()
+f.batch = _b0
+open(e.state_path, "w").write(_at_send["state"])
+f.t += 200
+e2 = OE.OffloadExecutor(e.plan_path, e.state_path, e.sha, f, 100, "5 min", START, STOP)
+run(e2, f, 120)
+check("a crash after the POST: the restart does not sell the row again", f.pos["n1"] == 300.0, str((f.pos["n1"], e2.st("4"))))
+e, f = setup(rows=_one, target=100, pos=_big)
+f.fail = [Err(503, "X")] * 40
+e.tick()
+_exp = e.state["pending"]["exp"]
+f.t = _exp + 1.0
+e.tick()
+check("a batch is dropped only once its orders are dead (expiry + 2 s), not before", e.state["pending"] is not None, str(e.state["pending"]))
+_cap2 = [row(4, "NV R YES", "leg", 200, 120.0, ["n1"], [0.60]), row(2, "CO D NO", "leg_held", 100, 40.0, ["c1"], [0.40])]
+e, f = setup(rows=_cap2, target=100)
+f.nd_fn = lambda p: 4700.0 + (200.0 - p.get("n1", 0.0)) * 1.0 + (100.0 + p.get("c1", 0.0)) * 2.0     # each widens: 200 then 200
+f.rest = True
+e.st("2")["next"] = T0 + 10.0
+run(e, f, 20)
+check("cap: another row's remainder counts in the next batch, it is not left out (300 + 200 would pass 5,000)", len(batches(f)) == 1 and not f.cancels, str((len(batches(f)), f.cancels)))
+
+# ---------------------------------------------------------------- pacing
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+f.fail = [Err(409, "REQUEST_IN_FLIGHT")] * 50
+run(e, f, 60)
+check("pacing: a key in flight waits the spec's 90 s, it is not resent every tick", len(f.sent) == 1, str(len(f.sent)))
+run(e, f, 30)
+check("pacing: a basket in flight is not repriced under a new key inside the 90 s lease", len({s["key"] for s in f.sent}) == 1, str([s["key"] for s in f.sent]))
+_e429 = Err(429, "RATE_LIMITED")
+_e429.retry_after = 30.0
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+f.fail = [_e429, None]
+run(e, f, 20)
+n = len(f.sent)
+run(e, f, 16)
+check("pacing: Retry-After is honoured", n == 1 and len(f.sent) >= 2, str((n, len(f.sent))))
+e, f = setup(rows=_legs, target=150)
+f.fail = [Err(503, "X")] * 30
+run(e, f, 28)
+check("pacing: a batch's resends back off", len(batches(f)) <= 5, str(len(batches(f))))
+e, f = setup(writes_per_min=3)
+f.pull_writes = 1
+run(e, f, 58)
+check("pacing: pulls count against the write limit", len(e.state["writes"]) <= 3 + 1, str(len(e.state["writes"])))
+e, f = setup(rows=_legs, target=150)
+run(e, f, 8)
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+f.pull_writes = 2
+run(e, f, 2)
+check("pacing: a pull's cancels are counted as writes, with the send", len(e.state["writes"]) == 3, str(e.state["writes"]))
+e, f = setup()
+e.rows = [dict(r, type="set_late", kind="buy_set", race=n, qty=q) for r, n, q in zip(ROWS, ("TX", "NV"), (2, 318))]
+check("test: without MN-05 the list's largest YES set is the test", e._test_row()["qty"] == 318, str(e._test_row()))
+check("snapshot: after_batch runs", f.after == 1, str(f.after))
+e, f = setup(rows=_legs, target=150)
+f.fail = [Err(503, "X"), None]
+run(e, f, 2)
+_lk = f.lock
+def _k2():
+    f.block = "kill switch"
+    return _lk()
+f.lock = _k2
+n = len(f.sent)
+run(e, f, 20)
+check("gate: a resend whose lock wait met the kill switch does not go", len(f.sent) == n, str((n, len(f.sent))))
+e, f = setup(rows=[r for r in ROWS if r["step"] == 1], target=3800)
+_lk2 = f.lock
+def _late():
+    f.t = e.t1 + 1.0
+    return _lk2()
+f.lock = _late
+run(e, f, 4)
+check("gate: a window that closed during the lock wait stops the send", not f.sent)
+
+# ---------------------------------------------------------------- rows that would hold a race for ever
+e, f = setup(rows=_legs, target=150)
+f.fail = [[{"ok": True, "status": 201, "data": {"orderId": None, "quantityTraded": 0, "open": False}},
+           {"ok": True, "status": 201, "data": {"orderId": None, "quantityTraded": 0, "open": False}}]] * 200
+run(e, f, OE.STUCK_MAX + 60)
+check("stuck: orders accepted with no fill (orderId null) end the row in time", e.state["status"] == "done", str((e.state["status"], e.st("2"))))
+e, f = setup(rows=_legs, target=150)
+f.bal = 1.0
+run(e, f, OE.STUCK_MAX + 60)
+check("stuck: a row short of cash ends in time, its race goes back", e.state["status"] == "done" and e.races() == set(), e.state["status"])
 
 # ---------------------------------------------------------------- cheap favourites
 cf_row = row(6, "MD D YES", "cheapfav", 400, 384.0, ["d1"], [0.96])
@@ -434,8 +602,13 @@ _shared = [row(6, "MD D YES", "cheapfav", 300, 288.0, ["d1"], [0.96]), row(7, "M
 e, f = setup(rows=_shared, target=380, pos=_p)
 f.cf = {"d1": 300.0}
 f.cf_lag = True
-e.st("7")["next"] = T0 + 20.0               # (in one batch they sell together, which is right)
-run(e, f, 40)
+e.st("6")["next"] = T0 + 10.0               # row 7 is seen first, so its base is set before the sleeve's row sells
+_ob = f.books["d1"]
+f.books["d1"] = {"bids": lad((0.90, 9000)), "asks": _ob["asks"]}
+run(e, f, 6)
+f.books["d1"] = _ob
+e.st("7")["next"] = T0 + 30.0
+run(e, f, 24)
 _r = e.state["raised"]
 check("shared leg: while the sleeve's fills are unread, its sale is not booked as a sale of the other row", f.pos["d1"] == 100.0 and e.st("7")["done"] == 0 and _r < 300, str((f.pos["d1"], e.st("7"), _r)))
 f.cf = {}

@@ -326,15 +326,21 @@ class _OffloadAdapter:
             return "shock mode"
         if b.churn is not None and any(l["race"] == race for l in b.churn.lots):
             return "high-frequency arb"
-        c = getattr(self, "_ex", None)
-        if c is None or time.time() - c[0] > 5.0:
-            c = self._ex = (time.time(), Bot.wind_down_exempt(b))
-        ex_r, ex_l = c[1]
-        if "*" in ex_r or ex_r.get(race) == "hold file":
+        try:
+            hold = json.load(open(getattr(b, "wind_down_hold_path", None) or os.path.join(HERE, "params", "wind_down_hold.json")))
+        except FileNotFoundError:
+            hold = {}
+        except Exception as e:
+            return f"hold file unreadable ({e})"
+        if race in {str(r) for r in hold.get("races", [])}:
             return "hold file"
+        held = {str(e) for e in hold.get("exchanges", [])}
+        catchup = {str(e) for e, q in (getattr(b, "catchup_open", None) or {}).items() if q}
         for e in b.universe.races[race].exchange_ids:
-            if ex_l.get(e) in ("hold file", "catch-up sweep"):
-                return ex_l[e]
+            if e in held:
+                return "hold file"
+            if e in catchup:
+                return "catch-up sweep"
         return None
 
     def blocked(self) -> Optional[str]:
@@ -353,7 +359,13 @@ class _OffloadAdapter:
         return None if strategy_paused(self.b, "cheapfav") else "the cheap-favourites sleeve is not paused: it would buy these back"
 
     def pull(self, exs: list, now: float) -> bool:
-        return True if self.dry else Bot.wind_down_pause_legs(self.b, exs, now)
+        if self.dry:
+            return True
+        try:
+            return Bot.wind_down_pause_legs(self.b, exs, now, retries=0)     # no client retries under the lock (they sleep)
+        except Exception as e:                          # a timeout: unknown whether the cancel landed, so the leg waits
+            log.warning("OFFLOAD pull %s: %s", exs, e)
+            return False
 
     def pull_cost(self, exs: list) -> int:
         return 0 if self.dry else sum(1 for e in exs if (self.b.open_orders_cache or {}).get(e))
@@ -438,11 +450,13 @@ class _OffloadAdapter:
         err = None
         for i in ids:
             try:
-                self.b.api.cancel_order(i)
+                self.b.api.cancel_order(i, retries=0)
                 self.b.store.mark_orders([i], "cancelled")
             except ApiError as e:
                 if e.status in PE.TRANSIENT:
                     err = err or e
+            except Exception as e:                      # a timeout: it may still rest
+                err = err or e
         if err is not None:
             raise err
 
@@ -2673,7 +2687,7 @@ class Bot:
             log.warning("WIND-DOWN: leg %s has open orders the bot did not place (%s): left alone", e, sorted(unknown)[:3])
         return bool(unknown)
 
-    def wind_down_pause_legs(self, exs: list, now: float, sec: float = 900.0) -> bool:
+    def wind_down_pause_legs(self, exs: list, now: float, sec: float = 900.0, retries: Optional[int] = None) -> bool:
         """Keep the MM off these legs for 15 min (the cash raise's raise_pause: no quotes, and no "hot" widening afterwards
         as with the news pause) and pull our resting orders on them,
         so a clip never meets our own quote. Called under the trade lock BEFORE positions are re-read (review 1: a fill
@@ -2693,7 +2707,7 @@ class Bot:
             if not mine and newer is None:
                 continue
             try:
-                self.api.cancel_all(exchange_id=e)
+                self.api.cancel_all(exchange_id=e, **({} if retries is None else {"retries": retries}))
             except ApiError as ex_:
                 log.warning("WIND-DOWN: cancel on %s failed (%s): clip not sent", e, ex_)
                 return False
