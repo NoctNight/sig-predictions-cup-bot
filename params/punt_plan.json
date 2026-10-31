@@ -1,0 +1,7 @@
+{"plan_id": "C1", "budget": 2600, "cap_exempt": false,
+ "steps": [
+  {"id": "c1_buy", "kind": "buy", "exchange_id": "842", "side": "no", "max_price": 0.26, "max_cash": 2600, "chunk_cash": 900,
+   "start": "2026-10-31T16:00:00-04:00", "stop": "2026-11-01T16:00:00-05:00", "min_gap_sec": 60, "abort_if_outside_below": 0.24},
+  {"id": "c1_exit", "kind": "sell", "of_step": "c1_buy", "min_price": 0.20, "chunk_shares": 3000, "timed_exit": true,
+   "start": "2026-11-03T12:00:00-05:00", "stop": "2026-11-03T15:00:00-05:00", "min_gap_sec": 60}
+ ]}

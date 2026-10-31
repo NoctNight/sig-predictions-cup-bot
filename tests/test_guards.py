@@ -16,6 +16,12 @@ from datetime import datetime, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+# the sleeves have dated deadlines (high-frequency arb stops entering 1 Nov 00:00 UTC, flatten and sell-all times on 3 Nov), so
+# these tests run as of 30 Oct 12:00 UTC whatever the real date: on the real clock the gate refused every deploy from 1 Nov
+_clock_real = time.time
+_clock_shift = 1793361600.0 - _clock_real()
+time.time = lambda: _clock_real() + _clock_shift
+
 import sigbot.run as R  # noqa: E402
 from sigbot.proposals.own_book import OwnLevels  # noqa: E402
 from sigbot.proposals.mm_upgrade import xv_gate  # noqa: E402
@@ -3242,6 +3248,63 @@ check("punt: validation refuses a max price above 0.99, a sell starting before i
 _f = _PuntFake(_T0, _books)
 _e, _, _ = _pmk(_pplan(budget=500000), _f)
 check("punt: a budget above punt_max_budget is refused", bool(_e.refused) and "budget" in _e.refused, str(_e.refused))
+
+# chamber plan C1 (31 Oct): a position sold by the clock on a side priced under 50c, with no outside gate
+def _cplan(**sell):
+    x = {"id": "x", "kind": "sell", "of_step": "b", "min_price": 0.20, "chunk_shares": 3000, "timed_exit": True,
+         "start": "2026-11-03T12:00:00-05:00", "stop": "2026-11-03T15:00:00-05:00", "min_gap_sec": 60}
+    x.update(sell)
+    x = {k: v for k, v in x.items() if v is not None}
+    return {"plan_id": "C", "budget": 2600, "cap_exempt": False, "steps": [
+        {"id": "b", "kind": "buy", "exchange_id": "842", "side": "no", "max_price": 0.26, "max_cash": 2600, "chunk_cash": 900,
+         "start": "2026-11-01T10:00:00-05:00", "stop": "2026-11-01T16:00:00-05:00", "min_gap_sec": 60, "abort_if_outside_below": 0.24}, x]}
+
+
+_cb = {"842": _pbook(asks=[(0.75, 25000), (0.76, 1e5)], bids=[(0.745, 2000), (0.74, 10000), (0.73, 77000)])}
+_cT = PE.ts_of("2026-11-01T10:00:00-05:00")
+_f = _PuntFake(_cT, _cb)
+_e, _, _ = _pmk(_cplan(timed_exit=None, outside_min=0.01), _f)
+check("punt: an outside_min under 0.5 is still refused without timed_exit", bool(_e.refused) and "outside_min" in _e.refused, str(_e.refused))
+_f = _PuntFake(_cT, _cb)
+_e, _, _ = _pmk(_cplan(outside_min=0.6), _f)
+check("punt: timed_exit with an outside_min is refused (one exit rule only)", bool(_e.refused) and "timed_exit" in _e.refused, str(_e.refused))
+_f = _PuntFake(_cT, _cb)
+_e, _, _ = _pmk(_cplan(timed_exit="yes"), _f)
+check("punt: timed_exit must be exactly true", bool(_e.refused) and "timed_exit" in _e.refused, str(_e.refused))
+_f = _PuntFake(_cT, _cb, cash=18300.0)
+_f.pos["842"] = -856.0                       # 856 NO already held, not the plan's
+_f.out["842"] = (0.72, 0.69)
+_e, _, _ = _pmk(_cplan(), _f)
+check("punt: the C1 plan with a timed exit is accepted", not _e.refused, str(_e.refused))
+_prun(_e, _f, _cT + 1800, step=30.0)
+_cn = -_f.pos["842"] - 856
+_cbuys = list(_f.sent)
+check("punt: C1 buys NO only, never above 26c, about 10,000 shares for the 2,600 budget, and stays under the 5,000 uncapped limit",
+      9500 <= _cn <= 10300 and all(o["side"] == "no" and o["price"] <= 0.26 for o in _cbuys) and sum(o["qty"] * o["price"] for o in _cbuys) <= 2600.01,
+      f"{_cn} {[(o['side'], o['qty'], o['price']) for o in _cbuys][:5]}")
+_cx0 = PE.ts_of("2026-11-03T12:00:00-05:00")
+_f.t = _cx0 - 600
+_prun(_e, _f, _cx0 - 1, step=30.0)
+check("punt: a timed exit sends nothing before its start", len(_f.sent) == len(_cbuys), str(_f.sent[len(_cbuys):][:2]))
+_f.out["842"] = (None, None)                 # the outside feed down: the clock alone must still sell
+_prun(_e, _f, _cx0 + 3600, step=30.0)
+_cs = _f.sent[len(_cbuys):]
+check("punt: a timed exit sells with the outside feed down, all of what the plan bought, in clips, and leaves the 856 NO it never bought",
+      _f.pos["842"] == -856.0 and _cs and all(o["side"] == "yes" and o["qty"] <= 3000 for o in _cs), f"{_f.pos} {[(o['side'], o['qty'], o['price']) for o in _cs][:6]}")
+check("punt: every timed-exit order is floored at min_price (YES limit 1 - 0.20)", all(abs(o["price"] - 0.80) < 1e-9 for o in _cs), str([o["price"] for o in _cs]))
+_f = _PuntFake(_cT, _cb, cash=16000.0)
+_e, _, _ = _pmk(_cplan(), _f)
+_e.cash_floor = 15000.0
+_f.c0 = 16000.0
+_prun(_e, _f, _cT + 1800, step=30.0)
+check("punt: the cash floor holds the shock reserve (16,000 cash, floor 15,000: at most 1,000 spent)", _f.c >= 15000.0 - 1e-6, str(_f.c))
+_f = _PuntFake(_T0, _books, cash=15000.0)
+_f.out["1007"] = (0.60, 0.60)
+_p = _pplan()
+_e, _, _ = _pmk(_p, _f)
+_prun(_e, _f, PE.ts_of("2026-11-03T20:00:00-05:00"), step=10.0)
+check("punt: an ordinary sell step keeps its outside gate (outside 60c, no sell)", not [o for o in _f.sent if "s1_sell" in o["key"]],
+      str([o for o in _f.sent if "s1_sell" in o["key"]][:1]))
 
 # the start / stop window on a fake clock; never above the max price; budget, max_cash and the cash floor
 _f = _PuntFake(_T0, _books, cash=15000.0)

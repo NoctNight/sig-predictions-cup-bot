@@ -25,6 +25,8 @@ Kinds:
   sell        sell what step `of_step` bought (buy the opposite side at 1 - limit; the venue nets YES against NO), never
               below `min_price`, once Polymarket AND Kalshi show our side >= outside_min for outside_polls consecutive
               ticks (or one venue >= single_venue_min when the other is missing). Never more than the venue position.
+              With "timed_exit": true (and no outside_min) the outside gate is off: it sells from `start`, for a position to
+              be flat by a set time rather than a winner to be sold on the call. min_price still floors every order.
   target_buy  after `after_step` sold min_sold_frac (or finished): target T = max(target_min, k x best live rival), else
               target_fallback; pick the first candidate whose capped ladder turns the cash into >= T shares; buy it
               like `buy`. No candidate fits by `stop`: keep the cash.
@@ -133,7 +135,10 @@ def validate(plan: dict, known: Callable[[str], bool], max_budget: float) -> lis
                 err.append(f"{sid}: min_price {p!r} not a tick in [0.01, 0.99]")
             if not isinstance(s.get("chunk_shares"), (int, float)) or s["chunk_shares"] < 1:
                 err.append(f"{sid}: chunk_shares >= 1 required")
-            if not isinstance(s.get("outside_min"), (int, float)) or not 0.5 <= s["outside_min"] <= 1.0:
+            if "timed_exit" in s:
+                if s["timed_exit"] is not True or "outside_min" in s:
+                    err.append(f"{sid}: timed_exit must be true, with no outside_min")
+            elif not isinstance(s.get("outside_min"), (int, float)) or not 0.5 <= s["outside_min"] <= 1.0:
                 err.append(f"{sid}: outside_min in [0.5, 1] required")
             if not isinstance(s.get("outside_polls", 3), int) or s.get("outside_polls", 3) < 1:
                 err.append(f"{sid}: outside_polls >= 1 required")
@@ -617,17 +622,21 @@ class PuntExecutor:
                 v["status"] = "done"
                 self.note(f"{s['id']}: sold {sold:.0f} (nothing left to sell)")
             return None
-        pm, k = self.a.outside(ex, side)
-        both = pm is not None and k is not None and min(pm, k) >= float(s["outside_min"])
-        single = (pm is None) != (k is None) and max(x for x in (pm, k) if x is not None) >= float(s.get("single_venue_min", 0.97))
-        stamp = getattr(self.a, "outside_stamp", lambda ex: None)(ex)    # count each outside poll once, not each tick
-        if stamp is None or stamp != v.get("stamp"):
-            v["stamp"] = stamp
-            v["polls"] = v["polls"] + 1 if (both or single) else 0
-        elif not (both or single):
-            v["polls"] = 0
-        if v["polls"] < int(s.get("outside_polls", 3)) or self._waiting(s, v, now):
-            return None
+        if s.get("timed_exit") is True:
+            if self._waiting(s, v, now):
+                return None
+        else:
+            pm, k = self.a.outside(ex, side)
+            both = pm is not None and k is not None and min(pm, k) >= float(s["outside_min"])
+            single = (pm is None) != (k is None) and max(x for x in (pm, k) if x is not None) >= float(s.get("single_venue_min", 0.97))
+            stamp = getattr(self.a, "outside_stamp", lambda ex: None)(ex)    # count each outside poll once, not each tick
+            if stamp is None or stamp != v.get("stamp"):
+                v["stamp"] = stamp
+                v["polls"] = v["polls"] + 1 if (both or single) else 0
+            elif not (both or single):
+                v["polls"] = 0
+            if v["polls"] < int(s.get("outside_polls", 3)) or self._waiting(s, v, now):
+                return None
         if not self._close_last(s, v, pos, now):
             return None
         sold, left = self._sale_state(v, pos, ex, side, bought)       # after the cancel, on a fresh read (review R2-4)
