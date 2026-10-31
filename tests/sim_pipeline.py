@@ -2687,8 +2687,8 @@ class OffloadSaleSell(OffloadSale):
     doc = "offload_sale with too little cash for the baskets' gross: they go as conventional sells, and the checks are the same"
 
     def bot_setup(self, sim):
-        sim.v.cash = 900.0
         super().bot_setup(sim)
+        sim.v.cash = 900.0                            # (after the seeds, which pay for themselves)
 
     def final_checks(self, sim):
         super().final_checks(sim)
