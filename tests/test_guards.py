@@ -3331,13 +3331,34 @@ _f.exit_cap_ok = lambda ex, side, qty, pos: False
 _prun(_e, _f, PE.ts_of("2026-11-03T15:00:00-05:00") + 120, step=30.0)
 check("punt: an exit that cannot sell by its stop records what it left unsold", _e.st("x")["status"] == "done" and "unsold" in str(_e.st("x").get("why")), str(_e.st("x")))
 _e, _f, _n = _cbought()
+_f.books.update(_pj.loads(_pj.dumps(_books)))
 _estate = _e.state_path
 _cplan2 = _pmk(_pplan(), _f)[1]
+_ebad = PE.PuntExecutor(_cplan2, _estate, "0" * 64, _f, max_budget=150000.0, cash_floor=100.0)
+_ft0, _f.t = _f.t, PE.ts_of("2026-11-03T15:00:01-05:00")
+_ebad.tick()
+_f.t = _ft0
+check("punt: a plan whose hash is wrong stays refused past a timed exit's stop (the wait never clears another refusal)", bool(_ebad.refused) and "hash" in _ebad.refused, str(_ebad.refused))
 _e2 = PE.PuntExecutor(_cplan2, _estate, PE.sha256_file(_cplan2), _f, max_budget=150000.0, cash_floor=100.0)
 _nb = len(_f.sent)
 _e2.tick()
 check("punt: a new plan is refused while a timed exit is open, and the old state is kept", bool(_e2.refused) and "timed exit" in _e2.refused and len(_f.sent) == _nb
       and PE.json.load(open(_estate)).get("plan_id") == "C", str(_e2.refused))
+_f.t = PE.ts_of("2026-11-03T15:00:01-05:00")
+_e2.tick()
+check("punt: a plan refused for a timed exit starts by itself once that exit's stop has passed (a stale flag never blocks the punt)",
+      not _e2.refused and _e2.state.get("plan_id") == "T", f"{_e2.refused} {_e2.state.get('plan_id')}")
+_e3 = PE.PuntExecutor(_cplan2, _estate, PE.sha256_file(_cplan2), _f, max_budget=150000.0, cash_floor=100.0)
+check("punt: after the stop a new plan loads at once, even if the old plan never ticked past it (bot down at 15:00)", not _e3.refused, str(_e3.refused))
+_e, _f, _n = _cbought()
+_f.exit_cap_ok = lambda ex, side, qty, pos: True
+_e.st("b")["filled"] = float(_e.st("b")["filled"])
+_f.t = _cx0
+_prun(_e, _f, _cx0 + 3600, step=30.0)
+_f.pos["842"] -= 50.0                        # 50 NO still to go from a part fill: under the minimum clip, but the cap is fine
+_e.st("x")["sold"] = max(0.0, float(_e.st("x").get("sold") or 0.0) - 50.0); _e.st("x")["status"] = "active"; _e.st("x")["orders"] = []
+_prun(_e, _f, _cx0 + 7200, step=30.0)
+check("punt: a last remainder under 100 shares is still sold when the cap allows it", _f.pos["842"] == -856.0, str(_f.pos))
 from sigbot.universe import Universe as _CU, Race as _CR, Leg as _CL  # noqa: E402
 _cu = _CU()
 _cu.races["U.S. Senate"] = _CR("U.S. Senate", {"D": _CL("D", "m1", "842", "t"), "R": _CL("R", "m2", "843", "t")})

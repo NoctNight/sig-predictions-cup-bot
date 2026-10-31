@@ -205,6 +205,7 @@ class PuntExecutor:
         self.plan_path, self.state_path = plan_path, state_path
         self.cash_floor = cash_floor
         self.refused = None
+        self.timed_wait = None                       # another plan's timed exit runs until this time: refused until then
         self.plan: dict = {}
         if getattr(adapter, "dry", False) and os.path.basename(state_path) == "punt_state.json":
             # review S7: a dry run never touches the live state file (it would make the live run resume a virtual one)
@@ -233,8 +234,10 @@ class PuntExecutor:
             st = json.load(open(self.state_path))
             if st.get("plan_id") == self.plan.get("plan_id") and st.get("sha") == self._sha():
                 return st
-            if st.get("timed_open"):                 # the new plan would forget shares a timed exit still has to sell
-                self.refused = f"plan {st.get('plan_id')} still has a timed exit open: it must finish first"
+            until = st.get("timed_until")
+            if until and not self.refused and self.a.now() < float(until):   # the new plan would forget shares a timed exit still has to sell
+                self.refused = f"plan {st.get('plan_id')} has a timed exit open until {float(until):.0f}: this plan waits for it"
+                self.timed_wait = float(until)       # `tick` starts this plan then: a stale flag must never block the punt
                 log.warning("PUNT refused: %s", self.refused)
                 return st
             log.warning("PUNT state belongs to another plan: starting fresh")
@@ -251,8 +254,9 @@ class PuntExecutor:
             return None
 
     def save(self):
-        self.state["timed_open"] = not self.state.get("aborted") and any(
-            s.get("timed_exit") is True and self.st(s["id"])["status"] not in ("done", "aborted") for s in self.plan.get("steps") or [])
+        stops = [ts_of(s["stop"]) for s in self.plan.get("steps") or [] if s.get("timed_exit") is True
+                 and self.st(s["id"])["status"] not in ("done", "aborted")]
+        self.state["timed_until"] = max(stops) if stops and not self.state.get("aborted") else None
         d = os.path.dirname(self.state_path) or "."
         fd, tmp = tempfile.mkstemp(dir=d, prefix=".punt_state.")
         with os.fdopen(fd, "w") as f:
@@ -323,6 +327,10 @@ class PuntExecutor:
     # ---------------------------------------------------------------- tick
     def tick(self) -> Optional[str]:
         """Do at most one order. Returns a short description of what it did, or None."""
+        if self.refused and self.timed_wait is not None and self.a.now() >= self.timed_wait:
+            self.refused, self.timed_wait = None, None
+            self.state = self._load()
+            self.note("the other plan's timed exit window has passed: this plan starts")
         if self.refused:
             return None
         self._recover(self.a.now())                  # review R3-5: a read-only lookup, also on early-return ticks and after an abort
@@ -665,7 +673,7 @@ class PuntExecutor:
         opp = "no" if side == "yes" else "yes"     # selling `side` at >= p = buying the other side at <= 1 - p
         if s.get("timed_exit") is True and not self.plan.get("cap_exempt"):
             q = self._cap_clip(ex, opp, q, pos)      # the 5,000 partisan cap is a hard limit: sell what fits, wait for the rest
-            if q < MIN_EXIT_CLIP:
+            if q < min(MIN_EXIT_CLIP, int(left)):
                 if not v.get("cap_noted"):
                     v["cap_noted"] = True
                     self.note(f"{s['id']}: held: a sale would take net D past the partisan cap ({left:.0f} left)")
