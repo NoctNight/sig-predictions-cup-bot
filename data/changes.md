@@ -496,3 +496,12 @@
 - Cheap favourites: `cheapfav_min_edge` 0.02 -> 0.04, new `cheapfav_min_price` 0.90 and `cheapfav_max_price` 0.92, `cheapfav_budget` 15,000 -> 21,000 (it was full), `cheapfav_cash_floor` 1,000 -> 100. The 15,000 shock reserve is unchanged. D adds count net D without the punt's legs, so C1's exit keeps its room.
 - Tests: test_guards `ri floor`, `cheapfav band`, `cheapfav punt room`; the live-config guard now pins these values. Sim `shock_reserve` keeps the sleeve at its old broad settings, because its refill needs that sleeve's trades. One independent review, its should-fix items done. Precheck passed.
 - Revert: remove `wind_down_set_floor`; set the four cheap favourites values back; deploy.
+
+## 2026-10-31 23:36 UTC
+- Sizhe: "keep selling more and more" of the non-high-edge positions, put them into favourites like Tennessee, Wyoming and Delaware, and sell those before 3 Nov. Sizhe chose "Sell by 2 Nov anyway" after research_notes/figures/favourite_gap_exit.png showed a 48 h hold keeps about 0.2c of a 5.5c gap: about -$660 on $20k against +$505 held to the result.
+- Sales: MN-05 YES sets added at a 0.96 floor (`wind_down_set_floor`, `wind_down_force_late`). Floored races clip up to 3,000 sets (`wind_down_floor_clip`), still one per 30 min, outside the hourly exit budget. Hawaii (7.7% to exit) and Nebraska are not floored.
+- Buys: `cheapfav_budget` 21,000 -> 41,000, `cheapfav_leg_cap` 2,000 -> 3,000. The 90-92c band, 4c edge and floor of 100 are unchanged. The 15,000 shock reserve is unchanged.
+- Exit: lots bought since `cheapfav_rotation_from` (31 Oct 22:42 UTC) sell from 2 Nov 12:00 ET to 3 Nov 12:00 ET, one clip per leg per 15 min at the touch, never under lot cost less 1c. No new cheap favourites or gap pilot buys from 2 Nov 12:00 ET. Unsold lots stay to the result. Older cheap favourites are not touched.
+- Offload executor deployed switched off (`offload_enabled` false, dry run true). Third review done. Live-sale fixes: a race's set floor holds at a basket's worst level, conventional sells off until verified (`offload_conventional_sell`), catch-up trades with a context are left alone.
+- Tests: test_guards `rotation exit`, `ri floor`; test_offload `floor`, `cash`, `adapter`. Sims 42 scenarios on today's and a 3 Nov clock before the rotation; precheck passed on the final code. Reviews: two on the rotation code, with its two blockers fixed and behaviour tested.
+- Revert: remove MN-05 from `wind_down_set_floor` and `wind_down_force_late`; empty `cheapfav_rotation_exit_start` to hold to the result; deploy.
