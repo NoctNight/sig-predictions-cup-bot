@@ -1,0 +1,1104 @@
+diff --git a/sigbot/config.py b/sigbot/config.py
+index 6f9b88f..dfa7a0c 100644
+--- a/sigbot/config.py
++++ b/sigbot/config.py
+@@ -207,6 +207,14 @@ class BotConfig:
+     cheapfav_leg_cap: float = 2000.0     # cost per race outcome,
+     cheapfav_order_notional: float = 500.0   # per order (touch only, <= 80% of the touch),
+     cheapfav_cash_floor: float = 1000.0  # never spend cash below this
++    liqabs_enabled: bool = False         # liquidation absorb (proposals/liq_absorb.py): buy favourites sagging >= 3 ticks under
++    liqabs_budget: float = 3000.0        # their usual gap while sigbot.liquidation_watch's trigger is on, sell within hours;
++    liqabs_leg_cap: float = 750.0        # cost caps (total, per leg, per order), a cash floor, exits at +2 / -6 ticks / 6 h,
++    liqabs_order_notional: float = 300.0  # sleeve kill at liqabs_kill, flat by 3 Nov 12:00 ET (liq_absorb.FLAT_BY)
++    liqabs_cash_floor: float = 2000.0
++    liqabs_kill: float = -300.0
++    liqabs_first_entry: float = 0.0      # epoch; 0 = liq_absorb.FIRST_ENTRY (31 Oct 00:00 ET)
++    liqabs_flat_by: float = 0.0          # epoch; 0 = liq_absorb.FLAT_BY (3 Nov 12:00 ET)
+     election_per_race_cap: float = 5000.0
+     election_total_cap: float = 90000.0
+     election_poll_sec: float = 4.0
+diff --git a/sigbot/liquidation_watch.py b/sigbot/liquidation_watch.py
+new file mode 100644
+index 0000000..c83e9a6
+--- /dev/null
++++ b/sigbot/liquidation_watch.py
+@@ -0,0 +1,186 @@
++"""Pre-punt liquidation watch (research_notes/new_strategies_overnight.md idea 3; research_notes/liquidation_watch.md).
++
++Rivals raising cash for an election-night punt would sell their held favourites into SIG's bids in the last days. Two
++signs, both on favourite legs (outside fair >= 0.70):
++  * taker sell share: shares of taker sells / all classified taker shares on the SIG tape, our own prints excluded;
++  * gap: mean SIG mid minus the Polymarket/Kalshi fair (venue_fair polls where both venues are fresh and within 4 points),
++    in ticks, against its baseline = the median daily gap of the 3 days before.
++Trigger (all): sell share > 0.60 AND sell share >= its own baseline (median of the 3 days before) + 0.10 AND gap - baseline
++< -2 ticks (SIG sags further under the outside). Ordinary weekdays already run 56-65% taker sells on favourites, so the
++absolute 60% alone carries no information (review 24 Oct).
++
++Read-only. Run for the daily brief:  python3 -m sigbot.liquidation_watch [--days 7] [--json]
++The bot calls `trigger(conn, now)` (rolling 24 h) for the liquidation-absorb sleeve (proposals/liq_absorb.py).
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import os
++import sqlite3
++import statistics as st
++import time
++from datetime import datetime, timedelta, timezone
++
++TICK = 0.005
++FAV_MIN = 0.70
++SELL_SHARE_MIN = 0.60
++SELL_SHARE_RISE = 0.10       # and at least this much above the share of the 3 days before
++MAKER_PURPOSES = ("mm", "inside", "tilt")   # our resting quotes: a rival hitting them is the flow we look for, so kept
++GAP_WIDEN_TICKS = 2.0
++BASE_DAYS = 3
++MIN_SHARES = 5000.0          # a window with less classified taker volume on favourites never triggers
++try:
++    from zoneinfo import ZoneInfo
++    ET = ZoneInfo("America/New_York")
++except Exception:                     # pragma: no cover - no tz database: fixed EDT
++    ET = timezone(timedelta(hours=-4))
++
++
++def _iso_ts(s: str) -> float:
++    return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
++
++
++def fav_legs(conn, t0: float, t1: float) -> dict:
++    """exchange -> median outside fair over [t0, t1) for legs whose median fair >= FAV_MIN."""
++    vals: dict = {}
++    for ex, f in conn.execute("SELECT exchange_id, fair FROM venue_fair WHERE ts >= ? AND ts < ? AND fair IS NOT NULL "
++                              "AND exchange_id IS NOT NULL", (t0, t1)):
++        vals.setdefault(str(ex), []).append(f)
++    return {ex: st.median(v) for ex, v in vals.items() if v and st.median(v) >= FAV_MIN}
++
++
++def sell_share(conn, legs: set, t0: float, t1: float) -> tuple:
++    """(sell share, classified shares) of taker prints on `legs` in [t0, t1). Prints where we were the taker are excluded
++    (fills of non-maker purposes); rivals hitting our MM/inside/tilt quotes stay in."""
++    if not legs:
++        return None, 0.0
++    own: dict = {}
++    for ex, px, fa in conn.execute("SELECT exchange_id, price, filled_at FROM fills WHERE filled_at >= ? AND filled_at < ? "
++                                   "AND COALESCE(purpose, '') NOT IN (%s)" % ",".join("?" * len(MAKER_PURPOSES)),
++                                   (_iso(t0 - 5), _iso(t1 + 5), *MAKER_PURPOSES)):
++        try:
++            own.setdefault(str(ex), []).append((_iso_ts(fa), px))
++        except (TypeError, ValueError):
++            continue
++    buy = sell = 0.0
++    for ex, px, q, at, agg in conn.execute("SELECT exchange_id, price, quantity, executed_at, aggressor FROM tape "
++                                           "WHERE executed_at >= ? AND executed_at < ? AND aggressor IN ('buy','sell')",
++                                           (_iso(t0), _iso(t1))):
++        ex = str(ex)
++        if ex not in legs:
++            continue
++        try:
++            t = _iso_ts(at)
++        except (TypeError, ValueError):
++            continue
++        if any(abs(t - tf) < 3 and pf is not None and abs(pf - px) < 1e-6 for tf, pf in own.get(ex, ())):
++            continue                                   # our own taker print
++        if agg == "sell":
++            sell += abs(q)
++        else:
++            buy += abs(q)
++    tot = buy + sell
++    return (sell / tot if tot > 0 else None), tot
++
++
++def gap_ticks(conn, legs: set, t0: float, t1: float):
++    """Mean (SIG mid - fair) in ticks over venue_fair polls on `legs` with both venues present and within 4 points."""
++    g = []
++    for ex, pm, k, f, m in conn.execute("SELECT exchange_id, pm, kalshi, fair, sig_mid FROM venue_fair WHERE ts >= ? AND ts < ? "
++                                        "AND fair IS NOT NULL AND sig_mid IS NOT NULL", (t0, t1)):
++        if str(ex) in legs and pm is not None and k is not None and abs(pm - k) <= 0.04:
++            g.append((m - f) / TICK)
++    return (sum(g) / len(g) if g else None), len(g)
++
++
++def _iso(ts: float) -> str:
++    # the tape and fills store ISO strings ('...Z' or '+00:00'); comparing on the first 19 chars of a 'T'-separated UTC
++    # stamp is exact to the second for both forms
++    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
++
++
++def window(conn, t0: float, t1: float, legs: dict = None) -> dict:
++    legs = fav_legs(conn, t0, t1) if legs is None else legs
++    ss, n = sell_share(conn, set(legs), t0, t1)
++    gap, ng = gap_ticks(conn, set(legs), t0, t1)
++    return {"t0": t0, "t1": t1, "legs": len(legs), "sell_share": ss, "shares": n, "gap_ticks": gap, "gap_polls": ng}
++
++
++def trigger(conn, now: float = None, span: float = 86400.0) -> tuple:
++    """(on, info) for the rolling window [now - span, now) against the median gap of the BASE_DAYS daily windows before it.
++    Legs are the favourites of the whole span so the baseline and the window compare the same legs."""
++    now = time.time() if now is None else now
++    t0 = now - span
++    legs = fav_legs(conn, t0 - BASE_DAYS * 86400, now)
++    cur = window(conn, t0, now, legs)
++    prior = [window(conn, t0 - (d + 1) * 86400, t0 - d * 86400, legs) for d in range(BASE_DAYS)]
++    base = [w["gap_ticks"] for w in prior if w["gap_ticks"] is not None]
++    bss = [w["sell_share"] for w in prior if w["sell_share"] is not None and w["shares"] >= MIN_SHARES]
++    cur["baseline_gap_ticks"] = st.median(base) if base else None
++    cur["baseline_sell_share"] = st.median(bss) if bss else None
++    cur["gap_change_ticks"] = (cur["gap_ticks"] - cur["baseline_gap_ticks"]
++                               if cur["gap_ticks"] is not None and cur["baseline_gap_ticks"] is not None else None)
++    on = (cur["sell_share"] is not None and cur["shares"] >= MIN_SHARES and cur["sell_share"] > SELL_SHARE_MIN
++          and cur["baseline_sell_share"] is not None and cur["sell_share"] >= cur["baseline_sell_share"] + SELL_SHARE_RISE
++          and cur["gap_change_ticks"] is not None and cur["gap_change_ticks"] < -GAP_WIDEN_TICKS)
++    cur["on"] = bool(on)
++    return bool(on), cur
++
++
++def leg_baselines(conn, now: float = None, days: float = BASE_DAYS, skip_recent: float = 86400.0) -> dict:
++    """exchange -> median (SIG mid - fair) in price units over [now - skip_recent - days, now - skip_recent): each leg's
++    usual gap before the trigger's 24-h window, so the sleeve buys a sag relative to the leg's own standing offset
++    (favourites sit ~6 ticks cheap on SIG anyway) and a day of liquidation cannot drag its own baseline down."""
++    end = (time.time() if now is None else now) - skip_recent
++    vals: dict = {}
++    for ex, pm, k, f, m in conn.execute("SELECT exchange_id, pm, kalshi, fair, sig_mid FROM venue_fair WHERE ts >= ? AND ts < ? "
++                                        "AND fair IS NOT NULL AND sig_mid IS NOT NULL", (end - days * 86400, end)):
++        if pm is not None and k is not None and abs(pm - k) <= 0.04:
++            vals.setdefault(str(ex), []).append(m - f)
++    return {ex: st.median(v) for ex, v in vals.items() if len(v) >= 20}
++
++
++def daily(conn, days: int = 7, now: float = None) -> list:
++    """One row per ET calendar day (America/New_York, so the 1 Nov clock change is handled), newest last, each judged like
++    trigger() at that day's end."""
++    now = time.time() if now is None else now
++    d_end = datetime.fromtimestamp(now, ET).replace(hour=0, minute=0, second=0, microsecond=0)
++    out = []
++    for k in range(days, -1, -1):
++        day = (d_end - timedelta(days=k)).replace(tzinfo=None)
++        a = day.replace(tzinfo=ET).timestamp()
++        b = min((day + timedelta(days=1)).replace(tzinfo=ET).timestamp(), now)
++        if b <= a:
++            continue
++        on, info = trigger(conn, b, span=b - a)
++        info["day"] = datetime.fromtimestamp(a, ET).strftime("%a %d %b") + ("" if b - a >= 82799 and b < now else " (so far)")
++        out.append(info)
++    return out
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
++    ap.add_argument("--days", type=int, default=7)
++    ap.add_argument("--db", default=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "sigbot.sqlite"))
++    ap.add_argument("--json", action="store_true")
++    a = ap.parse_args(argv)
++    conn = sqlite3.connect(f"file:{a.db}?mode=ro", uri=True, timeout=20)
++    rows = daily(conn, a.days)
++    on, cur = trigger(conn)
++    if a.json:
++        print(json.dumps({"daily": rows, "rolling_24h": cur}, default=str))
++        return
++    f = lambda x, fmt: "-" if x is None else format(x, fmt)
++    print("Pre-punt liquidation watch (favourites, outside fair >= 0.70). Trigger: taker sell share > 60% and >= 10 points over"
++          " its 3-day baseline AND gap widens > 2 ticks.")
++    print(f"{'day (ET)':18s} {'legs':>4s} {'sell share':>10s} {'base':>5s} {'taker sh':>11s} {'gap t':>6s} {'base t':>6s} {'change':>6s} trigger")
++    for r in rows:
++        print(f"{r['day']:18s} {r['legs']:4d} {f(r['sell_share'], '10.0%')} {f(r['baseline_sell_share'], '5.0%')} {r['shares']:11,.0f} "
++              f"{f(r['gap_ticks'], '6.1f')} {f(r['baseline_gap_ticks'], '6.1f')} {f(r['gap_change_ticks'], '+6.1f')} {'ON' if r['on'] else 'off'}")
++    print(f"rolling 24 h: sell share {f(cur['sell_share'], '.0%')} (baseline {f(cur['baseline_sell_share'], '.0%')}) on {cur['shares']:,.0f} sh, "
++          f"gap change {f(cur['gap_change_ticks'], '+.1f')} ticks -> {'ON' if on else 'off'}")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/sigbot/proposals/liq_absorb.py b/sigbot/proposals/liq_absorb.py
+new file mode 100644
+index 0000000..c28b658
+--- /dev/null
++++ b/sigbot/proposals/liq_absorb.py
+@@ -0,0 +1,149 @@
++"""Liquidation absorb (research_notes/new_strategies_overnight.md idea 3; research_notes/liquidation_watch.md). OFF by default.
++
++If rivals dump held favourites into SIG's bids before the 3 Nov punt, SIG's favourites sag under the outside fair by more
++than their usual offset. The sleeve buys that sag at the touch and sells it back within hours as the DMM re-centres:
++  * only while sigbot.liquidation_watch.trigger() is on (taker sell share > 60% over 24 h AND the favourite gap widened
++    > 2 ticks against the 3 days before), and only from `first_entry` (31 Oct 00:00 ET) to `last_entry`;
++  * legs: favourites (outside fair 0.70-0.97, Polymarket and Kalshi present and within 4 points), YES only, whose SIG mid
++    sits >= min_sag_ticks under (fair + the leg's own median gap of the last 3 days), with the ask still under the fair;
++  * caps: `budget` cost in total, `leg_cap` per leg, `order_notional` per order, <= 80% of the touch, a cash floor, never a
++    leg where we are short or already hold > hold_limit shares;
++  * exits (sell YES at the bid): +take_profit_ticks over the average cost, a stop at -stop_ticks, max_hold_h, the sleeve
++    kill (realised + marked P&L <= kill), and everything flat by `flat_by` (3 Nov 12:00 ET = 17:00 UTC), starting 30 min early.
++Exits and entries price off books with our own resting orders netted out (self-trade prevention); flat-by and kill exits
++fall back to a REST book, then to the cycle's bulk best bid minus 2 ticks.
++The ledger is the fills table (purposes liqabs / liqabs_exit), so a restart cannot lose a position.
++"""
++from __future__ import annotations
++
++from datetime import datetime, timezone
++from typing import Optional
++
++TICK = 0.005
++FIRST_ENTRY = datetime(2026, 10, 31, 4, 0, tzinfo=timezone.utc).timestamp()     # 31 Oct 00:00 ET
++LAST_ENTRY = datetime(2026, 11, 3, 14, 0, tzinfo=timezone.utc).timestamp()      # 3 Nov 09:00 ET (EST from 1 Nov)
++FLAT_BY = datetime(2026, 11, 3, 17, 0, tzinfo=timezone.utc).timestamp()         # 3 Nov 12:00 ET
++FLAT_WINDOW = 1800.0       # exits for flat-by start 30 min early: each attempt takes only the top of the book
++
++
++class LiqAbsorb:
++    def __init__(self, budget: float = 3000.0, leg_cap: float = 750.0, order_notional: float = 300.0, cash_floor: float = 2000.0,
++                 min_sag_ticks: float = 3.0, take_profit_ticks: float = 2.0, stop_ticks: float = 6.0, max_hold_h: float = 6.0,
++                 kill: float = -300.0, hold_limit: float = 4000.0, fair_lo: float = 0.70, fair_hi: float = 0.97,
++                 first_entry: float = FIRST_ENTRY, last_entry: float = LAST_ENTRY, flat_by: float = FLAT_BY, max_entries: int = 3):
++        self.budget, self.leg_cap, self.order_notional, self.cash_floor = budget, leg_cap, order_notional, cash_floor
++        self.min_sag, self.tp, self.stop, self.max_hold = min_sag_ticks * TICK, take_profit_ticks * TICK, stop_ticks * TICK, max_hold_h * 3600
++        self.kill, self.hold_limit, self.fair_lo, self.fair_hi = kill, hold_limit, fair_lo, fair_hi
++        self.first_entry, self.last_entry, self.flat_by, self.max_entries = first_entry, min(last_entry, flat_by - 3600), flat_by, max_entries
++
++    # ------------------------------------------------------------------ entries
++    def candidates(self, rows: list, positions: dict, base: dict, excluded_races: set = frozenset()) -> list:
++        """Favourite YES legs sagging >= min_sag under their usual gap. rows: direction rows (race, party, exchange_id, fair,
++        pm, kalshi, sig_bid, sig_ask); base: exchange -> usual (SIG mid - fair)."""
++        out = []
++        for r in rows:
++            ex = str(r.get("exchange_id") or "")
++            f, pm, k, bid, ask = r.get("fair"), r.get("pm"), r.get("kalshi"), r.get("sig_bid"), r.get("sig_ask")
++            if not ex or ex not in base or None in (f, pm, k, bid, ask) or r.get("race") in excluded_races:
++                continue
++            if not (self.fair_lo <= f <= self.fair_hi) or abs(pm - k) > 0.04 or ask <= bid:
++                continue
++            pos = positions.get(ex, 0.0)
++            if pos < 0 or abs(pos) > self.hold_limit:
++                continue                                   # short this leg (a set or another sleeve's NO), or too big already
++            mid = (bid + ask) / 2
++            sag = (mid - f) - base[ex]                      # negative = cheaper than this leg usually sits
++            if sag > -self.min_sag + 1e-9 or ask > f - TICK + 1e-9:
++                continue
++            out.append({"exchange_id": ex, "race": r.get("race"), "party": r.get("party"), "fair": f, "ask": ask, "bid": bid,
++                        "sag_ticks": sag / TICK})
++        out.sort(key=lambda c: c["sag_ticks"])
++        return out
++
++    def entries(self, cands: list, cost_by_ex: dict, deployed: float, cash: float, now: float, touch: dict, trigger_on: bool,
++                killed: bool) -> list:
++        """Orders {exchange_id, side 'yes', qty, price, notional}. touch: exchange -> (best ask, ask quantity) from a fresh book."""
++        if killed or not trigger_on or now < self.first_entry or now > self.last_entry:
++            return []
++        out = []
++        room_total = self.budget - deployed
++        for c in cands:
++            if len(out) >= self.max_entries or room_total < 1:
++                break
++            ex = c["exchange_id"]
++            if ex not in touch:
++                continue
++            px, tq = touch[ex]
++            if px is None or px <= 0 or px > c["fair"] - TICK + 1e-9 or px > c["ask"] + 1e-9:
++                continue                                   # the fresh book moved up: no longer under the fair / not the sag price
++            room = min(self.order_notional, self.leg_cap - cost_by_ex.get(ex, 0.0), room_total, cash - self.cash_floor)
++            qty = int(min(room / px, 0.8 * (tq or 0)))
++            if qty < 1:
++                continue
++            out.append({"exchange_id": ex, "race": c["race"], "side": "yes", "qty": qty, "price": round(px, 3),
++                        "notional": qty * px, "sag_ticks": c["sag_ticks"], "fair": c["fair"]})
++            room_total -= qty * px
++            cash -= qty * px
++        return out
++
++    # ------------------------------------------------------------------ exits
++    def exit_reason(self, lot: dict, bid: Optional[float], now: float, killed: bool) -> Optional[str]:
++        """lot: {qty > 0, avg, opened}. Returns why to sell now, or None."""
++        if lot["qty"] < 1:
++            return None
++        if now >= self.flat_by - FLAT_WINDOW:
++            return "flat_by"
++        if killed:
++            return "kill"
++        if bid is None:
++            return None
++        if bid >= lot["avg"] + self.tp - 1e-9:
++            return "take_profit"
++        if bid <= lot["avg"] - self.stop + 1e-9:
++            return "stop"
++        if now - lot["opened"] >= self.max_hold:
++            return "max_hold"
++        return None
++
++
++def ledger(fills: list) -> tuple:
++    """fills: rows {exchange_id, quantity, price, filled_at (epoch)} of purposes liqabs (buys, quantity > 0, YES price) and
++    liqabs_exit (sells; quantity < 0 or a NO buy recorded with YES price). Returns (lots {ex: {qty, avg, opened}},
++    cost_by_ex of open lots, deployed cost of open lots, realised P&L)."""
++    lots, realised = {}, 0.0
++    for f in fills:
++        ex, q, p, t = str(f["exchange_id"]), float(f["quantity"]), float(f["price"]), float(f.get("filled_at") or 0.0)
++        lot = lots.setdefault(ex, {"qty": 0.0, "avg": 0.0, "opened": t})
++        if q > 0:
++            if lot["qty"] <= 0:
++                lot.update(qty=0.0, avg=0.0, opened=t)
++            lot["avg"] = (lot["avg"] * lot["qty"] + p * q) / (lot["qty"] + q)
++            lot["qty"] += q
++        else:
++            n = min(-q, lot["qty"])
++            realised += n * (p - lot["avg"])
++            lot["qty"] -= n
++    lots = {ex: l for ex, l in lots.items() if l["qty"] >= 1}
++    cost = {ex: l["qty"] * l["avg"] for ex, l in lots.items()}
++    return lots, cost, sum(cost.values()), realised
++
++
++def cooled(fills: list, now: float, hours: float = 6.0, loss_ticks: float = 2.0) -> set:
++    """Legs closed at a loss of >= loss_ticks per share within the last `hours`: never re-bought (a leg that keeps falling
++    after a stop still looks like a sag). Derived from the fills, so it survives a restart."""
++    lots, out = {}, set()
++    for f in fills:
++        ex, q, p, t = str(f["exchange_id"]), float(f["quantity"]), float(f["price"]), float(f.get("filled_at") or 0.0)
++        qty, avg = lots.get(ex, (0.0, 0.0))
++        if q > 0:
++            lots[ex] = (qty + q, (avg * qty + p * q) / (qty + q)) if qty > 0 else (q, p)
++        elif qty > 0:
++            if p <= avg - loss_ticks * TICK + 1e-9 and now - t < hours * 3600:
++                out.add(ex)
++            lots[ex] = (max(qty + q, 0.0), avg)
++    return out
++
++
++def marked_pnl(lots: dict, realised: float, bids: dict) -> float:
++    """Realised plus open lots marked at the bid (a lot with no bid is marked at its cost)."""
++    return realised + sum(l["qty"] * ((bids.get(ex) if bids.get(ex) is not None else l["avg"]) - l["avg"]) for ex, l in lots.items())
+diff --git a/sigbot/run.py b/sigbot/run.py
+index 54c8a39..e26521f 100644
+--- a/sigbot/run.py
++++ b/sigbot/run.py
+@@ -49,6 +49,8 @@ from .proposals.inside_quoter import InsideQuoter
+ from .proposals.volatile_moves import MoveDetector, VolatileMoves
+ from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
+ from .proposals import cheap_favourites as CF
++from .proposals import liq_absorb as LA
++from . import liquidation_watch as LW
+ from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround, big_holding,
+                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
+ from .proposals import election_night as EN
+@@ -61,6 +63,12 @@ def cheapfav_races_of(bot) -> set:
+     return f() if callable(f) else set()
+ 
+ 
++def liqabs_races_of(bot) -> set:
++    """Races the liquidation-absorb sleeve holds lots in (empty when it is not wired, e.g. on test stubs)."""
++    f = getattr(bot, "liqabs_races", None)
++    return f() if callable(f) and getattr(bot, "liqabs_open", None) is not None else set()
++
++
+ class ExplainedDirection(DirectionTrader):
+     """Directional sleeve restricted to legs whose gap versus outside markets has been explained and marked tradable
+     (params/fair_explained.json verdict trade_yes / trade_no), value signals only, one leg per race (both legs of a
+@@ -562,6 +570,28 @@ class Bot:
+                 self.cheapfav_refresh()
+             except Exception as e:
+                 log.warning("cheapfav ledger at start-up: %s", e)
++        self.liqabs = None
++        self.liqabs_open: dict = {}
++        self.liqabs_state = {"on": False, "at": 0.0, "info": {}, "base": {}}
++        self.liqabs_killed = False
++        if getattr(cfg, "liqabs_enabled", False):
++            self.liqabs = LA.LiqAbsorb(budget=cfg.liqabs_budget, leg_cap=cfg.liqabs_leg_cap, order_notional=cfg.liqabs_order_notional,
++                                       cash_floor=cfg.liqabs_cash_floor, kill=cfg.liqabs_kill,
++                                       hold_limit=getattr(cfg, "churn_skip_holding", 4000.0) or 4000.0,
++                                       first_entry=cfg.liqabs_first_entry or LA.FIRST_ENTRY, flat_by=cfg.liqabs_flat_by or LA.FLAT_BY)
++            # races holding its YES lots are left alone by the recycler / free unwinds / offload (same rule as cheapfav)
++            _prot_la = self.arb.protected
++            self.arb.protected = lambda: set(_prot_la()) | self.liqabs_races()
++            try:
++                self.liqabs_refresh()
++                self.liqabs_killed = bool(self.store.get_param("liqabs_killed", False))   # a kill survives a restart
++            except Exception as e:
++                log.warning("liqabs ledger at start-up: %s", e)
++            log.warning("LIQABS sleeve enabled: budget %.0f, %.0f per leg, kill %.0f, entries %s to %s UTC, flat by %s UTC",
++                        cfg.liqabs_budget, cfg.liqabs_leg_cap, cfg.liqabs_kill,
++                        datetime.fromtimestamp(self.liqabs.first_entry, timezone.utc).strftime("%d %b %H:%M"),
++                        datetime.fromtimestamp(self.liqabs.last_entry, timezone.utc).strftime("%d %b %H:%M"),
++                        datetime.fromtimestamp(self.liqabs.flat_by, timezone.utc).strftime("%d %b %H:%M"))
+         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
+         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
+         self.tilt = TiltHarvester(self.api, self.store, cfg.tilt, self.universe, cfg.starting_cash, dry_run)
+@@ -724,6 +754,9 @@ class Bot:
+             if done >= write_budget or q < 1 or ex not in fair:
+                 continue
+             pos = positions.get(ex, 0.0)
++            la_q = (getattr(self, "liqabs_open", None) or {}).get(ex, 0.0)
++            if la_q > 0 and pos > 0:                         # the liquidation-absorb lot is that sleeve's to sell (review 24 Oct)
++                pos = max(pos - la_q, 0.0)
+             q = int(min(q, -pos if side == "no" else pos) - resting_exit.get((ex, side), 0.0))   # never close more than held, net of resting exits
+             if q < 1:
+                 continue
+@@ -1141,6 +1174,8 @@ class Bot:
+                     continue
+                 if rname in cheapfav_races_of(self):
+                     continue                                   # cheap-favourite NO legs are not sets: held to the call
++                if rname in liqabs_races_of(self):
++                    continue                                   # liquidation-absorb lots: the two ledgers stay apart
+                 n = venue_sets(race)
+                 if n <= 0:
+                     continue
+@@ -1161,6 +1196,8 @@ class Bot:
+                     continue
+                 if race.name in cheapfav_races_of(self):
+                     continue                                   # cheap-favourite race: the two ledgers stay apart
++                if race.name in liqabs_races_of(self):
++                    continue                                   # liquidation-absorb race: the two ledgers stay apart
+                 med = self.churn_med.get(race.name)
+                 if med is None:
+                     continue
+@@ -1241,6 +1278,8 @@ class Bot:
+         cu = dict(getattr(self, "catchup_open", None) or {})
+         for ex, q in (getattr(self, "cheapfav_open", None) or {}).items():   # held to the call: not MM inventory either
+             cu[ex] = cu.get(ex, 0.0) + q
++        for ex, q in (getattr(self, "liqabs_open", None) or {}).items():     # liquidation-absorb lots: its own exits; never
++            cu[ex] = cu.get(ex, 0.0) + min(q, max(positions.get(ex, 0.0) - cu.get(ex, 0.0), 0.0))   # more than the venue shows held
+         if not cu:
+             return positions
+         return {ex: q - cu.get(ex, 0.0) for ex, q in positions.items()}
+@@ -1465,6 +1504,206 @@ class Bot:
+             except ApiError as e:
+                 log.warning("cheapfav entry %s: %s", o["exchange_id"], e)
+ 
++    # ------------------------------------------------------------------ liquidation absorb (proposals/liq_absorb.py)
++    def liqabs_races(self) -> set:
++        bx = self.universe.by_exchange
++        return {bx[ex][0] for ex in (getattr(self, "liqabs_open", None) or {}) if ex in bx}
++
++    def liqabs_refresh(self):
++        """Ledger from the fills table (purposes liqabs / liqabs_exit), in fill order (id breaks filled_at ties: a buy and
++        its exit in the same second must not leave a phantom lot; review 24 Oct)."""
++        fills = []
++        for r in self.store.rows("SELECT id, order_id, exchange_id, quantity, price, filled_at FROM fills WHERE purpose IN ('liqabs','liqabs_exit') "
++                                 "AND price IS NOT NULL ORDER BY filled_at, id"):
++            d = dict(r)
++            try:
++                d["filled_at"] = datetime.fromisoformat(str(d["filled_at"]).replace("Z", "+00:00")).timestamp()
++            except ValueError:
++                d["filled_at"] = time.time()
++            fills.append(d)
++        lots, cost, deployed, realised = LA.ledger(fills)
++        self.liqabs_open = {ex: l["qty"] for ex, l in lots.items()}
++        return fills, lots, cost, deployed, realised
++
++    def _liqabs_trigger_work(self, now: float):
++        st_ = self.liqabs_state
++        try:
++            import sqlite3
++            conn = sqlite3.connect(f"file:{self.store.path}?mode=ro", uri=True, timeout=10)
++            try:
++                on, info = LW.trigger(conn, now)
++                base = LW.leg_baselines(conn, now)
++            finally:
++                conn.close()
++            st_.update(on=bool(on), info=info, base=base, done=time.time())
++            log.info("liqabs trigger %s: sell share %s (baseline %s) on %.0f sh, gap change %s ticks, %d leg baselines", "ON" if on else "off",
++                     info.get("sell_share"), info.get("baseline_sell_share"), info.get("shares") or 0, info.get("gap_change_ticks"), len(base))
++        except Exception as e:
++            st_.update(on=False, info={"error": str(e)}, done=time.time())
++            log.warning("liqabs trigger refresh failed (trigger off): %s", e)
++
++    def liqabs_trigger_refresh(self, now: float):
++        """Hourly: sigbot.liquidation_watch trigger (rolling 24 h) and each leg's usual gap, from a read-only connection, in
++        a daemon thread (it takes ~7 s on today's tape; review 24 Oct). Entries read the last result; any failure leaves the
++        trigger OFF. Exits never depend on it."""
++        st_ = self.liqabs_state
++        if now - st_["at"] < 3600:
++            return
++        th = getattr(self, "liqabs_thread", None)
++        if th is not None and th.is_alive():
++            return
++        st_["at"] = now
++        if getattr(self, "liqabs_refresh_sync", False):              # tests and the simulation: run inline
++            self._liqabs_trigger_work(now)
++            return
++        self.liqabs_thread = threading.Thread(target=self._liqabs_trigger_work, args=(now,), name="liqabs-trigger", daemon=True)
++        self.liqabs_thread.start()
++
++    def liqabs_cycle(self, positions: dict, prices: dict, killed: bool):
++        """Exits first (take profit / stop / max hold / kill / flat by 3 Nov 12:00 ET), then entries while the trigger is on.
++        One order per exchange in flight (60 s TTL); orders of the last 3 min not yet in the fills table count as held (an
++        entry) or as already sold (an exit)."""
++        la = self.liqabs
++        if la is None or self.dry_run or self.store is None:
++            return
++        now = time.time()
++        self.liqabs_trigger_refresh(now)
++        fills, lots, cost, deployed, realised = self.liqabs_refresh()
++        self.liqabs_cooled = LA.cooled(fills, now)          # legs stopped out in the last 6 h: no re-entry
++        filled_by_order: dict = {}
++        for f in fills:
++            k = str(f.get("order_id"))
++            filled_by_order[k] = filled_by_order.get(k, 0.0) + abs(float(f["quantity"]))
++        if positions:                                          # the venue shows less than the ledger (another path sold
++            for ex, lot in list(lots.items()):                 # some): mark, budget and protect only what is really held
++                vpos = max(positions.get(ex, 0.0), 0.0)
++                if vpos + 1e-9 < lot["qty"]:
++                    log.warning("liqabs %s: ledger lot %.0f > venue YES %.0f; using %.0f", ex, lot["qty"], vpos, vpos)
++                    cost[ex] = cost.get(ex, 0.0) * (vpos / lot["qty"]) if lot["qty"] > 0 else 0.0
++                    deployed -= lot["qty"] * lot["avg"] - cost[ex]
++                    lots[ex] = dict(lot, qty=vpos)
++            self.liqabs_open = {ex: l["qty"] for ex, l in lots.items() if l["qty"] >= 1}
++        live_ids = {str(o.get("id")) for lst in (self.open_orders_cache or {}).values() for o in lst}
++        for r in self.store.rows("SELECT order_id, exchange_id, price, quantity, purpose, placed_at FROM orders WHERE purpose IN ('liqabs','liqabs_exit') "
++                                 "AND placed_at > ?", (now - 180,)):
++            left = float(r["quantity"]) - filled_by_order.get(str(r["order_id"]), 0.0)
++            ex = str(r["exchange_id"])
++            if left <= 0:
++                continue
++            if r["purpose"] == "liqabs_exit" and now - float(r["placed_at"] or 0.0) > 90 and str(r["order_id"]) not in live_ids:
++                continue                                       # expired unfilled (60 s TTL + ingest lag): those shares are ours again
++            if r["purpose"] == "liqabs":
++                cost[ex] = cost.get(ex, 0.0) + left * float(r["price"])
++                deployed += left * float(r["price"])
++            elif ex in lots:                                   # an exit still in flight: never sell those shares twice
++                lots[ex] = dict(lots[ex], qty=max(lots[ex]["qty"] - left, 0.0))
++        in_flat = now >= la.flat_by - LA.FLAT_WINDOW
++        block = 60 if in_flat else 90                          # inside the flat window retry as soon as the 60 s TTL lapses
++        resting = {str(r["exchange_id"]) for r in self.store.rows(
++            "SELECT exchange_id FROM orders WHERE purpose IN ('liqabs','liqabs_exit') AND placed_at > ?", (now - block,))}
++        la_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose IN ('liqabs','liqabs_exit') AND placed_at > ?",
++                                                             (now - 6 * 3600,))}
++        for ex_o, lst in (self.open_orders_cache or {}).items():
++            if any(str(o.get("id")) in la_ids for o in lst):
++                resting.add(str(ex_o))
++        ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
++        lock = getattr(self, "trade_lock", None)
++        if lock is None:
++            self._liqabs_trade(la, now, lots, cost, deployed, realised, resting, ttl, positions, prices, killed)
++            return
++        with lock:
++            self._liqabs_trade(la, now, lots, cost, deployed, realised, resting, ttl, positions, prices, killed)
++
++    def _liqabs_book(self, own, ex: str, urgent: bool):
++        """Fresh book with our own resting orders netted out (the venue cancels the crossing remainder of an order that
++        meets our own quote, so pricing off our MM bid never fills; review 24 Oct). Urgent exits fall back to REST."""
++        bk = self.fresh_book(ex, 10.0)
++        if bk is None and urgent:
++            try:
++                bk = self.get_book(ex)
++            except ApiError as e:
++                log.warning("liqabs REST book %s: %s", ex, e)
++                bk = None
++        return own.net(ex, bk) if bk else None
++
++    def _liqabs_trade(self, la, now, lots, cost, deployed, realised, resting, ttl, positions, prices, killed):
++        positions = getattr(self, "positions_snapshot", None) or positions
++        own = own_levels(self)
++        urgent = now >= la.flat_by - LA.FLAT_WINDOW or self.liqabs_killed
++        bids = {}
++        for ex in lots:
++            bk = self._liqabs_book(own, ex, urgent)
++            bids[ex] = bk["bids"][0]["price"] if bk and bk.get("bids") else None
++        if not self.liqabs_killed and LA.marked_pnl(lots, realised, bids) <= la.kill:
++            self.liqabs_killed = True
++            try:
++                self.store.set_param("liqabs_killed", True)       # survives a restart
++            except Exception as e:
++                log.warning("liqabs kill flag not stored: %s", e)
++            log.error("LIQABS kill: realised %+.0f, marked %+.0f <= %.0f: no more entries, all lots exit", realised,
++                      LA.marked_pnl(lots, realised, bids), la.kill)
++        for ex, lot in lots.items():
++            if ex in resting:
++                continue
++            why = la.exit_reason(lot, bids.get(ex), now, self.liqabs_killed)
++            if not why:
++                continue
++            bid = bids.get(ex)
++            if bid is None and why in ("flat_by", "kill"):
++                snap = (prices or {}).get(ex) or {}               # no book at all: the cycle's bulk snapshot, 2 ticks through,
++                bid = round(snap["bestBid"] - 2 * LA.TICK, 3) if snap.get("bestBid") else None   # below any bid of our own,
++                own_bids = own.levels(ex)["bids"]                 # never under a floor 10c below the fair or our cost
++                while bid is not None and bid > 0 and round(bid, 3) in {round(p, 3) for p in own_bids}:
++                    bid = round(bid - LA.TICK, 3)
++                fair = next((r.get("fair") for r in (getattr(self.direction, "rows", None) or []) if str(r.get("exchange_id")) == ex), None)
++                floor = max(lot["avg"] - 0.10, (fair - 0.10) if fair is not None else 0.0)
++                if bid is not None and bid < floor:
++                    log.warning("liqabs %s: blind exit at %.3f would be under the floor %.3f; using the floor", ex, bid, floor)
++                    bid = round(floor, 3)
++            if bid is None or bid <= 0:
++                continue
++            vpos = positions.get(ex, 0.0)
++            n = int(min(lot["qty"], vpos if vpos > 0 else 0.0))       # never sell more YES than the venue shows held
++            if n < 1:
++                continue
++            px = round(1 - bid, 3)                                    # sell YES at the bid = buy NO at 1 - bid
++            try:
++                resp = self.api.place_order(ex, "no", "buy", n, px, expiration=ttl, key=self.api.new_key("lax"))
++                self.store.record_order(resp.get("orderId"), ex, None, "no", "buy", px, n, "liqabs_exit", response=resp)
++                log.info("LIQABS exit %s x%d @%.3f YES (avg %.3f, %s)", ex, n, bid, lot["avg"], why)
++            except ApiError as e:
++                log.warning("liqabs exit %s: %s", ex, e)
++        st_ = self.liqabs_state
++        fresh = now - st_.get("done", st_.get("at", 0.0)) <= 2 * 3600      # a hung refresh must not keep a stale ON
++        if killed or self.liqabs_killed or not st_["on"] or not fresh or not positions or now < la.first_entry or now > la.last_entry:
++            return                                   # no positions (read failed): every holding guard would be blind
++        excluded = set(cheapfav_races_of(self))
++        ch = getattr(self, "churn", None)
++        rows = getattr(self.direction, "rows", None) or []
++        if ch is not None:
++            excluded |= {r.get("race") for r in rows if ch.held(r.get("race"))}
++        skip = getattr(self, "liqabs_skip", None) or {}
++        cool = getattr(self, "liqabs_cooled", None) or set()
++        cands = [c for c in la.candidates(rows, positions, st_["base"], excluded)
++                 if c["exchange_id"] not in resting and skip.get(c["exchange_id"], 0) <= now and c["exchange_id"] not in cool]
++        touch = {}
++        for c in cands:
++            bk = self._liqabs_book(own, c["exchange_id"], False)
++            if bk and bk.get("asks"):
++                touch[c["exchange_id"]] = (bk["asks"][0]["price"], bk["asks"][0]["quantity"])
++        for o in la.entries(cands, cost, deployed, self.cash, now, touch, st_["on"], self.liqabs_killed or killed):
++            try:
++                resp = self.api.place_order(o["exchange_id"], "yes", "buy", o["qty"], o["price"], expiration=ttl, key=self.api.new_key("la"))
++                self.store.record_order(resp.get("orderId"), o["exchange_id"], None, "yes", "buy", o["price"], o["qty"], "liqabs", response=resp)
++                if resp.get("orderId") is None:          # its fill cannot be attributed to the sleeve: never buy this leg blind
++                    self.liqabs_skip = dict(getattr(self, "liqabs_skip", None) or {}, **{o["exchange_id"]: now + 3600})
++                    log.error("LIQABS entry %s: no orderId in the response; leg skipped for 1 h", o["exchange_id"])
++                self.cash -= o["notional"]
++                log.info("LIQABS enter %s %s x%d @%.3f: fair %.3f, sag %.1f ticks under its usual gap", o["race"], o["exchange_id"],
++                         o["qty"], o["price"], o["fair"], -o["sag_ticks"])
++            except ApiError as e:
++                log.warning("liqabs entry %s: %s", o["exchange_id"], e)
++
+     def volatile_cycle(self):
+         """research_notes/volatile_moves.md: after a sweep of 5+ ticks, quotes on the retrace side lost about 1 tick over the
+         next hour (t -5.4), so the MM's level-1 quote on that side is paused for an hour (after an up move: the ask). The
+@@ -2016,6 +2255,13 @@ class Bot:
+             except Exception as e:                   # the sleeve must never kill the loop
+                 log.exception("cheapfav cycle failed: %s", e)
+ 
++        # ---- liquidation absorb (off by default): buy favourites rivals dump before the punt, sell back within hours
++        if self.liqabs is not None:
++            try:
++                self.liqabs_cycle(positions, prices, killed)
++            except Exception as e:
++                log.exception("liqabs cycle failed: %s", e)
++
+         # ---- volatile moves: pause the MM's retrace side after a 5+ tick move (verified), paper-log the move trades
+         if self.feed_ok():
+             try:
+diff --git a/tests/sim_pipeline.py b/tests/sim_pipeline.py
+index 690a5be..d99e88e 100644
+--- a/tests/sim_pipeline.py
++++ b/tests/sim_pipeline.py
+@@ -220,6 +220,8 @@ class Sim:
+         self.cfg = cfg
+         self.bot = R.Bot(cfg, dry_run=False)
+         b = self.bot
++        if getattr(b, "liqabs", None) is not None:
++            b.liqabs_refresh_sync = True       # the hourly trigger refresh runs inline here (a thread in the live bot)
+         if b.news is not None:
+             b.news.collect = lambda prices: ([], {"sources": 0, "failed": 0, "items": 0})
+         b.arb.api = b.scan_api
+@@ -884,6 +886,126 @@ class CheapFav(Scenario):
+                         "per_outcome_max": round(max(per.values())) if per else 0}
+ 
+ 
++class LiqAbs(Scenario):
++    name, cycles, seed = "liqabs", 230, 37
++    cfg = {"liqabs_enabled": True, "liqabs_first_entry": T0 - 60, "liqabs_flat_by": T0 + 90 * 60}
++    doc = ("liquidation absorb: 4 days of synthetic history (favourites 6 ticks under the outside fair, the last 24 h 9 ticks "
++           "under with 75% taker sells against 50% before) turn the real detector ON; at +5 min legs A and B sag 4 ticks (buy), leg C does not sag "
++           "and leg D sags with Polymarket and Kalshi 6 points apart (never buy); +15 min A/B re-centre (take profit); +20 min B "
++           "sags again, +25 min falls 7 more (stop, then no re-buy); +28 min A sags (buy), held to flat-by (+80 min): flat at the end, "
++           "<= 300 per order, <= 750 per leg, <= 3,000 in total, no entry in the last hour before flat-by")
++
++    def bot_setup(self, sim):
++        v, b = sim.v, sim.bot
++        legs = []
++        for race in sim.universe.races.values():
++            if len(race.exchange_ids) != 2 or "I" in race.legs:
++                continue
++            for ex in race.exchange_ids:
++                if 0.78 <= v.mid(ex) <= 0.90 and v.ask_t[ex] - v.bid_t[ex] <= 2:
++                    legs.append((race.name, ex, [e for e in race.exchange_ids if e != ex][0]))
++                    break
++            if len(legs) == 4:
++                break
++        assert len(legs) == 4, f"need 4 favourite legs, found {len(legs)}"
++        self.A, self.B, self.C, self.D = [l[1] for l in legs]
++        self.race_of = {l[1]: l[0] for l in legs}
++        for race, ex, other in legs:                       # the usual offset: SIG 6 ticks under the outside fair
++            v.outside[ex] = round(v.mid(ex) + 0.03, 4)
++            v.outside[other] = round(1 - v.outside[ex], 4)
++        d_other = [l[2] for l in legs if l[1] == self.D][0]
++        v.kalshi_offset[self.D], v.kalshi_offset[d_other] = 0.06, -0.06   # D: Kalshi 6 points over Polymarket (both legs, so
++                                                                          # the bot's overround normalisation keeps the gap)
++        c = b.store.conn
++        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
++        rows = []
++        for race, ex, other in legs:
++            f = v.outside[ex]
++            for k in range(4 * 24 * 60):                   # 1-min polls for 4 days before T0
++                t = T0 - (4 * 24 * 60 - k) * 60
++                if t < T0 - 86400 and k % 60:
++                    continue                               # hourly before the last day
++                g = -0.045 if t >= T0 - 86400 else -0.03
++                rows.append((t, race, "D", f, f, f, 1.0, 1.0, f + g - 0.0025, f + g + 0.0025, f + g, ex))
++        c.executemany("INSERT OR REPLACE INTO venue_fair(ts,race,party,pm,kalshi,fair,pm_w,k_w,sig_bid,sig_ask,sig_mid,exchange_id) "
++                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows)
++        tape = []
++        for j in range(400):                               # 800k shares in the last 24 h, 75% taker sells (the sim's own
++            t = T0 - 82000 + j * 200                       # two-sided flow must not dilute it under baseline + 10 points)
++            ex = legs[j % 3][1]
++            tape.append((f"syn{j}", ex, None, 0.8, 2000.0, iso(t), j, "sell" if j % 4 else "buy", t))
++        for d in (1, 2, 3):                                # the 3 days before: 20k shares a day, half sells (the baseline)
++            for j in range(20):
++                t = T0 - 86400 * d - 80000 + j * 3000
++                tape.append((f"base{d}_{j}", legs[j % 3][1], None, 0.8, 1000.0, iso(t), 1000 * d + j, "sell" if j % 2 else "buy", t))
++        c.executemany("INSERT OR IGNORE INTO tape(trade_id,exchange_id,market_id,price,quantity,executed_at,sequence,aggressor,ingested_at) "
++                      "VALUES (?,?,?,?,?,?,?,?,?)", tape)
++        c.commit()
++        self.done = set()
++
++    def before_cycle(self, sim, i):
++        v = sim.v
++        m = (v.now - T0) / 60
++        def once(tag, cond, fn):
++            if cond and tag not in self.done:
++                self.done.add(tag)
++                fn()
++        once("sag1", m >= 5, lambda: [v.shift(ex, -4) for ex in (self.A, self.B, self.D)])
++        once("up1", m >= 15, lambda: [v.shift(ex, 4) for ex in (self.A, self.B, self.D)])
++        once("sag2", m >= 20, lambda: v.shift(self.B, -4))
++        once("fall", m >= 25, lambda: (v.shift(self.B, -7), setattr(self, "t_fall", v.now)))
++        once("sag3", m >= 28, lambda: v.shift(self.A, -4))
++
++    def final_checks(self, sim):
++        LA = sim.M["liq_absorb"]
++        b = sim.bot
++        calls = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] in ("la", "lax")]
++        entries = [c for c in calls if c["prefix"] == "la"]
++        exits = [c for c in calls if c["prefix"] == "lax"]
++        info = b.liqabs_state.get("info") or {}
++        if not b.liqabs_state.get("on"):
++            sim.chk.violation("liqabs_trigger_off", f"the detector did not fire on the synthetic history: {info}")
++        got = {c["ex"] for c in entries}
++        if self.A not in got or self.B not in got:
++            sim.chk.violation("liqabs_no_entry", f"no entry on a sagging leg (A {self.A}, B {self.B}); entries on {sorted(got)}")
++        for c in entries:
++            if c["ex"] in (self.C, self.D) or c["ex"] not in self.race_of:
++                sim.chk.violation("liqabs_bad_leg", f"{c['key']} bought {c['ex']} (not a sagging leg with agreeing venues)")
++            if c["side"] != "yes":
++                sim.chk.violation("liqabs_side", f"{c['key']} {c['ex']} side {c['side']}")
++            if c["qty"] * c["price"] > 300 * 1.02:
++                sim.chk.violation("liqabs_oversize", f"{c['key']} {c['ex']} {c['qty'] * c['price']:.0f} > 300")
++            if c["t"] > b.liqabs.last_entry:
++                sim.chk.violation("liqabs_late_entry", f"{c['key']} entered within the last hour before flat-by")
++            if c["ex"] == self.B and c["t"] >= getattr(self, "t_fall", 1e18) + 60:
++                sim.chk.violation("liqabs_rebuy_after_stop", f"{c['key']} re-bought {c['ex']} after its stop")
++        fills = [dict(r) for r in b.store.rows("SELECT exchange_id, quantity, price, filled_at FROM fills WHERE purpose IN ('liqabs','liqabs_exit') "
++                                               "AND price IS NOT NULL ORDER BY filled_at")]
++        for f in fills:
++            f["filled_at"] = datetime.fromisoformat(str(f["filled_at"]).replace("Z", "+00:00")).timestamp()
++        per, tot, open_ = {}, 0.0, {}
++        for f in fills:
++            q = float(f["quantity"])
++            if q > 0:
++                per[f["exchange_id"]] = per.get(f["exchange_id"], 0.0) + q * float(f["price"])
++            lots, cost, dep, real = LA.ledger([x for x in fills if x["filled_at"] <= f["filled_at"]])
++            tot = max(tot, dep)
++        lots, cost, dep, real = LA.ledger(fills)
++        if tot > 3000 + 1:
++            sim.chk.violation("liqabs_budget", f"open cost peaked at {tot:.0f} > 3,000")
++        if lots:
++            sim.chk.violation("liqabs_not_flat", f"lots still open after flat-by: {lots}")
++        pos = sim.v.positions() if hasattr(sim.v, "positions") else {}
++        stops = [c for c in exits if c["ex"] == self.B and c["t"] >= getattr(self, "t_fall", 1e18)]
++        if not stops:
++            sim.chk.violation("liqabs_no_stop", f"{self.B}: fell 7 ticks under its entry, no stop exit")
++        late = [c for c in exits if c["t"] >= b.liqabs.flat_by - LA.FLAT_WINDOW]
++        if not late:
++            sim.chk.violation("liqabs_no_flat_exit", "the lot bought at +28 min was not sold at flat-by")
++        self.summary = {"trigger": {k: info.get(k) for k in ("sell_share", "shares", "gap_change_ticks")}, "entries": len(entries),
++                        "exits": len(exits), "realised": round(real, 1), "max_open_cost": round(tot), "legs": {"A": self.A, "B": self.B}}
++
++
+ class DevChurnSim(Scenario):
+     name, cycles, seed = "churn", 200, 29
+     cfg = {"churn_enabled": True}
+@@ -1652,7 +1774,7 @@ class Day(Scenario):
+                         "killed": ch.killed, "vol_paused": ch.vol_paused}
+ 
+ 
+-SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnBlowout,
++SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, LiqAbs, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnBlowout,
+              ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
+              Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
+ 
+@@ -1665,6 +1787,7 @@ def import_sandbox(sb):
+     mods = {n: importlib.import_module("sigbot." + n) for n in names}
+     mods["xv_gate"] = importlib.import_module("sigbot.proposals.mm_upgrade").xv_gate
+     mods["cheap_favourites"] = importlib.import_module("sigbot.proposals.cheap_favourites")
++    mods["liq_absorb"] = importlib.import_module("sigbot.proposals.liq_absorb")
+     assert os.path.dirname(os.path.dirname(os.path.abspath(mods["run"].__file__))) == sb, "sigbot was not imported from the sandbox"
+     return mods
+ 
+@@ -1673,6 +1796,9 @@ def main(argv):
+     verbose = "-v" in argv
+     if "--churn" in argv:
+         FORCE_CFG["churn_enabled"] = True
++    if "--liqabs" in argv:                         # liquidation absorb on in every scenario's sandbox (its trigger stays off
++        FORCE_CFG["liqabs_enabled"] = True         # without the LiqAbs scenario's synthetic history: exits/refresh paths only)
++        FORCE_CFG["liqabs_first_entry"] = 1.0
+     names = [a for a in argv if not a.startswith("-")]
+     if "--list" in argv:
+         for s in SCENARIOS:
+diff --git a/tests/test_guards.py b/tests/test_guards.py
+index b9b3f7f..eb17a0d 100644
+--- a/tests/test_guards.py
++++ b/tests/test_guards.py
+@@ -1054,5 +1054,253 @@ finally:
+ check("cheapfav bot: an entry whose response has no orderId blocks that leg for 1 h (its fill could not be attributed)",
+       _n1 == 1 and len(_bad) == 1 and _b.cheapfav_skip.get("r1", 0) > 0, f"{_bad} {_b.cheapfav_skip}")
+ 
++# ---------------------------------------------------------------- 24 Oct: liquidation watch + liquidation absorb (off by default)
++import sqlite3 as _sq  # noqa: E402
++from sigbot import liquidation_watch as LW  # noqa: E402
++from sigbot.proposals import liq_absorb as LA  # noqa: E402
++
++_NOW = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc).timestamp()
++
++
++def _lwdb(cur_gap_ticks=-9.0, base_gap_ticks=-6.0, sell=7000.0, buy=3000.0, own=(), base_sell=0.55, own_purpose="direction"):
++    c = _sq.connect(":memory:")
++    c.execute("CREATE TABLE venue_fair (ts REAL, race TEXT, party TEXT, pm REAL, kalshi REAL, fair REAL, pm_w REAL, k_w REAL, "
++              "sig_bid REAL, sig_ask REAL, sig_mid REAL, exchange_id TEXT)")
++    c.execute("CREATE TABLE tape (trade_id TEXT, exchange_id TEXT, market_id TEXT, price REAL, quantity REAL, executed_at TEXT, "
++              "sequence INTEGER, aggressor TEXT, ingested_at REAL)")
++    c.execute("CREATE TABLE fills (id INTEGER, exchange_id TEXT, price REAL, quantity REAL, filled_at TEXT, purpose TEXT)")
++    for h in range(4 * 24):                       # 4 days of hourly polls, two favourites and one underdog
++        t = _NOW - (4 * 24 - h) * 3600 + 60
++        g = cur_gap_ticks if t >= _NOW - 86400 else base_gap_ticks
++        for ex, f in (("fa", 0.85), ("fb", 0.80), ("ud", 0.20)):
++            m = f + g * 0.005 if ex != "ud" else f + 0.03
++            c.execute("INSERT INTO venue_fair VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (t, "R" + ex, "D", f, f, f, 1, 1, m - 0.0025, m + 0.0025, m, ex))
++    iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
++    k = 0
++    for agg, tot in (("sell", sell), ("buy", buy)):
++        for j in range(10):
++            k += 1
++            t = _NOW - 80000 + k * 600
++            c.execute("INSERT INTO tape VALUES (?,?,?,?,?,?,?,?,?)", (f"t{k}", "fa", None, 0.80, tot / 10, iso(t), k, agg, t))
++    c.execute("INSERT INTO tape VALUES ('u1','ud',NULL,0.2,90000,?,0,'buy',0)", (iso(_NOW - 3000),))   # underdog flow: not counted
++    for d in (1, 2, 3):                           # the 3 days before: 10,000 classified shares a day at base_sell
++        for agg, q in (("sell", 10000 * base_sell), ("buy", 10000 * (1 - base_sell))):
++            k += 1
++            t = _NOW - 86400 * d - 40000
++            c.execute("INSERT INTO tape VALUES (?,?,?,?,?,?,?,?,?)", (f"t{k}", "fb", None, 0.80, q, iso(t), k, agg, t))
++    for t, px in own:
++        c.execute("INSERT INTO fills VALUES (1,'fa',?,1,?,?)", (px, iso(t), own_purpose))
++    return c
++
++
++_on, _inf = LW.trigger(_lwdb(), _NOW)
++check("liqwatch: 70% taker sells on favourites and the gap 3 ticks wider than the 3 days before -> trigger ON",
++      _on and abs(_inf["sell_share"] - 0.7) < 1e-9 and abs(_inf["gap_change_ticks"] + 3.0) < 1e-6 and _inf["legs"] == 2, str(_inf))
++check("liqwatch: OFF when the sell share is not 10 points over its own 3-day baseline (70% vs 62%), or the baseline is missing",
++      not LW.trigger(_lwdb(base_sell=0.62), _NOW)[0] and abs(LW.trigger(_lwdb(base_sell=0.62), _NOW)[1]["baseline_sell_share"] - 0.62) < 1e-9)
++check("liqwatch: OFF at 55% sells, OFF when the gap widens only 1 tick, OFF on < 5,000 classified shares, OFF with no tape",
++      not LW.trigger(_lwdb(sell=5500, buy=4500), _NOW)[0] and not LW.trigger(_lwdb(cur_gap_ticks=-7.0), _NOW)[0]
++      and not LW.trigger(_lwdb(sell=3500, buy=1000), _NOW)[0] and not LW.trigger(_lwdb(sell=0, buy=0), _NOW)[0])
++_own = [(_NOW - 80000 + k * 600, 0.80) for k in range(1, 11)]
++check("liqwatch: prints where we were the taker are excluded (all sells ours -> 0% sells -> OFF)",
++      not LW.trigger(_lwdb(own=_own), _NOW)[0] and LW.trigger(_lwdb(own=_own), _NOW)[1]["sell_share"] == 0.0)
++check("liqwatch: rivals selling into our MM bids are kept (maker fills are not excluded): still 70% and ON",
++      LW.trigger(_lwdb(own=_own, own_purpose="mm"), _NOW)[0])
++_bl = LW.leg_baselines(_lwdb(), _NOW)
++check("liqwatch: each leg's usual gap = median SIG mid - fair over the 3 days before the last 24 h (fa: -6 ticks, not the sagged -9)",
++      abs(_bl["fa"] + 0.03) < 1e-9 and "ud" in _bl, str(_bl))
++check("liqwatch: daily() gives one row per ET day and runs on the empty-ish synthetic book", len(LW.daily(_lwdb(), 3, _NOW)) >= 3)
++
++_la = LA.LiqAbsorb(first_entry=0.0, flat_by=_NOW + 30 * 86400)
++_base = {"fa": -0.03, "fb": -0.03}
++def _lr(ex, fair, bid, ask, pm=None, k=None, race=None):
++    return {"race": race or "R" + ex, "party": "D", "exchange_id": ex, "fair": fair, "pm": fair if pm is None else pm,
++            "kalshi": fair if k is None else k, "sig_bid": bid, "sig_ask": ask}
++_rows = [_lr("fa", 0.85, 0.80, 0.805), _lr("fb", 0.80, 0.76, 0.765)]       # fa: mid 0.8025 = -9.5 ticks vs usual -6 -> sag 3.5
++_c = _la.candidates(_rows, {}, _base)
++check("liqabs: a favourite 3.5 ticks under its usual gap (ask under the fair) is a candidate; one 1.5 ticks under is not",
++      [x["exchange_id"] for x in _c] == ["fa"] and abs(_c[0]["sag_ticks"] + 3.5) < 1e-6, str(_c))
++check("liqabs: never when the venues disagree, the fair is >= 0.98 or < 0.70, we are short the leg, hold > 4,000, the race is excluded, or no baseline",
++      _la.candidates([_lr("fa", 0.85, 0.80, 0.805, pm=0.90, k=0.84)], {}, _base) == []
++      and _la.candidates([_lr("fa", 0.985, 0.94, 0.945)], {}, {"fa": -0.03}) == []
++      and _la.candidates([_lr("fa", 0.65, 0.60, 0.605)], {}, {"fa": -0.03}) == []
++      and _la.candidates(_rows, {"fa": -10.0}, _base) == [] and _la.candidates(_rows, {"fa": 4100.0}, _base) == []
++      and _la.candidates(_rows, {}, _base, {"Rfa"}) == [] and _la.candidates(_rows, {}, {}) == [])
++_t = {"fa": (0.805, 5000)}
++_e = _la.entries(_c, {}, 0.0, 20000.0, _NOW, _t, True, False)
++check("liqabs: one YES entry at the ask, <= 300 notional", len(_e) == 1 and _e[0]["side"] == "yes" and _e[0]["qty"] == 372 and _e[0]["price"] == 0.805, str(_e))
++check("liqabs: no entries with the trigger off, when killed, before first entry or after last entry (1 h before flat)",
++      _la.entries(_c, {}, 0.0, 20000.0, _NOW, _t, False, False) == [] and _la.entries(_c, {}, 0.0, 20000.0, _NOW, _t, True, True) == []
++      and LA.LiqAbsorb(first_entry=_NOW + 1, flat_by=_NOW + 9e5).entries(_c, {}, 0.0, 20000.0, _NOW, _t, True, False) == []
++      and LA.LiqAbsorb(first_entry=0.0, flat_by=_NOW + 3000).entries(_c, {}, 0.0, 20000.0, _NOW, _t, True, False) == [])
++check("liqabs: caps: leg cap reached, budget reached, cash at the floor, 80% of a small touch, fresh ask over the fair",
++      _la.entries(_c, {"fa": 750.0}, 750.0, 20000.0, _NOW, _t, True, False) == []
++      and _la.entries(_c, {}, 3000.0, 20000.0, _NOW, _t, True, False) == []
++      and _la.entries(_c, {}, 0.0, 2000.0, _NOW, _t, True, False) == []
++      and _la.entries(_c, {}, 0.0, 20000.0, _NOW, {"fa": (0.805, 100)}, True, False)[0]["qty"] == 80
++      and _la.entries(_c, {}, 0.0, 20000.0, _NOW, {"fa": (0.85, 5000)}, True, False) == [])
++check("liqabs: leg cap counts what is held: 600 of 750 held -> <= 150 more", _la.entries(_c, {"fa": 600.0}, 600.0, 20000.0, _NOW, _t, True, False)[0]["qty"] == 186)
++_lot = {"qty": 300.0, "avg": 0.80, "opened": _NOW - 3600}
++check("liqabs: exits: +2 ticks take profit, -6 ticks stop, 6 h max hold, kill, flat-by 10 min early even without a bid; holds otherwise",
++      _la.exit_reason(_lot, 0.81, _NOW, False) == "take_profit" and _la.exit_reason(_lot, 0.77, _NOW, False) == "stop"
++      and _la.exit_reason(dict(_lot, opened=_NOW - 6 * 3600), 0.80, _NOW, False) == "max_hold"
++      and _la.exit_reason(_lot, 0.80, _NOW, True) == "kill" and _la.exit_reason(_lot, None, _la.flat_by - 300, False) == "flat_by"
++      and _la.exit_reason(_lot, 0.805, _NOW, False) is None)
++_lots, _cost, _dep, _real = LA.ledger([{"exchange_id": "fa", "quantity": 400, "price": 0.80, "filled_at": 1.0},
++                                      {"exchange_id": "fa", "quantity": 200, "price": 0.81, "filled_at": 2.0},
++                                      {"exchange_id": "fa", "quantity": -300, "price": 0.82, "filled_at": 3.0},
++                                      {"exchange_id": "fb", "quantity": -50, "price": 0.70, "filled_at": 3.0}])
++check("liqabs: ledger: 400 @0.80 + 200 @0.81, 300 sold @0.82 -> 300 left at avg 0.8033, realised +5.0; a stray sell with no lot is ignored",
++      abs(_lots["fa"]["qty"] - 300) < 1e-9 and abs(_lots["fa"]["avg"] - 0.80333333) < 1e-6 and abs(_real - 5.0) < 1e-6
++      and "fb" not in _lots and abs(_dep - 241.0) < 1e-6, f"{_lots} {_real} {_dep}")
++
++
++class _LStore:
++    path = "/nonexistent/sigbot.sqlite"
++    def __init__(self, fills=(), recent=(), resting=()):
++        self.fills, self.recent, self.resting, self.orders, self.params, self.queries = list(fills), list(recent), list(resting), [], {}, []
++    def rows(self, q, a=()):
++        self.queries.append(q)
++        if "FROM fills" in q: return self.fills
++        if "FROM orders WHERE purpose IN ('liqabs','liqabs_exit') AND placed_at > ?" in q and "quantity" in q: return self.recent
++        if "SELECT exchange_id FROM orders" in q: return self.resting
++        return []
++    def record_order(self, oid, ex, mid, side, act, px, q, purpose, **k): self.orders.append((ex, side, px, q, purpose))
++    def set_param(self, k, v): self.params[k] = v
++    def get_param(self, k, d=None): return self.params.get(k, d)
++
++
++def _labot(fills=(), positions=None, on=True, killed=False, dry=False, recent=(), resting=(), now_flat=False, kill=-300.0, bids=None, oid=True,
++           refresh_at=None, books=None, rest=None, prices=None, own_orders=None, sync=True):
++    sent = []
++    positions = {"fa": 0.0, "fb": 0.0} if positions is None else positions
++    bk = books if books is not None else {
++        "fa": {"bids": [{"price": (bids or {}).get("fa", 0.80), "quantity": 5000}], "asks": [{"price": 0.805, "quantity": 5000}]},
++        "fb": {"bids": [{"price": 0.76, "quantity": 5000}], "asks": [{"price": 0.765, "quantity": 5000}]}}
++
++    def _rest(ex, depth=50, client=None, max_age=None):
++        if rest is None:
++            raise R.ApiError(503, "unavailable", "no book")
++        return rest[ex]
++    la = LA.LiqAbsorb(first_entry=0.0, flat_by=(time.time() + 300) if now_flat else time.time() + 30 * 86400, kill=kill)
++    b = types.SimpleNamespace(liqabs=la, dry_run=dry, store=_LStore(fills, recent, resting), direction=types.SimpleNamespace(rows=_rows),
++                              universe=types.SimpleNamespace(by_exchange={"fa": ("Rfa", "D"), "fb": ("Rfb", "D")}, races={}),
++                              open_orders_cache=own_orders or {}, cash=20000.0, liqabs_killed=False, churn=None, liqabs_refresh_sync=sync,
++                              get_book=_rest,
++                              liqabs_state={"on": on, "at": time.time() if refresh_at is None else refresh_at, "info": {}, "base": dict(_base)},
++                              fresh_book=lambda ex, age=None: bk.get(ex),
++                              api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: sent.append((ex, side, q, px, key))
++                                                        or ({"orderId": len(sent)} if oid else {}), new_key=lambda p: p))
++    for m in ("liqabs_refresh", "liqabs_trigger_refresh", "_liqabs_trade", "_liqabs_book", "_liqabs_trigger_work"):
++        setattr(b, m, (lambda mm: (lambda *x: getattr(R.Bot, mm)(b, *x)))(m))
++    R.Bot.liqabs_cycle(b, positions, prices or {}, killed)
++    return b, sent
++
++
++_iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
++_b, _s = _labot()
++check("liqabs bot: trigger ON -> one YES entry on the sagging leg at the ask, purpose liqabs, key la",
++      len(_s) == 1 and _s[0][:2] == ("fa", "yes") and _s[0][3] == 0.805 and _s[0][4] == "la" and _b.store.orders[0][4] == "liqabs", str(_s))
++check("liqabs bot: nothing with the trigger off, the bot kill switch on, in dry run, or with no positions read",
++      _labot(on=False)[1] == [] and _labot(killed=True)[1] == [] and _labot(dry=True)[1] == [] and _labot(positions={})[1] == [])
++check("liqabs bot: an unfilled entry of the last 3 min counts against the leg cap; a resting order blocks the leg",
++      _labot(recent=[{"order_id": 9, "exchange_id": "fa", "price": 0.805, "quantity": 932, "purpose": "liqabs", "placed_at": time.time() - 30}])[1] == []
++      and _labot(resting=[{"exchange_id": "fa"}])[1] == [])
++_f = [{"order_id": 1, "exchange_id": "fa", "quantity": 300.0, "price": 0.80, "filled_at": _iso(time.time() - 600)}]
++_b, _s = _labot(fills=_f, positions={"fa": 120.0, "fb": 0.0}, on=False, bids={"fa": 0.81})
++check("liqabs bot: take profit sells YES as a NO buy at 1 - bid, never more than the venue shows held (120 of a 300 lot)",
++      _s == [("fa", "no", 120, 0.19, "lax")] and _b.store.orders[0][4] == "liqabs_exit", str(_s))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, on=True, now_flat=True)
++check("liqabs bot: within 30 min of flat-by every lot is sold and nothing is bought", _s == [("fa", "no", 300, 0.2, "lax")], str(_s))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, now_flat=True, books={}, rest={"fa": {"bids": [{"price": 0.79, "quantity": 900}], "asks": []}})
++check("liqabs bot: flat-by with no fresh feed book reads the REST book and sells there", _s == [("fa", "no", 300, 0.21, "lax")], str(_s))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, now_flat=True, books={}, rest=None, prices={"fa": {"bestBid": 0.795}})
++check("liqabs bot: flat-by with no book at all sells through the cycle's best bid by 2 ticks (0.785)", _s == [("fa", "no", 300, 0.215, "lax")], str(_s))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, on=False, books={}, rest=None, prices={"fa": {"bestBid": 0.85}})
++check("liqabs bot: an ordinary take profit never uses the blind fallback (no fresh book -> wait)", _s == [], str(_s))
++_f79 = [dict(_f[0], price=0.79)]
++_own = {"fa": [{"id": 77, "side": "yes", "action": "buy", "priceLimit": 0.81, "quantity": 5000}]}
++_bk_own = {"fa": {"bids": [{"price": 0.81, "quantity": 5000}, {"price": 0.80, "quantity": 5000}], "asks": [{"price": 0.815, "quantity": 5000}]},
++           "fb": {"bids": [{"price": 0.76, "quantity": 5000}], "asks": [{"price": 0.765, "quantity": 5000}]}}
++_b, _s = _labot(fills=_f79, positions={"fa": 300.0, "fb": 0.0}, on=False, books=_bk_own, own_orders=_own)
++check("liqabs bot: exits price off the book with our own MM bid netted out (0.80, not our 0.81: self-trade prevention)",
++      _s == [("fa", "no", 300, 0.2, "lax")], str(_s))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, on=False, bids={"fa": 0.81},
++                recent=[{"order_id": 5, "exchange_id": "fa", "price": 0.19, "quantity": 300, "purpose": "liqabs_exit", "placed_at": time.time() - 30}])
++check("liqabs bot: an exit still in flight (not yet in fills) is not sent again", _s == [], str(_s))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, on=False, bids={"fa": 0.81},
++                recent=[{"order_id": 5, "exchange_id": "fa", "price": 0.19, "quantity": 300, "purpose": "liqabs_exit", "placed_at": time.time() - 120}])
++check("liqabs bot: an exit that expired unfilled (120 s old, no longer resting) is retried at once, not after 180 s",
++      _s == [("fa", "no", 300, 0.19, "lax")], str(_s))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, now_flat=True, books={}, rest=None, prices={"fa": {"bestBid": 0.795}},
++                own_orders={"fa": [{"id": 88, "side": "yes", "action": "buy", "priceLimit": 0.785, "quantity": 500}]})
++check("liqabs bot: the blind flat-by price steps under our own resting bid (0.785 is ours -> 0.78)", _s == [("fa", "no", 300, 0.22, "lax")], str(_s))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, now_flat=True, books={}, rest=None, prices={"fa": {"bestBid": 0.40}})
++check("liqabs bot: the blind price never goes under max(cost - 10c, fair - 10c) (fair 0.85 -> 0.75)", _s == [("fa", "no", 300, 0.25, "lax")], str(_s))
++_b, _s = _labot(refresh_at=time.time() - 1800)
++_b.liqabs_state["done"] = time.time() - 3 * 3600
++_s2 = []
++_b.api.place_order = lambda ex, side, act, q, px, expiration=None, key=None: _s2.append((ex, side)) or {"orderId": 1}
++R.Bot._liqabs_trade(_b, _b.liqabs, time.time(), {}, {}, 0.0, 0.0, set(), "ttl", {"fa": 0.0, "fb": 0.0}, {}, False)
++check("liqabs bot: a trigger result older than 2 h (hung refresh) allows no entries", _s2 == [], str(_s2))
++_b, _s = _labot(fills=_f, positions={"fa": 120.0, "fb": 0.0}, on=False)
++check("liqabs bot: a lot larger than the venue holding is clamped to it (marking, budget, MM exclusion, protection)",
++      _b.liqabs_open == {"fa": 120.0}, str(_b.liqabs_open))
++
++
++class _ZStore:
++    def rows(self, q, a=()):
++        if "purpose IN ('direction','tilt')" in q:
++            return [{"exchange_id": "1068", "side": "yes", "q": 1203.0}]
++        return []
++    def record_order(self, *a, **k):
++        pass
++
++
++_zs = []
++_zb = types.SimpleNamespace(cfg=types.SimpleNamespace(exit_band=0.01), store=_ZStore(), dry_run=False, open_orders_cache={}, liqabs_open={"1068": 1000.0},
++                            api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: _zs.append((ex, side, q)) or {"orderId": 1},
++                                                      new_key=lambda k: k))
++R.Bot.zero_ev_exits(_zb, {"1068": 1203.0}, [{"exchange_id": "1068", "fair": 0.95, "sig_bid": 0.955, "sig_ask": 0.96, "pm": 0.95, "kalshi": 0.95}])
++check("zero-EV exits never sell the liquidation-absorb lot (1,203 held, 1,000 of it the sleeve's -> exit 203)", _zs == [("1068", "no", 203)], str(_zs))
++_zb.liqabs_open = {}
++_zs.clear()
++R.Bot.zero_ev_exits(_zb, {"1068": 1203.0}, [{"exchange_id": "1068", "fair": 0.95, "sig_bid": 0.955, "sig_ask": 0.96, "pm": 0.95, "kalshi": 0.95}])
++check("zero-EV exits unchanged with the sleeve off (no lots -> exit the full 1,203)", _zs == [("1068", "no", 1203)], str(_zs))
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, on=True, kill=-5.0, bids={"fa": 0.78})
++check("liqabs bot: the kill is stored as a param so a restart stays killed", _b.store.params.get("liqabs_killed") is True)
++_b, _s = _labot()
++check("liqabs: the ledger reads fills in (filled_at, id) order: a buy and its exit in the same second leave no phantom lot",
++      any("ORDER BY filled_at, id" in q for q in _b.store.queries))
++_b, _s = _labot(refresh_at=0.0, sync=False)
++_b.liqabs_thread.join(5)
++check("liqabs bot: the hourly trigger refresh runs in a daemon thread (the cycle does not wait for it); its failure leaves the trigger off",
++      _b.liqabs_thread.daemon and _b.liqabs_state["on"] is False and "error" in _b.liqabs_state["info"])
++_rs5 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
++check("liqabs wiring: churn sell-all and churn entries skip races with liquidation-absorb lots; arb.protected includes them",
++      _rs5.count("in liqabs_races_of(self):") >= 2 and "set(_prot_la()) | self.liqabs_races()" in _rs5)
++_b, _s = _labot(fills=_f, positions={"fa": 300.0, "fb": 0.0}, on=True, kill=-5.0, bids={"fa": 0.78})
++check("liqabs bot: marked loss past the kill -> killed, lot exits at the bid, no new entry",
++      _b.liqabs_killed and _s == [("fa", "no", 300, 0.22, "lax")], str(_s))
++_b, _s = _labot(oid=False)
++check("liqabs bot: an entry whose response has no orderId blocks that leg for 1 h", len(_s) == 1 and _b.liqabs_skip.get("fa", 0) > time.time())
++_b, _s = _labot(refresh_at=0.0)
++check("liqabs bot: a failed trigger refresh (database unreadable) leaves the trigger OFF: no entries",
++      _s == [] and _b.liqabs_state["on"] is False and "error" in _b.liqabs_state["info"], str(_b.liqabs_state))
++_mb = types.SimpleNamespace(catchup_open={}, cheapfav_open={}, liqabs_open={"fa": 300.0})
++check("liqabs: the MM's inventory excludes the sleeve's lot, but never more than the venue shows (lot 300, venue 100 -> MM sees 0)",
++      R.Bot.mm_positions(_mb, {"fa": 100.0, "fb": 50.0}) == {"fa": 0.0, "fb": 50.0}
++      and R.Bot.mm_positions(_mb, {"fa": 500.0}) == {"fa": 200.0})
++_fl = [{"exchange_id": "fa", "quantity": 300.0, "price": 0.80, "filled_at": _iso(time.time() - 600)},
++       {"exchange_id": "fa", "quantity": -300.0, "price": 0.77, "filled_at": _iso(time.time() - 300)}]
++_b, _s = _labot(fills=_fl)
++check("liqabs bot: a leg stopped out (sold 6 ticks under cost) 5 min ago is not re-bought although it still sags",
++      _s == [] and "fa" in _b.liqabs_cooled, str(_s))
++check("liqabs: cooldown ends after 6 h and does not apply to profitable exits",
++      LA.cooled([dict(f, filled_at=1000.0) for f in _fl], 1000.0 + 7 * 3600) == set()
++      and LA.cooled([_fl[0] | {"filled_at": 1.0}, {"exchange_id": "fa", "quantity": -300.0, "price": 0.81, "filled_at": 2.0}], 3.0) == set())
++check("liqabs: off by default in the config", R.BotConfig().liqabs_enabled is False if hasattr(R, "BotConfig") else
++      __import__("sigbot.config", fromlist=["BotConfig"]).BotConfig().liqabs_enabled is False)
++
+ print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
+ sys.exit(1 if FAILS else 0)

@@ -159,7 +159,7 @@
   "wind_down_enabled": true,
   "wind_down_set_floor": {
     "Rhode Island Governor": 1.905,
-    "MN-05 House race": 0.96
+    "MN-05 House race": 0.89
   },
   "wind_down_floor_clip": 3000,
   "wind_down_force_late": [
@@ -175,7 +175,7 @@
   "shock_exit_maker": true,
   "strategy_stops_enabled": true,
   "punt_enabled": true,
-  "punt_plan_sha256": "d1d46ffe3d646e665383b5aefc5b39af044000a2ecc6b8d038619e9640ae275b",
+  "punt_plan_sha256": "9619efe721f813536212dd0692c8b17831c9be12216d90a2d9dfb311f501b45d",
   "gap_enabled": true,
   "gap_budget": 150.0,
   "gap_min_edge": 0.03,

@@ -1,0 +1,1769 @@
+diff --git a/config.json b/config.json
+index 3179bc8..e5ff52a 100644
+--- a/config.json
++++ b/config.json
+@@ -146,5 +146,6 @@
+   "raise_sets_races": [
+     "Rhode Island Governor"
+   ],
+-  "raise_ri_trim_sets": 4500.0
++  "raise_ri_trim_sets": 4500.0,
++  "wind_down_enabled": true
+ }
+diff --git a/research_notes/wind_down_projection.py b/research_notes/wind_down_projection.py
+new file mode 100644
+index 0000000..23f2381
+--- /dev/null
++++ b/research_notes/wind_down_projection.py
+@@ -0,0 +1,113 @@
++"""Projected liquid cash at 18:00 ET 3 Nov by holding (backlog 000e), offline, read-only.
++
++    python3 research_notes/wind_down_projection.py [--md out.md]
++
++Positions = the fills ledger netted per leg (data/sigbot.sqlite, read-only; it matches the venue's sets to the share on
++24 Oct), depth = data/books_latest.json (a leg missing there: the newest data/books_history snapshot that has it), favourite = the latest Polymarket/Kalshi fair (venue_fair), else the SIG mid,
++cash = the last cycle's cash. The same WD.project the bot writes hourly to params/wind_down_report.json. No API calls.
++"""
++from __future__ import annotations
++
++import collections
++import glob
++import json
++import os
++import sqlite3
++import sys
++
++HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
++sys.path.insert(0, HERE)
++from sigbot.proposals import wind_down as WD  # noqa: E402
++from sigbot.universe import Universe  # noqa: E402
++
++
++def main(argv):
++    con = sqlite3.connect("file:" + os.path.join(HERE, "data", "sigbot.sqlite") + "?mode=ro", uri=True)
++    con.row_factory = sqlite3.Row
++    pos = collections.defaultdict(float)
++    cheap = collections.defaultdict(float)
++    catch = collections.defaultdict(float)
++    for r in con.execute("SELECT exchange_id, purpose, SUM(quantity) q FROM fills GROUP BY 1, 2"):
++        pos[str(r["exchange_id"])] += r["q"]
++        if r["purpose"] in ("cheapfav", "cheapfav_exit"):
++            cheap[str(r["exchange_id"])] += r["q"]
++        if r["purpose"] in ("catchup", "catchup_exit"):
++            catch[str(r["exchange_id"])] += r["q"]
++    cash = con.execute("SELECT cash FROM cycles ORDER BY ts DESC LIMIT 1").fetchone()["cash"]
++    fair = {}
++    for r in con.execute("SELECT exchange_id, fair FROM venue_fair v WHERE ts = (SELECT MAX(ts) FROM venue_fair w WHERE w.race = v.race "
++                         "AND w.party = v.party) AND fair IS NOT NULL"):
++        fair[str(r["exchange_id"])] = float(r["fair"])
++    con.close()
++    u = Universe.from_markets(json.load(open(os.path.join(HERE, "data", "markets.json"))))
++    books = json.load(open(os.path.join(HERE, "data", "books_latest.json")))
++    hist = sorted(glob.glob(os.path.join(HERE, "data", "books_history", "books_*.json")), reverse=True)
++    for path in hist:                        # a leg missing from the latest snapshot: the newest older book of it
++        missing = [e for e in u.by_exchange if e not in books]
++        if not missing:
++            break
++        old = json.load(open(path))
++        books.update({e: old[e] for e in missing if e in old})
++    for e, b in books.items():
++        if e not in fair and b.get("bids") and b.get("asks"):
++            fair[e] = 0.5 * (b["bids"][0]["price"] + b["asks"][0]["price"])
++
++    def fav_of(name):
++        xs = [fair[e] for e in u.races[name].exchange_ids if e in fair]
++        return max(xs) if xs else None
++
++    exempt_races = {}
++    for name, r in u.races.items():
++        if any(abs(cheap.get(e, 0.0)) >= 1 for e in r.exchange_ids):
++            exempt_races[name] = "cheap favourites"
++    try:
++        for l in json.load(open(os.path.join(HERE, "params", "churn_state.json"))).get("lots", []):
++            exempt_races[l["race"]] = "high-frequency arb"
++    except (OSError, ValueError):
++        pass
++    exempt_legs = {e: "catch-up sweep" for e, q in catch.items() if abs(q) >= 1}
++    rep = WD.project({n: r.exchange_ids for n, r in u.races.items()}, dict(pos), books, fav_of, cash,
++                     exempt_races=exempt_races, exempt_legs=exempt_legs)
++    out = render(rep)
++    if "--md" in argv:
++        open(argv[argv.index("--md") + 1], "w").write(out)
++    print(out)
++
++
++def render(rep) -> str:
++    rows, t = rep["rows"], rep["totals"]
++    L = []
++    sets = sorted([x for x in rows if x["kind"] in ("sell_set", "buy_set")], key=lambda x: (x["call"], -(x["sale_value"] or 0)))
++    L.append("| holding | sets | call | why | payout | exit cost now (ticks, touch) | clip | sale per set | sale value | cost vs payout | min hours | when |")
++    L.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
++    for x in sets:
++        L.append(f"| {x['holding']} ({'NO' if x['kind'] == 'sell_set' else 'YES'}) | {x['qty']:,} | {x['call']} | {x['why']} | {x['payout']:,.0f} | "
++                 f"{x['touch_cost_ticks']} | {x['clip']} | {x['sale_per_set']} | {x['sale_value'] or 0:,.0f} | {x['exit_cost'] or 0:,.0f} | "
++                 f"{x['hours_min']} | {x['when']} |")
++    legs = sorted([x for x in rows if x["kind"] in ("leg", "mm_leg")], key=lambda x: -(x["sale_value"] or 0))
++    L.append("")
++    L.append("| leg | shares | side | sale per share (touch) | sale value | when |")
++    L.append("|---|---|---|---|---|---|")
++    for x in legs:
++        if (x["sale_value"] or 0) < 25:
++            continue
++        L.append(f"| {x['holding']} | {x['qty']:,} | {x['side']} | {x['sale_per_share']} | {x['sale_value'] or 0:,.0f} | {x['when']} |")
++    small = [x for x in legs if (x["sale_value"] or 0) < 25]
++    L.append(f"| {len(small)} smaller legs | | | | {sum(x['sale_value'] or 0 for x in small):,.0f} | |")
++    ex = [x for x in rows if x["kind"] == "exempt"]
++    L.append("")
++    L.append("| exempt holding | sleeve | legs | when |")
++    L.append("|---|---|---|---|")
++    for x in ex:
++        L.append(f"| {x['holding']} | {x['sleeve']} | {x['legs']} | {x['when']} |")
++    L.append("")
++    L.append("| total | S |")
++    L.append("|---|---|")
++    for k in ("cash_now", "late_sets_sale", "legs_sale", "projected_cash_1800_et", "early_sets_sale_today", "early_sets_payout",
++              "projected_cash_if_early_sold_too"):
++        L.append(f"| {k.replace('_', ' ')} | {t[k]:,.0f} |")
++    return "\n".join(L)
++
++
++if __name__ == "__main__":
++    main(sys.argv[1:])
+diff --git a/sigbot/config.py b/sigbot/config.py
+index b2af4fd..2365868 100644
+--- a/sigbot/config.py
++++ b/sigbot/config.py
+@@ -209,6 +209,18 @@ class BotConfig:
+     cheapfav_cash_floor: float = 1000.0  # never spend cash below this
+     cheapfav_net_max: float = 2000.0     # the sleeve's own net D cost stays within +-this whatever the book
+     cheapfav_headroom: float = 1000.0    # an add that widens the book's |net D| keeps it this far under the partisan cap
++    wind_down_enabled: bool = False      # 31 Oct-3 Nov wind-down (proposals/wind_down, backlog 000): late-call sets, legs and MM
++    wind_down_clip_sets: int = 1000      # inventory to cash by 18:00 ET 3 Nov; does nothing before 31 Oct 00:00 ET but the report.
++    wind_down_gap_sec: float = 1800.0    # sets per clip, and at least this long between two clips in a race (or on a leg)
++    wind_down_max_walk_ticks: float = 1.0    # a clip shrinks (halving) while walking the book costs more than this per set
++    wind_down_min_clip: int = 100
++    wind_down_leg_clip: int = 2000       # shares per single-leg clip (also <= 80% of the touch), fill-or-cancel
++    wind_down_min_leg: int = 10
++    wind_down_max_cost_per_hour: float = 200.0   # exit cost (vs payout / fair) per hour: the kill switch trips at 400 an hour
++    wind_down_clips_per_cycle: int = 1
++    wind_down_fallback_buffer_sec: float = 7200.0   # a race drops the timing gate when only clips x gap + this is left
++    wind_down_force_late: list = field(default_factory=lambda: ["Rhode Island Governor"])   # sold even if called early
++    wind_down_sell_at_call: bool = False  # backlog 000c: selling early-call sets at their call stays report-only until Sizhe approves
+     strategy_monitor_enabled: bool = False   # strategy_monitor.py: test each sleeve on its own results every strategy_monitor_sec
+     strategy_monitor_sec: float = 900.0      # and pause a losing one's new entries (params/strategy_kill.json; a human re-enables)
+     raise_enabled: bool = False          # cash raise (proposals/cash_raise): sell holdings beyond the arb sets that cost
+diff --git a/sigbot/mm.py b/sigbot/mm.py
+index 9b67efa..739ddce 100644
+--- a/sigbot/mm.py
++++ b/sigbot/mm.py
+@@ -223,7 +223,10 @@ class MarketMaker:
+         # 2. reservation price: shift against race-level inventory (notional at risk / max)
+         inv = self.race_inventory(ex, positions)
+         inv_notional = inv * (mid if inv > 0 else (1 - mid))
+-        inv_frac = max(-1.0, min(1.0, inv_notional / self.cfg.max_inventory_notional))
++        # the wind-down shrinks the cap from 1 Nov through inv_cap_override (the shared config, which the shadow tuner's replays
++        # read, stays as set)
++        cap = getattr(self, "inv_cap_override", None) or self.cfg.max_inventory_notional
++        inv_frac = max(-1.0, min(1.0, inv_notional / cap))
+         # log-odds AS term: shift grows with sigma^2 * T; sigma is the hourly YES-price sigma, T hours (capped)
+         sigma = self.vol.get(ex, 0.01)
+         T = min(24.0, self.hours_to_end())
+diff --git a/sigbot/proposals/wind_down.py b/sigbot/proposals/wind_down.py
+new file mode 100644
+index 0000000..7ad2102
+--- /dev/null
++++ b/sigbot/proposals/wind_down.py
+@@ -0,0 +1,412 @@
++"""Wind-down (backlog item 000, Sizhe 23 Oct: RAISE_TARGET = everything): turn the late-call arb sets, the tilt/direction
++legs and the market maker's inventory into cash by 18:00 ET on 3 Nov, patiently, from 31 Oct 00:00 ET.
++
++Pure logic; Bot.wind_down_cycle wires books, orders, positions and the state file (params/wind_down_state.json).
++
++What is sold, and when
++  * Sets (NO on every leg, or YES on every leg) in LATE-call races: west coast / Hawaii / Alaska, slow-count states, a
++    last poll close after 21:00 ET, Georgia (runoff), chamber races, close races (favourite < 0.85), and the races in
++    force_late (Rhode Island Governor: three separate binary markets, Sizhe capped it on 23 Oct). EARLY-call sets are
++    held through the call; selling them at the call is report-only until Sizhe approves it (item 000c).
++  * Single legs left after the sets are taken out (tilt / direction / market-making inventory), in every race. Legs in
++    markets the MM quotes are sold only above the MM's shrinking inventory cap (full size until 1 Nov 00:00 ET, then
++    linear to zero at 12:00 ET 3 Nov or the MM's stop_quoting_at if earlier, when the MM stops quoting).
++  * From 31 Oct 00:00 ET recycling is switched off: every set it buys would have to be sold again before 18:00 ET 3 Nov.
++  * Never: the cheap-favourites sleeve's races (held through the call by design), high-frequency arb (churn) races, the
++    catch-up sweep's legs (both flatten themselves on their own schedules), legs the punt executor or the election-night
++    sleeve trade (HOLD_PURPOSES) and anything listed in params/wind_down_hold.json; nothing at or after 18:00 ET 3 Nov.
++    Catch-up and cheap-favourite positions are taken out of the positions before sets are counted. Listed in the report.
++
++How (research_notes/ladder_exits.md and ev_hunt.md 2c, both Fable-checked)
++  * Clips of at most clip_sets sets (1,000) per race, at least gap_sec (30 min) apart per race, shrunk while walking
++    the book costs more than max_walk ticks per set; a single leg sells at most 80% of its touch, fill-or-cancel.
++  * Cheapest first: candidates are ranked by exit cost per unit of cash raised.
++  * Timing gate on sets: until 2 Nov 00:00 ET a clip sells only while the race's touch exit cost is >= 1 tick below its
++    trailing 12-h median (ev_hunt 2c: sum of asks, deferral for hours); then while it is at or below its trailing 24-h
++    median ("level 0"). The gate is dropped for a race once the time left is only just enough to sell what it holds:
++    deadline - clips left x gap - fallback_buffer.
++  * Cost cap: a set clip's walked exit cost, as a share of its proceeds (payout - proceeds) / proceeds, may not exceed
++    max(the set's locked return, schedule): the schedule rises from 0 at 31 Oct 00:00 ET to 4.5% at 2 Nov 00:00 ET and
++    5.5% at 17:45 ET 3 Nov (item 000b). A leg's exit cost against the outside fair (SIG mid if none) may not exceed
++    1 tick until 2 Nov, 2 ticks until 12:00 ET 3 Nov, then rises to max(3 ticks, 5.5% of the price) at 17:45 ET.
++  * At most max_cost_per_hour of exit cost an hour: every set sold below payout counts as drawdown for the kill switch
++    (400 an hour).
++"""
++from __future__ import annotations
++
++import math
++from dataclasses import dataclass, field
++from datetime import datetime
++from statistics import median
++from typing import Optional
++from zoneinfo import ZoneInfo
++
++from .election_night import POLL_CLOSE_ET, SLOW_COUNT, race_abbr
++
++TICK = 0.005
++ET = ZoneInfo("America/New_York")
++
++
++def et_ts(y: int, m: int, d: int, h: int = 0, mi: int = 0) -> float:
++    return datetime(y, m, d, h, mi, tzinfo=ET).timestamp()
++
++
++START = et_ts(2026, 10, 31)              # sales start (EDT, 04:00 UTC)
++MM_SHRINK = et_ts(2026, 11, 1)           # MM inventory cap starts shrinking (EDT, 04:00 UTC)
++LOOSEN = et_ts(2026, 11, 2)              # set cost cap 4.5%; timing gate eases from 12-h median - 1 tick to 24-h median (EST)
++MM_FLAT = et_ts(2026, 11, 3, 12)         # MM flat, stops quoting (17:00 UTC)
++CAP_END = et_ts(2026, 11, 3, 17, 45)     # cost caps at their loosest (22:45 UTC)
++DEADLINE = et_ts(2026, 11, 3, 18)        # everything late-call sold (23:00 UTC)
++STOP = DEADLINE                          # no clip at or after 18:00 ET: the punt and the election-night sleeve trade then
++                                         # (review 1, blocker: the wind-down sold and cancelled a punt leg bought at 17:30 ET)
++# purposes whose legs the wind-down never sells or cancels orders on (punt executor, election-night sleeve)
++HOLD_PURPOSES = ("punt", "punt_exit", "election", "election_exit")
++
++CAP_LOOSEN = 0.045
++CAP_END_FRAC = 0.055
++EARLY_LAST_CLOSE = 21.0                  # a state whose last polls close after 21:00 ET is late
++EARLY_FAV = 0.85                         # a race whose favourite is below this is close: late
++LATE_STATES = {"GA"}                     # Georgia: runoff if nobody reaches 50%
++DEFAULT_FORCE_LATE = ("Rhode Island Governor",)
++
++
++def et_str(ts: float) -> str:
++    return datetime.fromtimestamp(ts, ET).strftime("%d %b %H:%M")
++
++
++def _lerp(t: float, t0: float, t1: float, a: float, b: float) -> float:
++    if t <= t0:
++        return a
++    if t >= t1:
++        return b
++    return a + (b - a) * (t - t0) / (t1 - t0)
++
++
++def active(now: float) -> bool:
++    return START <= now < STOP
++
++
++def mm_flat_due(now: float, end: float = MM_FLAT) -> bool:
++    return now >= end
++
++
++def set_cost_cap(now: float, locked: float) -> float:
++    """Largest exit cost a set clip may pay, as a share of its proceeds: never below the set's locked return (an exit at
++    no realised loss is always allowed)."""
++    if now < LOOSEN:
++        sched = _lerp(now, START, LOOSEN, 0.0, CAP_LOOSEN)
++    else:
++        sched = _lerp(now, LOOSEN, CAP_END, CAP_LOOSEN, CAP_END_FRAC)
++    return max(max(0.0, locked), sched)
++
++
++def leg_cost_cap(now: float, price: float) -> float:
++    """Largest exit cost per share of a single leg against its fair value (price units)."""
++    if now < LOOSEN:
++        return 1 * TICK
++    if now < MM_FLAT:
++        return 2 * TICK
++    return _lerp(now, MM_FLAT, CAP_END, 3 * TICK, max(3 * TICK, CAP_END_FRAC * max(0.0, price)))
++
++
++def mm_inventory_cap(now: float, base: float, end: float = MM_FLAT) -> float:
++    """The MM's per-race inventory cap: full until 1 Nov 00:00 ET, linear to 0 at `end` (12:00 ET 3 Nov, or the MM's own
++    stop_quoting_at if earlier)."""
++    return _lerp(now, MM_SHRINK, max(MM_SHRINK + 1.0, end), base, 0.0)
++
++
++def mm_end(stop_quoting_at: Optional[str]) -> float:
++    """When the MM is flat: 12:00 ET 3 Nov, or its stop_quoting_at (ISO, UTC) if that is earlier."""
++    try:
++        t = datetime.fromisoformat(str(stop_quoting_at).replace("Z", "+00:00")).timestamp()
++    except (TypeError, ValueError):
++        return MM_FLAT
++    return min(MM_FLAT, t)
++
++
++def fallback_ts(clips_left: int, gap_sec: float, buffer_sec: float) -> float:
++    """From this time on a race sells without the timing gate: just enough time is left for its clips."""
++    return DEADLINE - max(0, clips_left) * gap_sec - buffer_sec
++
++
++def global_fallback_ts(cost_left: float, clips_left: int, budget_per_hour: float, sec_per_clip: float, buffer_sec: float) -> float:
++    """From this time on EVERY race sells without the timing gate: the exit cost still to pay at the hourly budget, or the
++    clips still to send at one per sec_per_clip, needs all the time left (review 2: races falling back together shared one
++    budget and stranded sets at 18:00)."""
++    hours = max(0.0, cost_left) / max(1.0, budget_per_hour)
++    return DEADLINE - buffer_sec - max(hours * 3600.0, max(0, clips_left) * sec_per_clip)
++
++
++# ------------------------------------------------------------------------------------------------ call time
++def call_class(race: str, fav: Optional[float], force_late=DEFAULT_FORCE_LATE) -> tuple[str, str]:
++    """('early' | 'late', why) for a race on election night. fav = the favourite's probability (outside fair, else SIG)."""
++    if race in force_late:
++        return "late", "sold anyway (force_late)"
++    try:
++        ab = race_abbr(race)
++    except Exception:
++        ab = None
++    if ab is None or ab not in POLL_CLOSE_ET:
++        return "late", "no state poll close (chamber or unknown race)"
++    last = POLL_CLOSE_ET[ab][1]
++    if ab in SLOW_COUNT:
++        return "late", f"{ab} counts slowly"
++    if ab in LATE_STATES:
++        return "late", f"{ab} runoff rules"
++    if last > EARLY_LAST_CLOSE:
++        return "late", f"{ab} polls close {last:g}:00 ET"
++    if fav is None:
++        return "late", "no price for the favourite"
++    if fav < EARLY_FAV:
++        return "late", f"close race (favourite {fav:.2f})"
++    return "early", f"{ab} polls close by {last:g}:00 ET, favourite {fav:.2f}"
++
++
++# ------------------------------------------------------------------------------------------------ holdings
++def decompose(exs: list, positions: dict) -> tuple[Optional[str], int, dict]:
++    """(kind, sets, residual legs) of one race: kind 'sell_set' (NO on every leg; positions negative), 'buy_set' (YES on
++    every leg) or None; residual = what is left on each leg once the sets are taken out (signed, + = YES)."""
++    qs = [float(positions.get(e, 0.0)) for e in exs]
++    kind, k = None, 0
++    if len(exs) >= 2 and all(q < 0 for q in qs):
++        kind, k = "sell_set", int(min(-q for q in qs))
++    elif len(exs) >= 2 and all(q > 0 for q in qs):
++        kind, k = "buy_set", int(min(qs))
++    res = {}
++    for e, q in zip(exs, qs):
++        r = q + k if kind == "sell_set" else q - k if kind == "buy_set" else q
++        if abs(r) >= 1:
++            res[e] = r
++    return kind, k, res
++
++
++def touch_cost(kind: str, books: dict, exs: list) -> Optional[float]:
++    """Exit cost of one set at the touch (price units): sum of asks - 1 for NO sets, 1 - sum of bids for YES sets."""
++    side = "asks" if kind == "sell_set" else "bids"
++    px = []
++    for e in exs:
++        lv = (books.get(e) or {}).get(side) or []
++        if not lv:
++            return None
++        px.append(float(lv[0]["price"]))
++    return sum(px) - 1.0 if kind == "sell_set" else 1.0 - sum(px)
++
++
++def walk_quote(kind: str, books: dict, exs: list, qty: int) -> Optional[dict]:
++    """Walk `qty` sets: NO sets buy YES at the asks, YES sets sell YES at the bids (sent as NO buys at 1 - bid).
++    Returns proceeds per set, payout, forgone (payout - proceeds), cost_frac (forgone / proceeds), walk (extra per set
++    beyond the touch) and the leg limits (YES price for NO sets; NO price for YES sets)."""
++    if qty <= 0:
++        return None
++    side = "asks" if kind == "sell_set" else "bids"
++    n = len(exs)
++    total, limits, touch = 0.0, {}, 0.0
++    for e in exs:
++        lv = (books.get(e) or {}).get(side) or []
++        need, cost, worst = qty, 0.0, None
++        for x in lv:
++            take = min(need, int(x["quantity"]))
++            if take <= 0:
++                continue
++            cost += take * float(x["price"])
++            need -= take
++            worst = float(x["price"])
++            if need <= 0:
++                break
++        if need > 0 or worst is None:
++            return None
++        total += cost
++        touch += float(lv[0]["price"])
++        limits[e] = round(worst, 3) if kind == "sell_set" else round(1.0 - worst, 3)
++    avg = total / qty
++    if kind == "sell_set":
++        proceeds, payout, walk = n - avg, n - 1.0, avg - touch
++    else:
++        proceeds, payout, walk = avg, 1.0, touch - avg
++    forgone = payout - proceeds
++    return {"proceeds": proceeds, "payout": payout, "forgone": forgone, "walk": walk,
++            "cost_frac": forgone / proceeds if proceeds > 0 else 9.0, "limits": limits}
++
++
++def clip_quote(kind: str, books: dict, exs: list, want: int, max_walk: float, min_clip: int) -> tuple[int, Optional[dict]]:
++    """The largest clip <= want (halving) whose walk costs <= max_walk per set; at min_clip whatever the walk (the cost
++    cap still applies). (0, None) when even min_clip has no depth."""
++    q = int(want)
++    while q >= max(1, min_clip):
++        wq = walk_quote(kind, books, exs, q)
++        if wq is not None and (wq["walk"] <= max_walk + 1e-9 or q // 2 < min_clip):
++            return q, wq
++        q //= 2
++    q = min(int(want), max(1, min_clip))
++    wq = walk_quote(kind, books, exs, q)
++    return (q, wq) if wq else (0, None)
++
++
++def locked_return(kind: str, cost_basis: dict, positions: dict, exs: list, sets: int) -> float:
++    """The set's locked return from the venue's cost basis (payout - cost) / cost, in [0, CAP_END_FRAC]. Only when every
++    leg holds exactly the sets (a leg's basis then is the set's); 0 otherwise (review 1: residual NO bought at other
++    prices inflated it to 22% and a 5.3% exit was taken on 31 Oct)."""
++    try:
++        per = 0.0
++        for e in exs:
++            q = abs(float(positions.get(e, 0.0)))
++            b = float(cost_basis.get(e, 0.0))
++            if q <= 0 or abs(q - sets) > 0.5 or b <= 0:
++                return 0.0                       # a leg without its own basis: unknown, never the 5.5% clamp (review 2)
++            per += b / q
++        payout = len(exs) - 1.0 if kind == "sell_set" else 1.0
++        return min(CAP_END_FRAC, max(0.0, (payout - per) / per)) if per > 0 else 0.0
++    except (TypeError, ValueError, ZeroDivisionError):
++        return 0.0
++
++
++# ------------------------------------------------------------------------------------------------ timing gate
++def cost_medians(rows, legs_of: dict, now: float, grid: float = 300.0, stale: float = 1800.0) -> dict:
++    """rows: (race, party, ts, bid, ask) from venue_quotes (venue 'sig'), a leg stored when its quote changes plus a
++    10-min heartbeat. legs_of: race -> parties. Each leg's last quote is carried forward on a 5-min grid over the last
++    24 h; a grid point counts when every leg has a quote <= 30 min old. Returns race -> {'sell_set': (m12, m24),
++    'buy_set': (m12, m24)} of the touch exit cost (sum of asks - 1, 1 - sum of bids); a median is None without >= 6 h
++    (12-h) or 12 h (24-h) of points."""
++    by: dict = {}
++    for race, party, ts, bid, ask in rows:
++        if race in legs_of and ts is not None:
++            by.setdefault(race, []).append((float(ts), party, bid, ask))
++    out = {}
++    start = now - 86400.0
++    for race, xs in by.items():
++        xs.sort(key=lambda r: r[0])
++        parties = set(legs_of[race])
++        last, i = {}, 0
++        pts = []
++        t = start
++        while t <= now:
++            while i < len(xs) and xs[i][0] <= t:
++                last[xs[i][1]] = xs[i]
++                i += 1
++            if parties <= set(last) and all(t - last[p][0] <= stale and last[p][2] is not None and last[p][3] is not None for p in parties):
++                sa = sum(float(last[p][3]) for p in parties)
++                sb = sum(float(last[p][2]) for p in parties)
++                pts.append((t, sa - 1.0, 1.0 - sb))
++            t += grid
++        res = {}
++        for j, kind in ((1, "sell_set"), (2, "buy_set")):
++            p12 = [p[j] for p in pts if p[0] >= now - 43200.0]
++            p24 = [p[j] for p in pts]
++            m12 = median(p12) if len(p12) * grid >= 6 * 3600 else None
++            m24 = median(p24) if len(p24) * grid >= 12 * 3600 else None
++            res[kind] = (m12, m24)
++        out[race] = res
++    return out
++
++
++def gate_ok(now: float, cost: Optional[float], m12: Optional[float], m24: Optional[float], fallback: float) -> tuple[bool, str]:
++    """Timing gate for a set clip at touch exit cost `cost` (price units)."""
++    if now >= fallback:
++        return True, "deadline near: no timing gate"
++    if cost is None:
++        return False, "no touch"
++    if now < LOOSEN:
++        if m12 is None:
++            return False, "no 12-h median yet"
++        return (cost <= m12 - TICK + 1e-9), f"cost {cost / TICK:+.1f} vs 12-h median {m12 / TICK:+.1f} - 1 tick"
++    if m24 is None:
++        return True, "no 24-h median: level gate off"
++    return (cost <= m24 + 1e-9), f"cost {cost / TICK:+.1f} vs 24-h median {m24 / TICK:+.1f}"
++
++
++# ------------------------------------------------------------------------------------------------ state
++@dataclass
++class WindDownState:
++    last_race: dict = field(default_factory=dict)       # race -> time of our last set clip there
++    last_leg: dict = field(default_factory=dict)        # exchange -> time of our last leg clip there
++    pulled: dict = field(default_factory=dict)          # exchange -> until: a leg whose fill-or-cancel could not be confirmed
++    cost_log: list = field(default_factory=list)        # [(ts, exit cost in S)], last 2 h
++    sold: list = field(default_factory=list)            # [(ts, what, qty, proceeds per unit, cost)], newest 500
++
++    def to_json(self) -> dict:
++        return {"last_race": self.last_race, "last_leg": self.last_leg, "pulled": self.pulled,
++                "cost_log": self.cost_log[-500:], "sold": self.sold[-500:]}
++
++    def load(self, d: dict):
++        self.last_race = {str(k): float(v) for k, v in (d.get("last_race") or {}).items()}
++        self.last_leg = {str(k): float(v) for k, v in (d.get("last_leg") or {}).items()}
++        self.pulled = {str(k): float(v) for k, v in (d.get("pulled") or {}).items()}
++        self.cost_log = [tuple(x) for x in (d.get("cost_log") or []) if isinstance(x, (list, tuple)) and len(x) == 2]
++        self.sold = [list(x) for x in (d.get("sold") or [])][-500:]
++
++    def cost_last_hour(self, now: float) -> float:
++        self.cost_log = [(t, c) for t, c in self.cost_log if now - t < 7200.0]
++        return sum(c for t, c in self.cost_log if now - t < 3600.0)
++
++    def book(self, now: float, what: str, qty: int, px: float, cost: float):
++        self.cost_log.append((now, max(0.0, cost)))
++        self.sold.append([now, what, int(qty), round(px, 4), round(cost, 2)])
++        self.sold = self.sold[-500:]
++
++
++def clips_left(qty: int, clip: int) -> int:
++    return int(math.ceil(max(0, qty) / max(1, clip)))
++
++
++# ------------------------------------------------------------------------------------------------ projection
++def project(races: dict, positions: dict, books: dict, fav_of, cash: float, clip: int = 1000, gap_sec: float = 1800.0,
++            max_walk: float = TICK, min_clip: int = 100, force_late=DEFAULT_FORCE_LATE, exempt_races: Optional[dict] = None,
++            exempt_legs: Optional[dict] = None, mm_quoted=()) -> dict:
++    """Projected liquid cash at 18:00 ET 3 Nov (backlog 000e): every holding at its sale value in clips at today's
++    books. races: name -> exchange ids; fav_of(race) -> favourite probability or None; exempt_races / exempt_legs:
++    name or exchange -> sleeve that sells it on its own schedule. Sale value of a set clip = walked proceeds of a clip
++    (<= clip sets, walk <= max_walk per set), applied to the whole holding (the book refills between 30-min clips)."""
++    exempt_races, exempt_legs = exempt_races or {}, exempt_legs or {}
++    rows = []
++    for name, exs in sorted(races.items()):
++        held = {e: positions.get(e, 0.0) for e in exs if abs(positions.get(e, 0.0)) >= 1}
++        if not held:
++            continue
++        if name in exempt_races:
++            rows.append({"holding": name, "kind": "exempt", "sleeve": exempt_races[name], "legs": {e: round(q) for e, q in held.items()},
++                         "when": f"{exempt_races[name]}: own schedule"})
++            continue
++        kind, k, res = decompose(exs, positions)
++        if kind and k > 0:
++            payout = (len(exs) - 1.0) if kind == "sell_set" else 1.0
++            cls, why = call_class(name, fav_of(name), force_late)
++            q, wq = clip_quote(kind, books, exs, min(k, clip), max_walk, min_clip)
++            tc = touch_cost(kind, books, exs)
++            per = wq["proceeds"] if wq else None
++            n_clips = clips_left(k, q or clip)
++            rows.append({"holding": name, "kind": kind, "qty": k, "call": cls, "why": why, "payout": round(k * payout, 1),
++                         "touch_cost_ticks": None if tc is None else round(tc / TICK, 1), "clip": q,
++                         "sale_per_set": None if per is None else round(per, 4),
++                         "sale_value": None if per is None else round(k * per, 1),
++                         "exit_cost": None if per is None else round(k * (payout - per), 1),
++                         "clips": n_clips, "hours_min": round(n_clips * gap_sec / 3600.0, 1),
++                         "when": ("31 Oct-3 Nov 18:00 ET, clips every 30 min" if cls == "late"
++                                  else "held through the call (selling at the call is report-only)")})
++        for e, r in res.items():
++            if e in exempt_legs:
++                rows.append({"holding": f"{name} leg {e}", "kind": "exempt", "sleeve": exempt_legs[e], "legs": {e: round(r)},
++                             "when": f"{exempt_legs[e]}: own schedule"})
++                continue
++            b = books.get(e) or {}
++            if r > 0:
++                lv = b.get("bids") or []
++                px = float(lv[0]["price"]) if lv else None              # sell YES at the bid
++            else:
++                lv = b.get("asks") or []
++                px = 1.0 - float(lv[0]["price"]) if lv else None        # NO held: buy YES at the ask, get 1 - ask
++            mm = e in mm_quoted
++            rows.append({"holding": f"{name} leg {e}", "kind": "mm_leg" if mm else "leg", "qty": round(abs(r)), "side": "yes" if r > 0 else "no",
++                         "sale_per_share": None if px is None else round(px, 4),
++                         "sale_value": None if px is None else round(abs(r) * px, 1),
++                         "when": "1 Nov-3 Nov 12:00 ET (MM shrinks to flat)" if mm else "31 Oct-3 Nov, within 1-3 ticks of fair"})
++    tot = {"cash_now": round(cash, 1)}
++    late = sum(x["sale_value"] or 0.0 for x in rows if x.get("call") == "late")
++    early_sale = sum(x["sale_value"] or 0.0 for x in rows if x.get("call") == "early")
++    early_payout = sum(x["payout"] for x in rows if x.get("call") == "early")
++    legs = sum(x["sale_value"] or 0.0 for x in rows if x["kind"] in ("leg", "mm_leg"))
++    tot.update({"late_sets_sale": round(late, 1), "legs_sale": round(legs, 1), "early_sets_sale_today": round(early_sale, 1),
++                "early_sets_payout": round(early_payout, 1),
++                "projected_cash_1800_et": round(cash + late + legs, 1),
++                "projected_cash_if_early_sold_too": round(cash + late + legs + early_sale, 1),
++                "exempt": sorted({x["sleeve"] for x in rows if x["kind"] == "exempt"})})
++    return {"rows": rows, "totals": tot}
+diff --git a/sigbot/run.py b/sigbot/run.py
+index 379c5ad..8edcf4c 100644
+--- a/sigbot/run.py
++++ b/sigbot/run.py
+@@ -54,6 +54,7 @@ from .proposals import cash_raise as CR
+ from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround, big_holding,
+                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
+ from .proposals import election_night as EN
++from .proposals import wind_down as WD
+ from .proposals.own_book import OwnLevels
+ from . import strategy_monitor as SMON
+ 
+@@ -333,7 +334,7 @@ class ArbScanner(threading.Thread):
+         b = self.bot
+         n_max = b.cfg.mm_fast_requotes_per_min
+         if (n_max <= 0 or not b.cfg.mm.enabled or not b.feed_ok() or not b.mm.quoted or time.time() < b.killed_until
+-                or strategy_paused(b, "mm")):
++                or strategy_paused(b, "mm") or (getattr(b, "wind_down", None) is not None and WD.mm_flat_due(time.time(), getattr(b, "wd_mm_end", WD.MM_FLAT)))):
+             return
+         now = time.time()
+         self.fast_log = [t for t in self.fast_log if now - t < 60]
+@@ -581,6 +582,26 @@ class Bot:
+                 self.churn.load(json.load(open(self.churn_state_path)))
+             except Exception as e:                   # missing/corrupt: start empty; held sets stay under the normal rules
+                 log.warning("churn state unreadable (%s): starting empty", e)
++        # wind-down (proposals/wind_down.py, backlog 000): late-call sets, legs and MM inventory to cash by 18:00 ET 3 Nov
++        self.wind_down = WD.WindDownState() if getattr(cfg, "wind_down_enabled", False) else None
++        self.wind_down_path = os.path.join(HERE, "params", "wind_down_state.json")
++        self.wd_med, self.wd_med_ts, self.wd_report_ts, self.wd_cap_logged = {}, 0.0, 0.0, 0.0
++        self.exit_lock: dict = {}                # race -> {routine: time of its last clip} (wind-down / cash raise; stamp_exit)
++        self.wd_foreign_logged: dict = {}
++        self.mm_inv_base = float(cfg.mm.max_inventory_notional)
++        self.wd_mm_end = WD.mm_end(getattr(cfg.mm, "stop_quoting_at", None))   # MM flat: 12:00 ET 3 Nov or its own stop, if earlier
++        if self.wind_down is not None:
++            try:
++                self.wind_down.load(json.load(open(self.wind_down_path)))
++            except FileNotFoundError:
++                pass
++            except Exception as e:                   # corrupt: start empty (spacing restarts; nothing is sold twice: every
++                log.warning("wind-down state unreadable (%s): starting empty", e)   # clip re-reads the positions)
++            log.warning("WIND-DOWN enabled: sells from %s ET; MM inventory cap shrinks from %s, flat at %s ET; everything late by %s ET",
++                        WD.et_str(WD.START), WD.et_str(WD.MM_SHRINK), WD.et_str(self.wd_mm_end), WD.et_str(WD.DEADLINE))
++            if time.time() >= WD.START and cfg.arb.recycle_enabled:
++                cfg.arb.recycle_enabled = False          # restart inside the window: off before the scanner thread starts
++                log.warning("WIND-DOWN: recycling switched off for the wind-down (free unwinds continue)")
+         # strategy monitor (strategy_monitor.py): a sleeve found losing (or paused by hand) in params/strategy_kill.json takes
+         # no NEW entries until a human deletes its entry; exits continue; the global kill switch and hard limits are separate
+         self.strategy_kill = SMON.KillFile(os.path.join(HERE, "params", SMON.KILL_FILE))
+@@ -994,6 +1015,9 @@ class Bot:
+         # catch-up's 500 YES on D next to 1,000 sets read as 500 NO on R, which tier 1 then sold)
+         busy_races = {self.universe.race_of(e).name for e in busy if self.universe.race_of(e) is not None}
+         excl_races = set(cfg.raise_exclude_races or []) | prot | busy_races
++        # the wind-down owns every race it does not exempt from 31 Oct 00:00 ET to 18:00 ET 3 Nov, and a race it clipped less
++        # than 30 min ago waits (shared exit lock)
++        excl_races |= Bot.wind_down_owned(self, now) | {r for r in race_legs if Bot.exit_locked(self, r, "raise", now=now)}
+         sent = 0.0
+         with self.trade_lock:
+             # a clip of ours that may still rest anywhere: pulled before positions are read (review 3: a rested clip filling
+@@ -1035,6 +1059,8 @@ class Bot:
+             # sets were sold at up to 4.5% for the reserve; tier 2 waits until tier 1 has refilled it)
+             if getattr(cfg, "raise_sets_enabled", False) and t2_target > 0 and t1 < t2_target and skips >= cfg.raise_set_min_skips:
+                 s_excl = prot | set(cfg.raise_set_hold_races or []) | busy_races
++                # the wind-down's races (31 Oct - 3 Nov) and races it clipped < 30 min ago: tier 2 too (merge review M1)
++                s_excl |= Bot.wind_down_owned(self, now) | {r for r in race_legs if Bot.exit_locked(self, r, "raise", now=now)}
+                 for r, exs in race_legs.items():
+                     if r not in s_excl and len(exs) >= 2:
+                         qs = [pos.get(e, 0.0) for e in exs]
+@@ -1105,6 +1131,7 @@ class Bot:
+                     except OSError as e:                     # URLError / timeout / connection reset after the client's retries:
+                         raise ApiError(0, "NETWORK", str(e))  # placement status unknown (review 5)
+                     self.store.record_order(resp.get("orderId"), ex, None, c["side"], "buy", float(c["price"]), q, "raise", response=resp)
++                    Bot.stamp_exit(self, self.universe.race_of(ex).name, "raise", now)
+                     traded = resp.get("quantityTraded", resp.get("filledQuantity"))
+                     sent += (min(q, float(traded)) if traded is not None else q) * c["pps"]   # cash: what traded, if known
+                     hist.append((now, c["proceeds"]))                                # the 24-h cap: what was sent (safe side)
+@@ -1147,6 +1174,7 @@ class Bot:
+                     for e in race_legs[p["race"]]:
+                         pull(e)
+                     bk = {e: books[e] for e in race_legs[p["race"]]}
++                    Bot.stamp_exit(self, p["race"], "raise", now)
+                     if p["kind"] == "sell_set":
+                         res = self.arb.unwind_set(p["race"], bk, p["qty"], why="raise tier 2", min_qty=1, refresh=self.fresh_positions, purpose="raise_set")
+                     else:
+@@ -1217,6 +1245,8 @@ class Bot:
+             race = self.universe.races.get(rname)
+             if race is None or len(race.exchange_ids) < 2 or rname in self.arb.protected():
+                 continue
++            if rname in Bot.wind_down_owned(self, now) or Bot.exit_locked(self, rname, "raise", now=now):
++                continue                                   # the wind-down sells it (31 Oct - 3 Nov) or clipped it < 30 min ago
+             exs = list(race.exchange_ids)
+             payout = float(len(exs) - 1)
+             rows = self.store.rows("SELECT race, party, ts, ask FROM venue_quotes WHERE venue='sig' AND race=? AND ts > ? AND ask IS NOT NULL",
+@@ -1269,6 +1299,7 @@ class Bot:
+                             log.warning("RI trim %s: could not pull our orders on %s (%s): no clip", rname, e, e2)
+                             return
+                 t_send = time.time()
++                Bot.stamp_exit(self, rname, "raise", now)
+                 try:
+                     res = self.arb.unwind_set(rname, books, q, why="RI trim", min_qty=1, refresh=self.fresh_positions, purpose="ri_trim")
+                 except OSError as e:                   # network error after the client's retries: outcome unknown
+@@ -1761,6 +1792,462 @@ class Bot:
+             except OSError as e:
+                 log.warning("churn state: %s", e)
+ 
++    # ------------------------------------------------------------------ exit lock shared by the wind-down and the cash raise
++    def stamp_exit(self, race: str, who: str, now: Optional[float] = None):
++        """Record a clip in `race` by `who` ('wind_down' | 'raise'): the OTHER routine leaves the race alone for 30 min."""
++        lk = getattr(self, "exit_lock", None)
++        if lk is None:
++            lk = self.exit_lock = {}
++        lk.setdefault(race, {})[who] = time.time() if now is None else now
++
++    def exit_locked(self, race: str, who: str, gap: float = 1800.0, now: Optional[float] = None) -> bool:
++        """True while another routine clipped `race` less than `gap` ago (each routine keeps its own spacing as well)."""
++        t = time.time() if now is None else now
++        return any(w != who and t - ts < gap for w, ts in ((getattr(self, "exit_lock", None) or {}).get(race) or {}).items())
++
++    def wind_down_owned(self, now: Optional[float] = None) -> set:
++        """Races the wind-down owns while it runs (31 Oct 00:00 ET - 18:00 ET 3 Nov): every race it does not exempt. The
++        cash raise and the RI trim leave them alone then (agreed with the cash-raise session, 24 Oct)."""
++        t = time.time() if now is None else now
++        if getattr(self, "wind_down", None) is None or not WD.active(t):
++            return set()
++        ex_r, _ = self.wind_down_exempt()
++        return {r for r in self.universe.races if r not in ex_r}
++
++    # ------------------------------------------------------------------ wind-down (proposals/wind_down.py, backlog 000)
++    def wind_down_exempt(self) -> tuple[dict, dict]:
++        """Races and legs the wind-down never sells or cancels orders on: cheap favourites' races (held through the call),
++        high-frequency arb lots (flat by 3 Nov 17:30 ET), the catch-up sweep's legs (flat by 3 Nov), legs the punt executor
++        or the election-night sleeve trade (any fill or order of WD.HOLD_PURPOSES) and params/wind_down_hold.json
++        ({"races": [...], "exchanges": [...]}, written by hand or by the punt executor; read every call)."""
++        races = {r: "cheap favourites" for r in cheapfav_races_of(self)}
++        if self.churn is not None:
++            races.update({l["race"]: "high-frequency arb" for l in self.churn.lots})
++        legs = {str(e): "catch-up sweep" for e, q in (getattr(self, "catchup_open", None) or {}).items() if q}
++        if self.store is not None:
++            ph = ",".join("?" * len(WD.HOLD_PURPOSES))
++            for r in self.store.rows(f"SELECT DISTINCT exchange_id FROM fills WHERE purpose IN ({ph}) UNION "
++                                     f"SELECT DISTINCT exchange_id FROM orders WHERE purpose IN ({ph})", WD.HOLD_PURPOSES * 2):
++                legs[str(r["exchange_id"])] = "punt / election night"
++        try:
++            hold = json.load(open(getattr(self, "wind_down_hold_path", None) or os.path.join(HERE, "params", "wind_down_hold.json")))
++            races.update({str(r): "hold file" for r in hold.get("races", [])})
++            legs.update({str(e): "hold file" for e in hold.get("exchanges", [])})
++        except FileNotFoundError:
++            pass
++        except Exception as e:                       # unreadable hold file: sell nothing this cycle rather than guess
++            log.warning("WIND-DOWN: params/wind_down_hold.json unreadable (%s): no clips this cycle", e)
++            races["*"] = "hold file unreadable"
++        return races, legs
++
++    def wind_down_positions(self, positions: dict) -> dict:
++        """The venue's positions minus the catch-up sweep's and the cheap-favourites sleeve's own open positions: those are not
++        sets or inventory of ours to sell (review 1: a catch-up NO counted inside a set was sold, then catch-up's own exit
++        crossed zero)."""
++        out = dict(positions or {})
++        for led in (getattr(self, "catchup_open", None) or {}, getattr(self, "cheapfav_open", None) or {}):
++            for ex, q in led.items():
++                out[str(ex)] = out.get(str(ex), 0.0) - q
++        return out
++
++    def wind_down_fairs(self, prices: dict) -> tuple[dict, callable]:
++        """(exchange -> fair value: the outside fair, else a two-sided SIG mid; race -> favourite probability)."""
++        fair = {r["exchange_id"]: float(r["fair"]) for r in (getattr(self.direction, "rows", None) or [])
++                if r.get("exchange_id") and r.get("fair") is not None}
++        for ex, p in (prices or {}).items():
++            if ex not in fair and p.get("bestBid") is not None and p.get("bestAsk") is not None:
++                fair[ex] = 0.5 * (p["bestBid"] + p["bestAsk"])
++
++        def fav_of(race_name):
++            r = self.universe.races.get(race_name)
++            xs = [fair[e] for e in (r.exchange_ids if r else []) if e in fair]
++            return max(xs) if xs else None
++        return fair, fav_of
++
++    def wind_down_report(self, now: float, prices: dict, every: float = 3600.0):
++        """Hourly (backlog 000e): projected liquid cash at 18:00 ET 3 Nov by holding -> params/wind_down_report.json. Feed books
++        only (no API reads)."""
++        if now - self.wd_report_ts < every or not self.positions_snapshot:
++            return
++        self.wd_report_ts = now
++        races = {r.name: r.exchange_ids for r in self.universe.races.values()}
++        books = {}
++        for e in self.universe.all_exchanges():
++            b = self.fresh_book(e, 3600.0) if self.feed is not None else None
++            if b is not None:
++                books[e] = b
++        _, fav_of = self.wind_down_fairs(prices)
++        ex_r, ex_l = self.wind_down_exempt()
++        rep = WD.project(races, self.wind_down_positions(self.positions_snapshot), books, fav_of, self.cash, clip=self.cfg.wind_down_clip_sets,
++                         gap_sec=self.cfg.wind_down_gap_sec, max_walk=self.cfg.wind_down_max_walk_ticks * TICK,
++                         min_clip=self.cfg.wind_down_min_clip, force_late=tuple(self.cfg.wind_down_force_late),
++                         exempt_races=ex_r, exempt_legs=ex_l, mm_quoted=set(self.mm.quoted))
++        rep["ts"], rep["et"] = now, WD.et_str(now)
++        rep["sold"] = self.wind_down.sold[-50:]
++        try:
++            tmp = os.path.join(HERE, "params", "wind_down_report.json.tmp")
++            with open(tmp, "w") as f:
++                json.dump(rep, f, indent=1)
++            os.replace(tmp, os.path.join(HERE, "params", "wind_down_report.json"))
++        except OSError as e:
++            log.warning("wind-down report: %s", e)
++        t = rep["totals"]
++        log.info("WIND-DOWN projection: cash %.0f + late sets %.0f + legs %.0f = %.0f by 18:00 ET 3 Nov; early-call sets %.0f today "
++                 "(payout %.0f, held through the call); exempt: %s", t["cash_now"], t["late_sets_sale"], t["legs_sale"],
++                 t["projected_cash_1800_et"], t["early_sets_sale_today"], t["early_sets_payout"], ", ".join(t["exempt"]) or "none")
++
++    def wind_down_save(self):
++        try:
++            tmp = self.wind_down_path + ".tmp"
++            with open(tmp, "w") as f:
++                json.dump(self.wind_down.to_json(), f)
++            os.replace(tmp, self.wind_down_path)
++        except OSError as e:
++            log.warning("wind-down state: %s", e)
++
++    def wind_down_books(self, exs: list, rest_left: list) -> Optional[tuple]:
++        """(raw, netted) books: feed books <= 30 s old, else REST (at most rest_left[0] reads a cycle); netted = our own resting
++        orders taken out (what a clip can trade against). The timing gate compares the RAW touch with the medians, which
++        are of the raw touch too (review 1: own-netted live cost vs raw medians kept the gate shut on MM-quoted races)."""
++        bk = {e: self.fresh_book(e, 30.0) for e in exs}
++        if any(v is None for v in bk.values()):
++            if rest_left[0] <= 0:
++                return None
++            rest_left[0] -= 1
++            try:
++                bk = {e: self.get_book(e, 50) for e in exs}
++            except ApiError as e:
++                log.warning("wind-down books %s: %s", exs, e)
++                return None
++        own = own_levels(self)
++        return bk, {e: own.net(e, b) for e, b in bk.items()}
++
++    def wind_down_candidates(self, now: float, prices: dict) -> list:
++        """Every clip the wind-down could sell now, with its cost; only those inside their cost cap and timing gate."""
++        cfg, wd = self.cfg, self.wind_down
++        venue = self.positions_snapshot or {}
++        snap = self.wind_down_positions(venue)
++        ex_r, ex_l = self.wind_down_exempt()
++        if "*" in ex_r:
++            return []
++        fair, fav_of = self.wind_down_fairs(prices)
++        gap = cfg.wind_down_gap_sec
++        rest_left = [2]
++        out = []
++        sets, cost_left, clips_total = [], 0.0, 0
++        for race in self.universe.races.values():
++            exs = race.exchange_ids
++            if race.name in ex_r or not any(abs(snap.get(e, 0.0)) >= 1 for e in exs):
++                continue
++            kind, k, res = WD.decompose(exs, snap)
++            if kind and k >= 1 and not any(e in ex_l for e in exs):
++                cls, why = WD.call_class(race.name, fav_of(race.name), tuple(cfg.wind_down_force_late))
++                if cls == "late":
++                    payout = (len(exs) - 1.0) if kind == "sell_set" else 1.0
++                    clips_total += WD.clips_left(k, cfg.wind_down_clip_sets)
++                    last = wd.last_race.get(race.name, 0.0)
++                    free = now - last >= gap and not self.exit_locked(race.name, "wind_down", gap, now)
++                    bb = self.wind_down_books(exs, rest_left) if free and not any(self.wind_down_foreign(e) for e in exs) else None
++                    if bb is None:
++                        cost_left += k * 0.03 * payout             # not quoted this cycle: a typical 3% exit cost
++                        continue
++                    raw, books = bb
++                    q, wq = WD.clip_quote(kind, books, exs, min(k, cfg.wind_down_clip_sets), cfg.wind_down_max_walk_ticks * TICK,
++                                          min(cfg.wind_down_min_clip, k))
++                    cost_left += k * (wq["forgone"] if wq else 0.03 * payout)
++                    sets.append((race, kind, k, raw, books, q, wq, why))
++            for e, r in res.items():
++                if e in ex_l or abs(r) < cfg.wind_down_min_leg or wd.pulled.get(e, 0.0) > now or now - wd.last_leg.get(e, 0.0) < gap:
++                    continue
++                if self.exit_locked(race.name, "wind_down", gap, now):
++                    continue                                       # the cash raise clipped this race < 30 min ago
++                if self.wind_down_foreign(e):
++                    continue
++                bb = self.wind_down_books([e], rest_left)
++                if not bb:
++                    continue
++                raw, nb = bb[0].get(e) or {}, bb[1].get(e) or {}
++                lv = (nb.get("bids") if r > 0 else nb.get("asks")) or []
++                if not lv:
++                    continue
++                rb, ra = (raw.get("bids") or [None])[0], (raw.get("asks") or [None])[0]
++                mark = 0.5 * (float(rb["price"]) + float(ra["price"])) if rb and ra else None
++                f = fair.get(e, mark)
++                if f is None:
++                    continue                                       # no outside fair and a one-sided book: no idea of the value
++                touch, touch_q = float(lv[0]["price"]), float(lv[0]["quantity"])
++                cost = (f - touch) if r > 0 else (touch - f)       # per share, vs the fair value
++                px = touch if r > 0 else 1.0 - touch                # cash per share sold
++                sellable = abs(r)
++                if e in self.mm.quoted and now < self.wd_mm_end:
++                    # MM inventory: only what is above the shrinking cap (notional at risk / price at risk)
++                    risk_px = max(0.01, f if r > 0 else 1.0 - f)
++                    sellable = max(0.0, abs(r) - WD.mm_inventory_cap(now, self.mm_inv_base, self.wd_mm_end) / risk_px)
++                q = int(min(sellable, cfg.wind_down_leg_clip, 0.8 * touch_q))
++                cap = WD.leg_cost_cap(now, px)
++                if q >= cfg.wind_down_min_leg and px > 0 and cost <= cap + 1e-9:
++                    fb = WD.fallback_ts(WD.clips_left(int(sellable), cfg.wind_down_leg_clip), gap, cfg.wind_down_fallback_buffer_sec)
++                    vs_mark = 0.0 if mark is None else ((mark - touch) if r > 0 else (touch - mark))
++                    out.append({"type": "leg", "race": race, "ex": e, "sign": 1 if r > 0 else -1, "qty": q, "price": touch, "cost_ps": cost,
++                                "cap": cap, "cost_frac": max(0.0, cost) / px, "fallback": fb,
++                                # what the kill switch sees: the drop against the marks, not only against the fair (review 1)
++                                "est_cost": q * max(0.0, cost, vs_mark), "book_ps": max(0.0, cost, vs_mark),
++                                "why": f"fair {f:.3f}, cost {cost / TICK:+.1f} ticks (cap {cap / TICK:.1f})"})
++        # every late race drops its timing gate once the total exit cost (at the budget the fallback may use) or the total
++        # clips need all the time left (review 2: races falling back together stranded sets at 18:00)
++        gfb = WD.global_fallback_ts(cost_left + sum(c["est_cost"] for c in out), clips_total + len(out),
++                                    max(cfg.wind_down_max_cost_per_hour, cfg.kill_drawdown - 100.0),
++                                    60.0 / max(1, cfg.wind_down_clips_per_cycle), cfg.wind_down_fallback_buffer_sec)
++        self.wd_global_fallback = gfb
++        for c in out:
++            c["fallback"] = min(c["fallback"], gfb)
++        for race, kind, k, raw, books, q, wq, why in sets:
++            exs = race.exchange_ids
++            fb = min(gfb, WD.fallback_ts(WD.clips_left(k, cfg.wind_down_clip_sets), gap, cfg.wind_down_fallback_buffer_sec))
++            m12, m24 = (self.wd_med.get(race.name) or {}).get(kind, (None, None))
++            ok, gwhy = WD.gate_ok(now, WD.touch_cost(kind, raw, exs), m12, m24, fb)
++            cap = WD.set_cost_cap(now, WD.locked_return(kind, getattr(self, "cost_basis", {}) or {}, venue, exs, k))
++            if wq is not None and q >= 1 and ok and wq["cost_frac"] <= cap + 1e-9:
++                out.append({"type": "set", "race": race, "kind": kind, "qty": q, "held": k, "books": books, "quote": wq,
++                            "cap": cap, "cost_frac": wq["cost_frac"], "est_cost": q * wq["forgone"], "fallback": fb,
++                            "why": f"{why}; {gwhy}"})
++        out.sort(key=lambda c: c["cost_frac"])
++        return out
++
++    def wind_down_foreign(self, e: str) -> bool:
++        """An open order on this leg that our store does not know (the punt executor before it records its order, Sizhe's
++        own): the leg is left alone, no cancel and no clip (review 2)."""
++        ids = {str(o.get("id")) for o in (self.open_orders_cache or {}).get(e, []) if o.get("id") is not None}
++        if not ids:
++            return False
++        known = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE exchange_id=? AND order_id IS NOT NULL", (str(e),))}
++        unknown = ids - known
++        if unknown and self.wd_foreign_logged.get(e, 0.0) < time.time() - 3600:
++            self.wd_foreign_logged[e] = time.time()
++            log.warning("WIND-DOWN: leg %s has open orders the bot did not place (%s): left alone", e, sorted(unknown)[:3])
++        return bool(unknown)
++
++    def wind_down_pause_legs(self, exs: list, now: float, sec: float = 900.0) -> bool:
++        """Keep the MM off these legs for 15 min (the cash raise's raise_pause: no quotes, and no "hot" widening afterwards
++        as with the news pause) and pull our resting orders on them,
++        so a clip never meets our own quote. Called under the trade lock BEFORE positions are re-read (review 1: a fill
++        between the re-read and the cancel took a leg through zero). False when a cancel failed or a leg carries an order
++        the bot did not place (nothing is cancelled or sent)."""
++        if any(self.wind_down_foreign(e) for e in exs):
++            return False
++        pause = {e: t for e, t in (getattr(self.mm, "raise_pause", None) or {}).items() if t > now}
++        for e in exs:
++            pause[e] = max(float(pause.get(e, 0.0)), now + sec)
++        self.mm.raise_pause = pause
++        self.store.set_param("raise_pause", pause)
++        since = getattr(self, "open_orders_ts", 0.0) - 60.0
++        for e in exs:
++            mine = list((self.open_orders_cache or {}).get(e, []))
++            newer = self.store.one("SELECT 1 FROM orders WHERE exchange_id=? AND status='open' AND placed_at>=? LIMIT 1", (str(e), since))
++            if not mine and newer is None:
++                continue
++            try:
++                self.api.cancel_all(exchange_id=e)
++            except ApiError as ex_:
++                log.warning("WIND-DOWN: cancel on %s failed (%s): clip not sent", e, ex_)
++                return False
++            ids = {o["id"] for o in mine} | {r["order_id"] for r in self.store.rows(
++                "SELECT order_id FROM orders WHERE exchange_id=? AND status='open' AND order_id IS NOT NULL", (str(e),))}
++            if ids:
++                self.store.mark_orders(list(ids), "cancelled")
++            if e in (self.open_orders_cache or {}):
++                self.open_orders_cache[e] = []
++        return True
++
++    def wind_down_partisan_ok(self, before: dict, after: dict, prices: dict) -> bool:
++        """The 5,000 partisan cap after the clip: |net D| within the cap, or no larger than before (a sale may only reduce it)."""
++        cap = self.cfg.mm.portfolio_max_partisan_notional
++        b = abs(risk.exposure(self.universe, before, prices).net_d_notional)
++        a = abs(risk.exposure(self.universe, after, prices).net_d_notional)
++        return a <= cap + 1e-6 or a <= b + 1e-6
++
++    def wind_down_set_clip(self, c: dict, now: float, prices: dict):
++        """Sell one set clip, all legs or none. Under the trade lock: pull our quotes on the legs, THEN re-read positions,
++        re-clamp to the sets held now (other sleeves' ledgers taken out), re-check the cost cap on the clamped quote and the
++        partisan cap, send. Returns the exit cost booked, None (nothing sent), or 'stop' (stop this cycle)."""
++        race, kind, exs, wd = c["race"], c["kind"], c["race"].exchange_ids, self.wind_down
++        t_lock = time.time()
++        with self.trade_lock:
++            if time.time() >= WD.STOP:
++                return "stop"                            # the lock came after 18:00 ET: the punt / election night trade now
++            ex_r, ex_l = self.wind_down_exempt()
++            if race.name in ex_r or "*" in ex_r or any(e in ex_l for e in exs):
++                return None
++            if not self.wind_down_pause_legs(exs, now):
++                return None
++            fresh = self.fresh_positions()
++            if fresh is None:
++                log.warning("WIND-DOWN %s: positions re-read failed; stopping this cycle", race.name)
++                return "stop"
++            kind2, k2, _ = WD.decompose(exs, self.wind_down_positions(fresh))
++            if kind2 != kind or k2 < 1:
++                return None
++            q = min(c["qty"], k2)
++            wq = WD.walk_quote(kind, c["books"], exs, q)
++            if wq is None or wq["cost_frac"] > c["cap"] + 1e-9:
++                return None
++            sgn = 1 if kind == "sell_set" else -1               # NO sets: every leg's short shrinks; YES sets: every long
++            after = dict(fresh)
++            for e in exs:
++                after[e] = after.get(e, 0.0) + sgn * q
++            if not self.wind_down_partisan_ok(fresh, after, prices):
++                log.warning("WIND-DOWN %s: clip of %d sets skipped: it would leave |net D| above the partisan cap", race.name, q)
++                return None
++            # spacing and the shared lock start at the attempt, before the send: a rejected basket, or one whose send raised
++            # (network error), waits a full gap (merge review L4)
++            wd.last_race[race.name] = now
++            self.stamp_exit(race.name, "wind_down", now)
++            if kind == "sell_set":
++                res = self.arb.unwind_set(race.name, c["books"], q, why="wind-down", min_qty=1)
++            else:
++                res = self.arb.unwind_buy_set(race.name, c["books"], q, why="wind-down", purpose="arb")
++            if not res or res.get("dry"):
++                self.wind_down_save()
++                return None
++            self.refresh_snapshot({e: sgn * q for e in exs})
++            payout = (len(exs) - 1.0) if kind == "sell_set" else 1.0
++            cost = q * (payout - res["proceeds"])
++            wd.book(now, f"{kind} {race.name}", q, res["proceeds"], cost)
++            self.wind_down_save()
++        held_s = time.time() - t_lock
++        if held_s > 5.0:
++            log.warning("WIND-DOWN %s: trade lock held %.1f s", race.name, held_s)
++        self.cash += q * res["proceeds"]
++        log.info("WIND-DOWN sold %d %s of %s at %.4f/set (cost %.1f, %.2f%% of proceeds, cap %.2f%%; %d left): %s", q, kind, race.name,
++                 res["proceeds"], cost, 100 * wq["cost_frac"], 100 * c["cap"], k2 - q, c["why"])
++        return cost
++
++    def wind_down_leg_clip(self, c: dict, now: float, prices: dict):
++        """Sell one single-leg clip at the touch, fill-or-cancel. Under the trade lock: skip a leg with a zero-EV exit sent in the
++        last 2 min, pull our quotes on the leg, THEN re-read positions and clamp to the residual held now (same sign, never
++        through zero; other sleeves' ledgers taken out), check the partisan cap, send, cancel any remainder at once. A
++        remainder that cannot be cancelled, or an order whose status is unknown, pulls the leg for 30 min and stops the cycle."""
++        e, race, wd, sgn = c["ex"], c["race"], self.wind_down, c["sign"]
++        t_lock = time.time()
++        with self.trade_lock:
++            if time.time() >= WD.STOP:
++                return "stop"                            # the lock came after 18:00 ET: the punt / election night trade now
++            ex_r, ex_l = self.wind_down_exempt()
++            if e in ex_l or race.name in ex_r or "*" in ex_r:
++                return None
++            if self.store.one("SELECT 1 FROM orders WHERE exchange_id=? AND purpose='exit' AND placed_at>? LIMIT 1", (str(e), now - 120.0)):
++                return None
++            if not self.wind_down_pause_legs([e], now):
++                return None
++            fresh = self.fresh_positions()
++            if fresh is None:
++                log.warning("WIND-DOWN %s: positions re-read failed; stopping this cycle", e)
++                return "stop"
++            _, _, res = WD.decompose(race.exchange_ids, self.wind_down_positions(fresh))
++            r = res.get(e, 0.0)
++            if r * sgn <= 0:
++                return None
++            q = int(min(c["qty"], abs(r)))
++            if q < self.cfg.wind_down_min_leg:
++                return None
++            after = dict(fresh)
++            after[e] = after.get(e, 0.0) - sgn * q
++            if not self.wind_down_partisan_ok(fresh, after, prices):
++                log.warning("WIND-DOWN %s: leg clip of %d skipped: it would leave |net D| above the partisan cap", e, q)
++                return None
++            side, px = ("no", round(1.0 - c["price"], 3)) if sgn > 0 else ("yes", round(c["price"], 3))
++            ttl = (datetime.now(timezone.utc) + timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
++            wd.last_leg[e] = now
++            self.stamp_exit(race.name, "wind_down", now)
++            try:
++                resp = self.api.place_order(e, side, "buy", q, px, expiration=ttl, key=self.api.new_key("wdx"))
++            except ApiError as ex_:
++                wd.pulled[e] = now + 1800.0
++                self.wind_down_save()
++                log.warning("WIND-DOWN %s: order failed (%s): leg pulled for 30 min, cycle stopped", e, ex_)
++                return "stop"
++            oid = resp.get("orderId")
++            self.store.record_order(oid, e, None, side, "buy", px, q, "exit", response=resp)
++            traded = int(float(resp.get("quantityTraded") or resp.get("filledQuantity") or 0))
++            if resp.get("open"):
++                try:
++                    self.api.cancel_order(oid)
++                    self.store.mark_orders([oid], "cancelled")
++                except ApiError as ex_:
++                    wd.pulled[e] = now + 1800.0
++                    self.refresh_snapshot({e: -sgn * traded})
++                    self.wind_down_save()
++                    log.warning("WIND-DOWN %s: remainder of order %s not cancelled (%s): leg pulled for 30 min, cycle stopped", e, oid, ex_)
++                    return "stop"
++            elif oid is not None:
++                self.store.mark_orders([oid], "filled")
++            self.refresh_snapshot({e: -sgn * traded})
++            cost = traded * c["book_ps"]                 # vs the fair or the mark, whichever is worse: what the kill switch sees
++            if traded > 0:
++                wd.book(now, f"leg {e} {'yes' if sgn > 0 else 'no'}", traded, c["price"] if sgn > 0 else 1.0 - c["price"], cost)
++            self.wind_down_save()
++        held_s = time.time() - t_lock
++        if held_s > 5.0:
++            log.warning("WIND-DOWN %s: trade lock held %.1f s", e, held_s)
++        if traded > 0:
++            log.info("WIND-DOWN sold %d %s of leg %s (%s) at %.3f (%s)", traded, "YES" if sgn > 0 else "NO", e, race.name, px, c["why"])
++        return cost
++
++    def wind_down_cycle(self, prices: dict, killed: bool, cycle_id=None):
++        """Backlog 000 (Sizhe 23 Oct: RAISE_TARGET = everything): from 31 Oct 00:00 ET to 18:00 ET 3 Nov sell the late-call
++        sets, the single legs and the MM inventory above its shrinking cap, at most wind_down_clips_per_cycle clips a cycle,
++        cheapest exit cost per unit of cash first, inside the cost caps, the timing gate, the hourly cost budget and the
++        partisan cap. Before the start: only the hourly projection. Early-call sets are held (selling them at the call is
++        report-only). Nothing at or after 18:00 ET: the punt and the election-night sleeve trade then."""
++        wd = self.wind_down
++        if wd is None or self.store is None:
++            return
++        now = time.time()
++        try:
++            self.wind_down_report(now, prices)
++        except Exception as e:                       # the report must never stop the sales
++            log.warning("wind-down report: %s", e)
++        if self.dry_run or not WD.active(now):
++            return
++        if self.cfg.arb.recycle_enabled:
++            # every set a recycle buys from now on would have to be sold again before 18:00 ET 3 Nov
++            self.cfg.arb.recycle_enabled = False
++            log.warning("WIND-DOWN: recycling switched off for the wind-down (free unwinds continue)")
++        if getattr(self, "positions_ok", True) is False:
++            log.warning("WIND-DOWN: skipped this cycle: the positions read failed")
++            return
++        if now - self.wd_med_ts > 900:
++            rows = self.store.rows("SELECT race, party, ts, bid, ask FROM venue_quotes WHERE venue='sig' AND ts > ?", (now - 86400.0 - 1800.0,))
++            legs_of = {r.name: list(r.legs) for r in self.universe.races.values()}
++            self.wd_med = WD.cost_medians([(r["race"], r["party"], r["ts"], r["bid"], r["ask"]) for r in rows], legs_of, now)
++            self.wd_med_ts = now
++        spent = wd.cost_last_hour(now)
++        budget = self.cfg.wind_down_max_cost_per_hour
++        # past a clip's fallback time the budget may use the kill switch's remaining headroom (review 1: 200/h stranded
++        # leftovers at 18:00 when several races fell back at once); 100 kept as a margin for the MM's marks
++        late_budget = max(budget, self.cfg.kill_drawdown - 100.0)
++        done = 0
++        for c in self.wind_down_candidates(now, prices):
++            if done >= self.cfg.wind_down_clips_per_cycle:
++                break
++            late = now >= c["fallback"]
++            if killed and not late:
++                continue                                   # kill switch: only clips that cannot wait any longer
++            # past its fallback a clip may use the kill switch's room: the drawdown already holds this hour's exits, so the
++            # larger of the two is counted once (review 2)
++            used = max(spent, getattr(self, "wd_drawdown", 0.0)) if late else spent
++            if used + c["est_cost"] > (late_budget if late else budget):
++                if now - self.wd_cap_logged > 900:
++                    self.wd_cap_logged = now
++                    log.info("WIND-DOWN: hourly exit-cost budget %.0f reached (%.0f used): waiting", late_budget if late else budget, used)
++                continue
++            got = self.wind_down_set_clip(c, now, prices) if c["type"] == "set" else self.wind_down_leg_clip(c, now, prices)
++            if got == "stop":
++                break
++            if got is not None:
++                done += 1
++                spent += got
++
+     def snapshot_books(self, every: float = 3600.0, history_every: float = 6 * 3600.0):
+         """Hourly copy of every order book the feed holds (no API reads) to data/books_latest.json, the format of
+         data/books.json ({exchange_id: book}) so the punt screener reads current depth; every 6 h also to
+@@ -2528,6 +3015,7 @@ class Bot:
+         self.mm.meanrev_pred = self.meanrev_predictions(self.mm.quoted)
+         self.mm.prices = prices
+         hl = self.health(cycle_cash + pos_value + cycle_adj, cycle_id)
++        self.wd_drawdown = float(hl.get("drawdown") or 0.0)       # the wind-down's budget past a fallback uses the kill headroom
+         killed = time.time() < self.killed_until
+         if not killed and (hl["drawdown"] > self.cfg.kill_drawdown or (hl["n_markout"] >= 20 and hl["markout30"] is not None and hl["markout30"] < self.cfg.kill_markout_ticks)):
+             self.killed_until = time.time() + self.cfg.kill_pause_sec
+@@ -2550,6 +3038,13 @@ class Bot:
+         if not gate_ready and not killed:
+             log.info("MM waits for the first outside-fair poll before quoting (xv gate)")
+         mm_paused = strategy_paused(self, "mm")
++        if self.wind_down is not None:
++            # wind-down: the MM's per-race inventory cap shrinks from 1 Nov 00:00 ET to zero at 12:00 ET 3 Nov (at the cap it
++            # posts nothing on the adding side), then the MM stops and its quotes are pulled like a monitor pause
++            now_ = time.time()
++            self.mm.inv_cap_override = max(1.0, WD.mm_inventory_cap(now_, self.mm_inv_base, self.wd_mm_end))
++            if WD.mm_flat_due(now_, self.wd_mm_end):
++                mm_paused = True
+         if mm_paused and not self.dry_run and any(open_orders.values()):
+             try:
+                 n = self.cancel_mm_quotes(open_orders, max(4, self.cfg.mm_write_budget - 4))
+@@ -2686,6 +3181,13 @@ class Bot:
+                 if fu:
+                     log.info("free unwinds: %s", fu)
+ 
++        # ---- wind-down (31 Oct - 3 Nov): late-call sets, legs and MM inventory to cash, in clips, cheapest first
++        if self.wind_down is not None:
++            try:
++                self.wind_down_cycle(prices, killed, cycle_id)
++            except Exception as e:                   # the routine must never kill the loop
++                log.exception("wind-down cycle failed: %s", e)
++
+         # ---- cash raise: sell cheap-to-exit holdings only for a higher-edge sleeve short of cash this cycle; after the
+         # zero-EV exits, whose orders mark their legs busy (sim cash_raise: an exit sized from the cycle-start positions
+         # sold a leg the raise had just sold, -900)
+diff --git a/tests/sim_pipeline.py b/tests/sim_pipeline.py
+index 40400c6..33319d5 100644
+--- a/tests/sim_pipeline.py
++++ b/tests/sim_pipeline.py
+@@ -597,6 +597,13 @@ class Checker:
+             elif m["prefix"] in ("unw", "fre") and m["after"] > 0:      # Fable 24 Oct: -1,700 -> +300 passed the check above
+                 self.violation("unwind_crossed_zero", f"{m['key']} {m['ex']} ({self.sim.race_of(m['ex'])}) unwind leg bought YES x{m['qty']} @{m['price']} "
+                                f"through zero: position {m['before']:+d} -> {m['after']:+d}", trace=self._order_trace(m["ex"]))
++            # a YES-set unwind (wind-down) buys NO on every leg of a HELD buy-set: each leg must close YES, never go short
++            if m["prefix"] == "unb" and m["before"] <= 0:
++                self.violation("unwind_without_set", f"{m['key']} {m['ex']} ({self.sim.race_of(m['ex'])}) YES-set unwind leg bought NO x{m['qty']} "
++                               f"with no YES held: position {m['before']:+d} -> {m['after']:+d}", trace=self._order_trace(m["ex"]))
++            elif m["prefix"] == "unb" and m["after"] < 0:
++                self.violation("unwind_crossed_zero", f"{m['key']} {m['ex']} ({self.sim.race_of(m['ex'])}) YES-set unwind leg bought NO x{m['qty']} "
++                               f"through zero: position {m['before']:+d} -> {m['after']:+d}", trace=self._order_trace(m["ex"]))
+             # directional holding per leg (cost), net of exits
+             if pur in ("direction", "exit"):
+                 h = self.dir_hold.setdefault(m["ex"], [0.0, 0.0])
+@@ -2057,9 +2064,144 @@ class Day(Scenario):
+                         "killed": ch.killed, "vol_paused": ch.vol_paused}
+ 
+ 
++# ---------------------------------------------------------------- wind-down (backlog 000), 30 Oct - 3 Nov on a fake clock
++class WindDown(Scenario):
++    name, cycles, seed = "wind_down", 175, 41
++    cfg = {"wind_down_enabled": True}
++    doc = ("wind-down on the live config: the clock jumps through 30 Oct 23:00, 31 Oct 22:00, 2 Nov 01:00, 3 Nov 11:30 and 15:00-18:40 ET "
++           "(3 extra min a cycle); late-call NO sets (Oregon Governor at 2 ticks, Rhode Island Governor 3-leg at 2.8%) and a YES set "
++           "(California Governor) are sold by the wind-down itself (not free unwinds) in clips <= 1,000, >= 30 min apart per race, nothing before 31 Oct 00:00 ET, all by 18:00 ET 3 Nov; an early-call set is "
++           "held; a directional leg is sold; a punt leg is never touched; nothing is sold from 18:00 ET; no MM quote is sent once the MM is "
++           "flat (its stop_quoting_at, 07:00 ET 3 Nov live)")
++    WINDOWS = [(0, (2026, 10, 30, 23, 0)), (12, (2026, 10, 31, 22, 0)), (45, (2026, 11, 2, 1, 0)), (80, (2026, 11, 3, 11, 30)),
++               (105, (2026, 11, 3, 15, 0))]
++
++    def venue_setup(self, sim):
++        WD = sys.modules["sigbot.proposals.wind_down"]
++        CLOCK.t = WD.et_ts(*self.WINDOWS[0][1])
++
++    def bot_setup(self, sim):
++        WD = sys.modules["sigbot.proposals.wind_down"]
++        v, u = sim.v, sim.universe
++        self.late_sell = ["Oregon Governor", "Rhode Island Governor"]
++        self.late_buy = ["California Governor"]
++        early = []
++        for name, r in sorted(u.races.items()):
++            if len(r.legs) != 2 or name in self.late_sell + self.late_buy:
++                continue
++            fav = max(v.mid(e) for e in r.exchange_ids)
++            if WD.call_class(name, fav)[0] == "early" and fav <= 0.93:
++                early.append(name)
++        self.early = early[0]
++        mids = [x for x in two_leg_mid_races(sim, 0.35, 0.65, exclude=tuple(self.late_sell + self.late_buy + [self.early]))]
++        self.dir_race, self.punt_race = mids[0], mids[1]
++        self.dir_ex = sim.legs(self.dir_race)[0]
++        self.punt_ex = sim.legs(self.punt_race)[0]
++        self.sizes = {"Oregon Governor": 2500, "Rhode Island Governor": 2200, "California Governor": 1800, self.early: 3000}
++        # real exit costs, not free unwinds: Oregon's asks sum to 1.01 (2 ticks), Rhode Island's 3 legs to 1.055 (2.8% of proceeds)
++        set_race_bids_sum(sim, "Oregon Governor", 1.0)
++        set_race_bids_sum(sim, "Rhode Island Governor", 1.04)
++        for race in self.late_sell + [self.early]:
++            sim.seed_set(race, self.sizes[race])
++        for race in self.late_buy:
++            legs = []
++            for ex in sim.legs(race):
++                px = SV.P(v.ask_t[ex])
++                sim.seed_holding(ex, "yes", self.sizes[race], "arb", px)
++                legs.append({"exchangeId": ex, "side": "yes", "action": "buy", "quantity": self.sizes[race], "price": px})
++            sim.bot.store.record_arb(race, "buy_set", legs, self.sizes[race], 1 - sum(l["price"] for l in legs), sum(l["price"] for l in legs), True, {"seed": True})
++        sim.seed_holding(self.dir_ex, "yes", 600, "direction")
++        sim.seed_holding(self.punt_ex, "yes", 800, "punt")          # a punt leg: never sold, its orders never cancelled
++        self.preload(sim)
++        self.mm_after_flat = []
++
++    def preload(self, sim):
++        """25 h of 'sig' heartbeats with each race's exit cost 2 ticks above today's: today's touch is cheap vs its medians."""
++        v, rows = sim.v, []
++        for race in self.late_sell + self.late_buy + [self.early]:
++            legs = list(sim.universe.races[race].legs.items())
++            for k in range(150):
++                t = v.now - 25 * 3600 + 600 * k
++                for i, (party, l) in enumerate(legs):
++                    bt, at = v.bid_t[l.exchange_id], v.ask_t[l.exchange_id]
++                    if i == 0:
++                        bt, at = bt - 2, at + 2
++                    b, a = SV.P(bt), SV.P(at)
++                    rows.append((t, "sig", race, party, l.exchange_id, b, a, (b + a) / 2, None, None, None, None))
++        sim.bot.store.conn.executemany(VQ_INS, rows)
++        sim.bot.store.conn.commit()
++        sim.bot.wd_med_ts = 0.0
++
++    def before_cycle(self, sim, i):
++        WD = sys.modules["sigbot.proposals.wind_down"]
++        for at, ymdhm in self.WINDOWS[1:]:
++            if i == at:
++                CLOCK.t = max(CLOCK.t, WD.et_ts(*ymdhm))
++                self.preload(sim)
++
++    def after_cycle(self, sim, i):
++        CLOCK.advance(180.0)
++        WD = sys.modules["sigbot.proposals.wind_down"]
++        end = sim.bot.wd_mm_end
++        if CLOCK.t > end + 120:
++            self.mm_after_flat.extend(c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] == "bat" and c["t"] > end + 120
++                                      and c not in self.mm_after_flat)
++
++    def final_checks(self, sim):
++        WD = sys.modules["sigbot.proposals.wind_down"]
++        b, v = sim.bot, sim.v
++        sold = list(b.wind_down.sold)
++        pos = v.signed_positions()
++        if not sold:
++            sim.chk.violation("wind_down_none", "the wind-down sold nothing")
++        early = [s for s in sold if s[0] < WD.START]
++        if early:
++            sim.chk.violation("wind_down_before_start", f"{len(early)} sales before 31 Oct 00:00 ET: {early[:3]}")
++        late = [s for s in sold if s[0] >= WD.DEADLINE]
++        if late:
++            sim.chk.violation("wind_down_after_deadline", f"{len(late)} sales at or after 18:00 ET 3 Nov: {late[:3]}")
++        wd_calls = [c for c in v.calls if c.get("prefix") in ("unw", "unb", "wdx") and c["t"] >= WD.DEADLINE]
++        if wd_calls:
++            sim.chk.violation("wind_down_after_deadline", f"{len(wd_calls)} unwind/exit orders at or after 18:00 ET 3 Nov, first {wd_calls[0].get('key')}")
++        if pos.get(self.punt_ex, 0.0) != 800 or any(self.punt_ex in s[1] for s in sold):
++            sim.chk.violation("wind_down_sold_punt", f"punt leg {self.punt_ex}: {pos.get(self.punt_ex)} held (seeded 800)")
++        by_race = collections.defaultdict(list)
++        for t, what, q, px, cost in sold:
++            if q > 1000:
++                sim.chk.violation("wind_down_clip_size", f"{what}: {q} in one clip (> 1,000)")
++            if what.startswith(("sell_set", "buy_set")):
++                by_race[what.split(" ", 1)[1]].append(t)
++        for race, ts in by_race.items():
++            ts.sort()
++            if any(b_ - a_ < 1800 - 1 for a_, b_ in zip(ts, ts[1:])):
++                sim.chk.violation("wind_down_spacing", f"{race}: clips less than 30 min apart: {[WD.et_str(x) for x in ts]}")
++        for race in self.late_sell + self.late_buy:
++            if race not in by_race:
++                sim.chk.violation("wind_down_not_its_sale", f"{race}: the wind-down never sold a clip (another path took the sets?)")
++        for race in self.late_sell:
++            n = venue_sets(sim, race)
++            if n:
++                sim.chk.violation("wind_down_left", f"{race}: {n} late-call NO sets still held after 18:00 ET 3 Nov")
++        for race in self.late_buy:
++            qs = [pos.get(e, 0.0) for e in sim.legs(race)]
++            if all(q > 0 for q in qs):
++                sim.chk.violation("wind_down_left", f"{race}: {int(min(qs))} late-call YES sets still held after 18:00 ET 3 Nov")
++        if venue_sets(sim, self.early) < self.sizes[self.early] and self.early not in b.wind_down_exempt()[0]:
++            sim.chk.violation("wind_down_sold_early_call", f"{self.early}: an early-call set was sold ({venue_sets(sim, self.early)} left)")
++        if any(self.early in s[1] for s in sold):
++            sim.chk.violation("wind_down_sold_early_call", f"{self.early}: the wind-down sold an early-call set")
++        if pos.get(self.dir_ex, 0.0) > 0:
++            sim.chk.violation("wind_down_left", f"directional leg {self.dir_ex}: {pos.get(self.dir_ex)} YES still held")
++        if self.mm_after_flat:
++            sim.chk.violation("wind_down_mm_after_flat", f"{len(self.mm_after_flat)} MM batch orders after 12:00 ET 3 Nov, first {self.mm_after_flat[0]['key']}")
++        self.summary = {"sales": len(sold), "first": WD.et_str(sold[0][0]) if sold else None, "last": WD.et_str(sold[-1][0]) if sold else None,
++                        "cost": round(sum(s[4] for s in sold), 1), "early_race": self.early, "dir_leg": self.dir_ex,
++                        "by_race": {r: len(t) for r, t in by_race.items()}}
++
++
+ SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
+              ChurnMany, ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, ShockReserve, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
+-             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, Day]
++             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Day]
+ 
+ 
+ # ======================================================================================== main
+@@ -2081,6 +2223,8 @@ def main(argv):
+     if "--raise" in argv:
+         FORCE_CFG["raise_enabled"] = True
+         FORCE_CFG["raise_sets_enabled"] = True
++    if "--wind" in argv:                     # the wind-down on in every scenario's sandbox (it acts only from 31 Oct)
++        FORCE_CFG["wind_down_enabled"] = True
+     names = [a for a in argv if not a.startswith("-")]
+     if "--list" in argv:
+         for s in SCENARIOS:
+diff --git a/tests/test_guards.py b/tests/test_guards.py
+index 7b6c1b2..638e51c 100644
+--- a/tests/test_guards.py
++++ b/tests/test_guards.py
+@@ -1974,5 +1974,404 @@ _rs7 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+ check("mm_touch: the snapshot fallback is the REST snapshot stamped at read time; feed books written to book_cache clear its REST stamp",
+       'getattr(self, "rest_snapshot", None)' in _rs7 and _rs7.count("book_ts.pop(ex, None)") >= 2)
+ 
++# ---------------------------------------------------------------- wind-down (backlog 000), under a fake clock
++from sigbot.proposals import wind_down as WD  # noqa: E402
++
++
++class _WVenue(_Venue):
++    """_Venue plus single orders (filling `leg_fill` shares, None = all; the rest stays open), cancels (cancel_fail raises)."""
++    def __init__(self, pos):
++        super().__init__(pos)
++        self.orders, self.cancels, self.cancel_alls, self.leg_fill, self.cancel_fail = [], [], [], None, False
++
++    def place_order(self, ex, side, act, q, px, expiration=None, key=None):
++        f = q if self.leg_fill is None else min(self.leg_fill, q)
++        self.pos[ex] = self.pos.get(ex, 0.0) + (f if side == "yes" else -f)
++        self.n += 1
++        self.orders.append((key, ex, side, q, px))
++        return {"orderId": self.n, "open": f < q, "quantityTraded": f, "remainingQuantity": q - f}
++
++    def cancel_order(self, oid):
++        if self.cancel_fail:
++            raise _ApiErr(503, "DOWN", "down")
++        self.cancels.append(oid)
++        return {}
++
++    def cancel_all(self, exchange_id=None, **k):
++        self.cancel_alls.append(exchange_id)
++        return {}
++
++
++def _wrace(name, parties, exs):
++    return Race(name, {p: Leg(p, e, e, name) for p, e in zip(parties, exs)})
++
++
++_WR = {r.name: r for r in (_wrace("Hawaii Governor", "DR", ["H1", "H2"]), _wrace("Rhode Island Governor", "DRI", ["RD", "RR", "RI"]),
++                            _wrace("Florida Governor", "DR", ["F1", "F2"]), _wrace("Ohio Senate", "DR", ["O1", "O2"]),
++                            _wrace("Texas Senate", "DR", ["T1", "T2"]), _wrace("Kansas Senate", "DR", ["K1", "K2"]))}
++
++
++def _wdbot(pos, books, fairs=None, med=None, now=None, cfg_over=None, churn_lots=(), cheapfav=()):
++    tmp = tempfile.mkdtemp()
++    st = _Store(os.path.join(tmp, "t.sqlite"))
++    v = _WVenue(pos)
++    bx = {l.exchange_id: (r.name, p) for r in _WR.values() for p, l in r.legs.items()}
++    u = types.SimpleNamespace(races=_WR, by_exchange=bx, all_exchanges=lambda: list(bx))
++    e = ArbEngine.__new__(ArbEngine)
++    e.cfg = ArbConfig(min_set_qty=20)
++    e.u, e.api, e.store, e.dry_run, e.starting_cash = u, v, st, False, 100000.0
++    e.committed, e.cooldown, e.hostile, e.recycle_credit = {}, {}, set(), 0.0
++    ch = DC.DevChurn()
++    for race, qty in churn_lots:
++        ch.add_lot(race, qty, 0.98, 0.0)
++    e.protected = lambda: {l["race"] for l in ch.lots} | set(cheapfav)
++    cfg = BotConfig()
++    cfg.wind_down_enabled = True
++    for k_, v_ in (cfg_over or {}).items():
++        setattr(cfg, k_, v_)
++    b = R.Bot.__new__(R.Bot)
++    b.cfg, b.dry_run, b.store, b.api, b.arb, b.universe = cfg, False, st, v, e, u
++    b.wind_down, b.wind_down_path = WD.WindDownState(), os.path.join(tmp, "wind_down_state.json")
++    b.wd_med, b.wd_med_ts, b.wd_report_ts, b.wd_cap_logged = dict(med or {}), 9e18, 9e18, 0.0
++    b.exit_lock, b.mm_inv_base, b.cash, b.wd_mm_end, b.wd_foreign_logged = {}, 900.0, 50000.0, WD.MM_FLAT, {}
++    b.positions_snapshot, b.positions_ok, b.cost_basis = dict(pos), True, {}
++    b.open_orders_cache, b.open_orders_ts, b.trade_lock = {}, 0.0, threading.Lock()
++    b.churn, b.catchup_open, b.feed = ch, {}, None
++    b.cheapfav_races = lambda: set(cheapfav)
++    b.direction = types.SimpleNamespace(rows=[{"exchange_id": x, "fair": f} for x, f in (fairs or {}).items()])
++    b.mm = types.SimpleNamespace(quoted=[])
++    b.fresh_book = lambda ex, age=None: books.get(ex)
++    b.get_book = lambda ex, d=50, *a, **k: books[ex]
++    b.positions_map = lambda strict=False: (dict(v.pos), 0.0, len(v.pos))
++    return b, v
++
++
++def _wcycle(b, t, killed=False):
++    _keep = R.time.time
++    R.time.time = lambda: t
++    try:
++        R.Bot.wind_down_cycle(b, {}, killed)
++    finally:
++        R.time.time = _keep
++
++
++def _sent_keys(v):
++    return [k.split("-")[0] for k, _ in v.sent] + [o[0].split("-")[0] for o in v.orders]
++
++
++_HI = {"H1": _book(0.93, 0.935, 50000), "H2": _book(0.065, 0.07, 50000)}           # YES set exits at 0.995: 1 tick under payout
++_HIP = {"H1": 8743.0, "H2": 7658.0}                                                 # 7,658 YES sets + 1,085 spare YES on H1
++_HIF = {"H1": 0.93, "H2": 0.07}
++_HIM = {"Hawaii Governor": {"buy_set": (0.015, 0.015), "sell_set": (0.02, 0.02)}}   # usual cost 3 ticks: 1 tick is cheap
++_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
++_wcycle(_b, WD.START - 60)
++check("wind-down: nothing is sold before 31 Oct 00:00 ET (fake clock 30 Oct 23:59 ET)", _v.sent == [] and _v.orders == [], str(_sent_keys(_v)))
++_t1 = WD.START + 10 * 3600
++_wcycle(_b, _t1)
++_wcycle(_b, _t1 + 30)
++_wcycle(_b, _t1 + 60)
++_k1 = _sent_keys(_v)
++_wcycle(_b, _t1 + 1860)
++_k2 = _sent_keys(_v)
++_q = [l[0]["quantity"] for k, l in _v.sent]
++check("wind-down: 31 Oct 10:00 ET: one clip a cycle, cheapest first (the fair-priced spare leg, then a 1,000-set YES clip), "
++      "then nothing in that race for 30 min, then the next clip",
++      _k1 == ["unb", "wdx"] and _k2 == ["unb", "unb", "wdx"] and _q == [1000, 1000] and _v.pos["H2"] == 5658.0, f"{_k1} {_k2} {_q} {_v.pos}")
++check("wind-down: a YES-set clip buys NO on every leg at 1 - bid (the venue nets it against the YES held)",
++      all(l["side"] == "no" and l["action"] == "buy" for l in _v.sent[0][1]) and {l["price"] for l in _v.sent[0][1]} == {0.07, 0.935},
++      str(_v.sent[0][1]))
++check("wind-down: the spare YES on a leg is sold at the bid (NO buy at 1 - bid), 80% of the touch at most, and only that leg",
++      _v.orders[0][1:4] == ("H1", "no", 1085) and abs(_v.orders[0][4] - 0.07) < 1e-9, str(_v.orders))
++_b2, _ = _wdbot(_HIP, _HI, _HIF, _HIM)
++_b2.wind_down.load(_j3.load(open(_b.wind_down_path)))
++check("wind-down: the state file reloads after a restart (spacing kept)", _b2.wind_down.last_race.get("Hawaii Governor") == _t1 + 1860,
++      str(_b2.wind_down.last_race))
++
++# cost cap: a 3-leg NO set whose exit costs 3.1% of its proceeds, locked return 1%
++_RI = {"RD": _book(0.895, 0.90, 50000), "RR": _book(0.095, 0.10, 50000), "RI": _book(0.055, 0.06, 50000)}
++_RIP = {"RD": -12304.0, "RR": -12304.0, "RI": -12304.0}
++_RIM = {"Rhode Island Governor": {"sell_set": (0.08, 0.07), "buy_set": (None, None)}}
++_b, _v = _wdbot(_RIP, _RI, {"RD": 0.9, "RR": 0.08, "RI": 0.02}, _RIM)
++_b.cost_basis = {"RD": 12304 * 0.10, "RR": 12304 * 0.90, "RI": 12304 * 0.98}
++_wcycle(_b, WD.START + 3600)
++_n_early = len(_v.sent)
++_wcycle(_b, WD.LOOSEN + 60)
++check("wind-down: cost cap: a set costing 3.1% of proceeds is not sold on 31 Oct (cap = its 1% locked return), is sold from 2 Nov (4.5%)",
++      _n_early == 0 and len(_v.sent) == 1 and _sent_keys(_v) == ["unw"] and _v.sent[0][1][0]["quantity"] == 1000
++      and all(l["side"] == "yes" for l in _v.sent[0][1]), f"{_n_early} {_sent_keys(_v)}")
++check("wind-down: the cap schedule: locked return at the start, 4.5% on 2 Nov 00:00 ET, 5.5% at 17:45 ET 3 Nov, never below the locked return",
++      abs(WD.set_cost_cap(WD.START, 0.01) - 0.01) < 1e-9 and abs(WD.set_cost_cap(WD.LOOSEN, 0.0) - 0.045) < 1e-9
++      and abs(WD.set_cost_cap(WD.CAP_END, 0.0) - 0.055) < 1e-9 and abs(WD.set_cost_cap(WD.CAP_END, 0.08) - 0.08) < 1e-9)
++# timing gate (ev_hunt 2c, then level 0)
++_b, _v = _wdbot(_RIP, _RI, {}, {"Rhode Island Governor": {"sell_set": (0.06, 0.05), "buy_set": (None, None)}})
++_b.cost_basis = {"RD": 12304 * 0.10, "RR": 12304 * 0.90, "RI": 12304 * 0.98}
++_wcycle(_b, WD.LOOSEN + 60)
++_g1 = len(_v.sent)
++_b.wd_med = {"Rhode Island Governor": {"sell_set": (0.06, 0.06), "buy_set": (None, None)}}
++_wcycle(_b, WD.LOOSEN + 120)
++check("wind-down: timing gate: from 2 Nov a clip waits while the exit cost (12 ticks) is above the race's 24-h median (10), sells at the median",
++      _g1 == 0 and len(_v.sent) == 1, f"{_g1} {len(_v.sent)}")
++_b.wd_med = {"Rhode Island Governor": {"sell_set": (0.065, 0.10), "buy_set": (None, None)}}
++check("wind-down: timing gate before 2 Nov: the cost must be >= 1 tick below the 12-h median; near the deadline no gate",
++      not WD.gate_ok(WD.START + 3600, 0.06, 0.0625, 0.1, WD.DEADLINE)[0] and WD.gate_ok(WD.START + 3600, 0.06, 0.065, 0.1, WD.DEADLINE)[0]
++      and WD.gate_ok(WD.DEADLINE - 3600, 0.09, 0.05, 0.05, WD.DEADLINE - 7200)[0])
++# early-call sets are held; Rhode Island Governor is sold anyway; exempt sleeves untouched
++_FL = {"F1": _book(0.95, 0.955, 50000), "F2": _book(0.045, 0.05, 50000)}
++_b, _v = _wdbot({"F1": -5000.0, "F2": -5000.0}, _FL, {"F1": 0.95, "F2": 0.05},
++                {"Florida Governor": {"sell_set": (0.03, 0.03), "buy_set": (None, None)}})
++_wcycle(_b, WD.LOOSEN + 60)
++_b.cfg.wind_down_force_late = ["Florida Governor"]
++_wcycle(_b, WD.LOOSEN + 120)
++check("wind-down: an early-call set (Florida Governor, polls close 20:00 ET, favourite 0.95) is held; listed in force_late it is sold",
++      len(_v.sent) == 1 and WD.call_class("Florida Governor", 0.95)[0] == "early", str(_sent_keys(_v)))
++_b, _v = _wdbot({"O1": -3000.0, "O2": -3000.0, "T1": -3000.0, "T2": -3000.0},
++                {"O1": _book(0.5, 0.505, 50000), "O2": _book(0.495, 0.5, 50000), "T1": _book(0.5, 0.505, 50000), "T2": _book(0.495, 0.5, 50000)},
++                {}, {"Ohio Senate": {"sell_set": (0.02, 0.02)}, "Texas Senate": {"sell_set": (0.02, 0.02)}}, churn_lots=[("Ohio Senate", 3000)],
++                cheapfav=["Texas Senate"])
++_wcycle(_b, WD.LOOSEN + 60)
++check("wind-down: races high-frequency arb or cheap favourites hold are never sold by it (their own schedules)", _v.sent == [] and _v.orders == [],
++      str(_sent_keys(_v)))
++# never more than held now: the clip is re-clamped to the positions re-read under the lock
++_b, _v = _wdbot({"H1": 300.0, "H2": 300.0}, _HI, _HIF, _HIM)
++_b.positions_snapshot = dict(_HIP)
++_wcycle(_b, _t1)
++check("wind-down: a clip sized from a stale snapshot (7,658 sets) is cut to the sets held now (300); no leg ends short",
++      [l[0]["quantity"] for k, l in _v.sent] == [300] and _v.pos["H1"] == 0.0 and _v.pos["H2"] == 0.0 and _v.orders == [],
++      f"{_v.sent} {_v.pos} {_v.orders}")
++# partisan cap after every clip
++_b, _v = _wdbot({"O1": 1000.0, "T2": 11400.0}, {"O1": _book(0.5, 0.505, 50000), "T2": _book(0.5, 0.505, 50000)},
++                {"O1": 0.5, "T2": 0.5}, {}, cfg_over={"wind_down_clips_per_cycle": 5})
++_wcycle(_b, WD.START + 3600)
++_ex = [o[1] for o in _v.orders]
++check("wind-down: partisan cap: no sale of O1 (D YES, |net D| 5,200 -> 5,700), T2 (R YES) is sold",
++      "O1" not in _ex and "T2" in _ex, str(_v.orders))
++# single legs: fill-or-cancel
++_b, _v = _wdbot({"O1": 1000.0}, {"O1": _book(0.5, 0.505, 50000)}, {"O1": 0.5}, {})
++_v.leg_fill = 400
++_wcycle(_b, WD.START + 3600)
++check("wind-down: a leg clip's unfilled remainder is cancelled at once and only what traded is booked",
++      len(_v.cancels) == 1 and _b.wind_down.sold[-1][2] == 400 and _v.pos["O1"] == 600.0,
++      f"{_v.cancels} {_b.wind_down.sold} {_v.pos}")
++_b, _v = _wdbot({"O1": 1000.0, "T2": 1000.0}, {"O1": _book(0.5, 0.505, 50000), "T2": _book(0.5, 0.505, 50000)}, {"O1": 0.5, "T2": 0.5}, {},
++                cfg_over={"wind_down_clips_per_cycle": 5})
++_v.leg_fill, _v.cancel_fail = 400, True
++_wcycle(_b, WD.START + 3600)
++check("wind-down: a remainder that cannot be cancelled pulls that leg for 30 min and stops the cycle (no second order)",
++      len(_v.orders) == 1 and _b.wind_down.pulled.get(_v.orders[0][1], 0) > WD.START + 3600, f"{_v.orders} {_b.wind_down.pulled}")
++# zero-EV exit just sent on the leg: leave it this cycle
++_b, _v = _wdbot({"O1": 1000.0}, {"O1": _book(0.5, 0.505, 50000)}, {"O1": 0.5}, {})
++_b.store.record_order(77, "O1", None, "no", "buy", 0.5, 1000, "exit")
++_b.store.conn.execute("UPDATE orders SET placed_at=?", (WD.START + 3600 - 60,))
++_b.store.conn.commit()
++_wcycle(_b, WD.START + 3600)
++_z1 = list(_v.orders)
++_wcycle(_b, WD.START + 3600 + 130)
++check("wind-down: no leg clip while a zero-EV exit sent in the last 2 min may still rest on that leg; 2 min later it is sold",
++      _z1 == [] and [o[1] for o in _v.orders] == ["O1"], f"{_z1} {_v.orders}")
++# hourly cost budget and the kill switch
++_b, _v = _wdbot(_RIP, _RI, {}, _RIM, cfg_over={"wind_down_max_cost_per_hour": 50.0})
++_wcycle(_b, WD.LOOSEN + 60)
++check("wind-down: no clip whose exit cost would take the last hour past wind_down_max_cost_per_hour (kill switch at 400/h)", _v.sent == [],
++      str(_sent_keys(_v)))
++_b, _v = _wdbot(_RIP, _RI, {}, _RIM)
++_wcycle(_b, WD.LOOSEN + 60, killed=True)
++_n_k = len(_v.sent)
++_wcycle(_b, WD.DEADLINE - 600, killed=True)
++check("wind-down: while the kill switch is on only clips that cannot wait (past the race's fallback time) are sold",
++      _n_k == 0 and len(_v.sent) == 1, f"{_n_k} {len(_v.sent)}")
++check("wind-down: the MM is flat at 12:00 ET 3 Nov or at its own stop_quoting_at if earlier (live: 12:00 UTC = 07:00 ET)",
++      WD.mm_end("2026-11-03T12:00:00Z") == datetime(2026, 11, 3, 12, tzinfo=timezone.utc).timestamp() and WD.mm_end("2026-11-04T00:00:00Z") == WD.MM_FLAT
++      and WD.mm_end(None) == WD.MM_FLAT and WD.mm_inventory_cap(WD.mm_end("2026-11-03T12:00:00Z"), 900, WD.mm_end("2026-11-03T12:00:00Z")) == 0)
++_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
++_b.cfg.arb.recycle_enabled = True
++_wcycle(_b, WD.START - 60)
++_rec_before = _b.cfg.arb.recycle_enabled
++_wcycle(_b, WD.START + 60)
++check("wind-down: recycling stays on before 31 Oct 00:00 ET and is switched off from then (a recycled set would have to be sold again)",
++      _rec_before is True and _b.cfg.arb.recycle_enabled is False)
++# MM: cap shrinks from 1 Nov, flat (no quotes, no fast requotes) from 12:00 ET 3 Nov
++_calls = []
++_fb = types.SimpleNamespace(cfg=types.SimpleNamespace(mm_fast_requotes_per_min=3, mm=types.SimpleNamespace(enabled=True)), feed_ok=lambda: True,
++                            mm=types.SimpleNamespace(quoted=["H1"], state={"H1": types.SimpleNamespace(last_touch=(0.5, 0.51), last_reserve=0.5)}), killed_until=0.0, wind_down=WD.WindDownState(), strategy_kill=None,
++                            wd_mm_end=WD.MM_FLAT)
++_sc = R.ArbScanner.__new__(R.ArbScanner)
++_sc.bot, _sc.fast_log, _sc.stats = _fb, [], {}
++_fb.fresh_book = lambda ex, age=None: _calls.append(ex) or None
++_keep = R.time.time
++R.time.time = lambda: WD.MM_FLAT + 60
++try:
++    _sc.fast_requote_pass()
++finally:
++    R.time.time = _keep
++_c_after = list(_calls)
++R.time.time = lambda: WD.MM_FLAT - 60
++try:
++    _sc.fast_requote_pass()
++finally:
++    R.time.time = _keep
++_rs_wd = open(os.path.join(ROOT, "sigbot", "run.py")).read()
++_mm = MarketMaker.__new__(MarketMaker)
++check("wind-down: the MM reads its cap from inv_cap_override when set, the shared config otherwise (the shadow tuner's replays read the config)",
++      "cap = getattr(self, \"inv_cap_override\", None) or self.cfg.max_inventory_notional" in open(os.path.join(ROOT, "sigbot", "mm.py")).read()
++      and getattr(_mm, "inv_cap_override", None) is None)
++check("wind-down: MM: inventory cap 900 until 1 Nov, ~531 on 2 Nov 00:00 ET, 0 at 12:00 ET 3 Nov; no fast requotes from 12:00 ET 3 Nov; "
++      "the cycle pulls MM quotes then (monitor-pause path)",
++      WD.mm_inventory_cap(WD.MM_SHRINK, 900) == 900 and abs(WD.mm_inventory_cap(WD.LOOSEN, 900) - 531.3) < 1 and WD.mm_inventory_cap(WD.MM_FLAT, 900) == 0
++      and _c_after == [] and _calls == ["H1"] and "if WD.mm_flat_due(now_, self.wd_mm_end):\n                mm_paused = True" in _rs_wd
++      and "self.mm.inv_cap_override = max(1.0, WD.mm_inventory_cap(now_, self.mm_inv_base, self.wd_mm_end))" in _rs_wd
++      and "self.cfg.mm.max_inventory_notional =" not in _rs_wd, f"{_c_after} {_calls}")
++
++# review 1 (Opus): blockers 1-4 and should-fixes 5, 9
++_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
++_b.open_orders_cache = {"H1": [{"id": 5, "quantity": 100}]}
++_wcycle(_b, WD.DEADLINE + 60)
++_wcycle(_b, WD.DEADLINE + 3 * 3600)
++check("wind-down: nothing is sold or cancelled at or after 18:00 ET 3 Nov (the punt and the election-night sleeve trade then)",
++      _v.sent == [] and _v.orders == [] and _v.cancel_alls == [] and WD.STOP == WD.DEADLINE, f"{_sent_keys(_v)} {_v.cancel_alls}")
++_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
++_b.store.record_order(88, "H2", None, "yes", "buy", 0.07, 500, "punt")
++_wcycle(_b, _t1)
++_wcycle(_b, _t1 + 3600)
++check("wind-down: a race with a punt / election-night order on any leg sells no set; that leg is never sold or cancelled (the other leg's spare YES may be)",
++      _v.sent == [] and "H2" not in _v.cancel_alls and all(o[1] != "H2" for o in _v.orders), f"{_sent_keys(_v)} {_v.orders} {_v.cancel_alls}")
++_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
++_b.wind_down_hold_path = os.path.join(tempfile.mkdtemp(), "wind_down_hold.json")
++open(_b.wind_down_hold_path, "w").write('{"races": ["Hawaii Governor"], "exchanges": []}')
++_wcycle(_b, _t1)
++_h1 = (list(_v.sent), list(_v.orders))
++open(_b.wind_down_hold_path, "w").write('{"races": [')
++_wcycle(_b, _t1 + 60)
++check("wind-down: the hold file (params/wind_down_hold.json) holds a race; an unreadable hold file stops every clip",
++      _h1 == ([], []) and _v.sent == [] and _v.orders == [], f"{_h1} {_sent_keys(_v)}")
++_b, _v = _wdbot({"O1": -1000.0, "O2": -1000.0}, {"O1": _book(0.5, 0.505, 50000), "O2": _book(0.5, 0.505, 50000)}, {},
++                {"Ohio Senate": {"sell_set": (0.03, 0.03)}}, cfg_over={"wind_down_force_late": ["Ohio Senate"]})
++_b.open_orders_cache = {"O1": [{"id": 5, "quantity": 500}]}
++_b.store.record_order(5, "O1", None, "yes", "buy", 0.495, 500, "mm")             # our own MM bid: known, so cancelled
++_ca = _v.cancel_all
++_v.cancel_all = lambda exchange_id=None, **k: (_v.pos.__setitem__("O1", _v.pos["O1"] + 500) if exchange_id == "O1" else None) or _ca(exchange_id)
++_wcycle(_b, WD.LOOSEN + 60)
++check("wind-down: our MM bid filling during the cancel (O1 -1,000 -> -500) shrinks the clip to the 500 sets held: no leg crosses zero",
++      [l[0]["quantity"] for k, l in _v.sent] == [500] and _v.pos["O1"] == 0.0 and _v.pos["O2"] == -500.0, f"{_v.sent} {_v.pos}")
++_b, _v = _wdbot({"O1": -300.0, "O2": -1000.0}, {"O1": _book(0.5, 0.505, 50000), "O2": _book(0.5, 0.505, 50000)}, {"O1": 0.5, "O2": 0.5},
++                {"Ohio Senate": {"sell_set": (0.03, 0.03)}}, cfg_over={"wind_down_force_late": ["Ohio Senate"]})
++_b.catchup_open = {"O1": -300.0}
++_wcycle(_b, WD.LOOSEN + 60)
++check("wind-down: a catch-up NO is not counted inside a set (O1 -300 is all catch-up): no set sold, O1 untouched",
++      _v.sent == [] and "O1" not in [o[1] for o in _v.orders] and _v.pos["O1"] == -300.0, f"{_sent_keys(_v)} {_v.orders}")
++check("wind-down: locked return only from legs holding exactly the sets, at most 5.5% (residual NO at other prices inflated it to 22%)",
++      WD.locked_return("sell_set", {"a": 1000 * 0.03 + 3000 * 0.30, "b": 1000 * 0.97}, {"a": -4000, "b": -1000}, ["a", "b"], 1000) == 0.0
++      and abs(WD.locked_return("sell_set", {"a": 30.0, "b": 940.0}, {"a": -1000, "b": -1000}, ["a", "b"], 1000) - 0.0309) < 1e-3
++      and WD.locked_return("sell_set", {"a": 10.0, "b": 10.0}, {"a": -1000, "b": -1000}, ["a", "b"], 1000) == WD.CAP_END_FRAC)
++_b, _v = _wdbot({"O1": 3000.0}, {"O1": {"bids": [{"price": 0.30, "quantity": 50000}], "asks": []}}, {}, {})
++_wcycle(_b, WD.START + 3600)
++check("wind-down: a leg with no outside fair and a one-sided book is not sold (no idea of its value)", _v.orders == [], str(_v.orders))
++check("wind-down: recycling is off at start-up when the bot restarts inside the window (before the scanner thread starts)",
++      "if time.time() >= WD.START and cfg.arb.recycle_enabled:\n                cfg.arb.recycle_enabled = False" in _rs_wd)
++
++# review 2 (Opus): N1-N5
++_b, _v = _wdbot({"O1": 2000.0}, {"O1": _book(0.50, 0.53, 50000)}, {"O1": 0.50}, {})
++_wcycle(_b, WD.START + 3600)
++check("wind-down: the hourly ledger books a leg's cost against the mark too (fair = bid 0.50, mid 0.515: 2,000 sold books 30, not 0)",
++      [o[1] for o in _v.orders] == ["O1"] and abs(_b.wind_down.cost_log[-1][1] - 30.0) < 1e-6, f"{_v.orders} {_b.wind_down.cost_log}")
++_b, _v = _wdbot({"O1": 1000.0}, {"O1": _book(0.5, 0.505, 50000)}, {"O1": 0.5}, {})
++_b.open_orders_cache = {"O1": [{"id": 999, "quantity": 300}]}
++_wcycle(_b, WD.START + 3600)
++check("wind-down: a leg carrying an open order the bot did not place (punt executor before it records, Sizhe's own) is not cancelled or sold",
++      _v.orders == [] and _v.cancel_alls == [], f"{_v.orders} {_v.cancel_alls}")
++_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
++_keep = R.time.time
++R.time.time = lambda: _t1
++try:
++    _cs = R.Bot.wind_down_candidates(_b, _t1, {})
++finally:
++    R.time.time = _keep
++R.time.time = lambda: WD.STOP + 1
++try:
++    _r = [R.Bot.wind_down_set_clip(_b, c, _t1, {}) if c["type"] == "set" else R.Bot.wind_down_leg_clip(_b, c, _t1, {}) for c in _cs]
++finally:
++    R.time.time = _keep
++check("wind-down: a clip whose lock is taken at or after 18:00 ET sends nothing and cancels nothing (candidates built before)",
++      _cs and all(x == "stop" for x in _r) and _v.sent == [] and _v.orders == [] and _v.cancel_alls == [], f"{len(_cs)} {_r} {_v.cancel_alls}")
++_g = WD.global_fallback_ts(1500.0, 30, 300.0, 60.0, 7200.0)
++check("wind-down: global fallback: 1,500 of exit cost at 300/h needs 5 h -> every race drops its gate at 11:00 ET 3 Nov (18:00 - 2 h - 5 h)",
++      abs(_g - (WD.DEADLINE - 7200 - 5 * 3600)) < 1 and WD.global_fallback_ts(0.0, 120, 300.0, 60.0, 7200.0) == WD.DEADLINE - 7200 - 7200)
++_b, _v = _wdbot(_RIP, _RI, {}, {"Rhode Island Governor": {"sell_set": (0.03, 0.03), "buy_set": (None, None)}},
++                cfg_over={"wind_down_max_cost_per_hour": 50.0})
++_wcycle(_b, WD.LOOSEN + 60)
++_n_g = len(_v.sent)
++_b2, _v2 = _wdbot({"RD": -40000.0, "RR": -40000.0, "RI": -40000.0}, _RI, {}, {"Rhode Island Governor": {"sell_set": (0.03, 0.03), "buy_set": (None, None)}})
++_wcycle(_b2, WD.DEADLINE - 6 * 3600)
++check("wind-down: with the gate shut (cost above the medians), 12,304 sets wait on 2 Nov; 40,000 sets (about 2.3k of exit cost) drop the gate "
++      "at 12:00 ET 3 Nov", _n_g == 0 and len(_v2.sent) == 1 and _b2.wd_global_fallback <= WD.DEADLINE - 6 * 3600, f"{_n_g} {len(_v2.sent)} "
++      f"{WD.et_str(_b2.wd_global_fallback)}")
++check("wind-down: a leg without its own cost basis gives a locked return of 0, not the 5.5% clamp",
++      WD.locked_return("sell_set", {"a": 970.0}, {"a": -1000, "b": -1000}, ["a", "b"], 1000) == 0.0)
++
++# merge with the cash raise (24 Oct): one shared exit lock, the wind-down owns its races 31 Oct - 3 Nov, the raise's MM pause
++_rB = _U.race_of(_L(_RB, "R")).name
++_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (300.0, "floor")})
++R.Bot.stamp_exit(_b, _rB, "wind_down")
++R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
++check("merge: the cash raise leaves a race the wind-down clipped < 30 min ago (B) and sells elsewhere (A)",
++      _v.orders and all(o[0] not in _U.races[_rB].exchange_ids for o in _v.orders), str(_v.orders))
++_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (300.0, "floor")})
++R.Bot.stamp_exit(_b, _rB, "raise")
++R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
++check("merge: a routine's own stamp does not lock it out (the raise's own spacing rules apply)", _v.orders and _v.orders[0][0] == _L(_RB, "R"),
++      str(_v.orders))
++_b, _v = _rbot(_rpos, _rbooks, {"hf_arb": (300.0, "floor")})
++_b.wind_down, _b.wind_down_exempt = WD.WindDownState(), (lambda: ({}, {}))
++_keep = R.time.time
++R.time.time = lambda: WD.START + 3600
++try:
++    R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
++finally:
++    R.time.time = _keep
++_o_in = list(_v.orders)
++R.time.time = lambda: WD.STOP + 60
++try:
++    R.Bot.raise_cycle(_b, _rprices(_rbooks), False)
++finally:
++    R.time.time = _keep
++check("merge: from 31 Oct 00:00 ET to 18:00 ET 3 Nov the cash raise leaves the wind-down's races alone; after 18:00 it may sell again",
++      _o_in == [] and len(_v.orders) >= 1, f"{_o_in} {_v.orders}")
++_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
++R.Bot.stamp_exit(_b, "Hawaii Governor", "raise", _t1 - 600)
++_wcycle(_b, _t1)
++_l1 = (list(_v.sent), list(_v.orders))
++_wcycle(_b, _t1 + 1201)
++check("merge: the wind-down leaves a race the cash raise clipped < 30 min ago (no set clip, no leg clip), then sells it",
++      _l1 == ([], []) and len(_v.sent) + len(_v.orders) == 1, f"{_l1} {_sent_keys(_v)}")
++_b, _v = _wdbot(_HIP, _HI, _HIF, _HIM)
++_wcycle(_b, _t1)
++_wcycle(_b, _t1 + 30)
++check("merge: a wind-down clip keeps the MM off the race's legs with the cash raise's raise_pause (in the store, survives a restart) and stamps the lock",
++      {"H1", "H2"} <= set(_b.mm.raise_pause) and {"H1", "H2"} <= set(_b.store.get_param("raise_pause") or {})
++      and "wind_down" in _b.exit_lock.get("Hawaii Governor", {}) and _sent_keys(_v) == ["unb", "wdx"], f"{_b.mm.raise_pause} {_b.exit_lock}")
++_rs_m = open(os.path.join(ROOT, "sigbot", "run.py")).read()
++check("merge: the RI trim and tier 2 also leave a wind-down race (or one the wind-down clipped < 30 min ago) alone; the wind-down sells YES "
++      "sets through the cash raise's unwind_buy_set",
++      "if rname in Bot.wind_down_owned(self, now) or Bot.exit_locked(self, rname, \"raise\", now=now):" in _rs_m
++      and 'self.arb.unwind_buy_set(race.name, c["books"], q, why="wind-down", purpose="arb")' in _rs_m
++      and 's_excl |= Bot.wind_down_owned(self, now) | {r for r in race_legs if Bot.exit_locked(self, r, "raise", now=now)}' in _rs_m
++      and _rs_m.count("    def unwind_buy_set(") == 0 and open(os.path.join(ROOT, "sigbot", "arb.py")).read().count("    def unwind_buy_set(") == 1)
++
++_b, _v = _sbot(_spos, _sbooks, {"hf_arb": (2000.0, "floor")})
++R.Bot.stamp_exit(_b, "Rhode Island Governor", "wind_down")
++R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
++_r1 = [_U.race_of(l[0]["exchangeId"]).name for k, l in getattr(_v, "sent_ml", [])]
++_b, _v = _sbot(_spos, _sbooks, {"hf_arb": (2000.0, "floor")})
++_b.wind_down, _b.wind_down_exempt = WD.WindDownState(), (lambda: ({}, {}))
++_keep = R.time.time
++_tn = time.time()
++R.time.time = lambda: max(_tn, WD.START + 3600)
++try:
++    _b.store.set_param("churn_cash_skips", [[R.time.time() - 1860 * i, "X%d" % i, 2000, 0, 0.98] for i in range(3)])
++    R.Bot.raise_cycle(_b, _rprices(_sbooks), False)
++finally:
++    R.time.time = _keep
++check("merge (review M1): tier 2 skips a race the wind-down clipped < 30 min ago (RI Governor: A only) and sends no set at all in the window",
++      "Rhode Island Governor" not in _r1 and _RA in _r1 and getattr(_v, "sent_ml", []) == [], f"{_r1} {getattr(_v, 'sent_ml', [])}")
++
+ print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
+ sys.exit(1 if FAILS else 0)

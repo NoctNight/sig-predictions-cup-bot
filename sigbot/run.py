@@ -2083,15 +2083,12 @@ class Bot:
         """Per-strategy stops (strategy_stops.py), every cycle; never raises (a failure keeps the last pauses in force)."""
         try:
             self._stops_cycle(cash, positions, mv, prices, open_orders, hl, settled)
-            if getattr(self, "stops_fallback", False):
-                log.warning("STRATEGY STOPS: working again: the bot-wide kill switch is off again")
-            self.stops_failures, self.stops_fallback = 0, False
+            self.stops_failures = 0
         except Exception as e:                       # the stops must never kill the loop (or skip this cycle's exits)
             log.exception("strategy stops failed: %s", e)
             self.stops_failures = getattr(self, "stops_failures", 0) + 1
-            if self.stops_failures >= 3 and not getattr(self, "stops_fallback", False):
-                self.stops_fallback = True           # never fail open: today's switch takes over until the stops work
-                log.error("STRATEGY STOPS: failed %d cycles in a row: the bot-wide kill switch is back on", self.stops_failures)
+            if self.stops_failures == 3:             # nothing takes over: the last pauses stay in force, new ones wait for the stops
+                log.error("STRATEGY STOPS: failed %d cycles in a row: the last pauses stay, no new stop can fire", self.stops_failures)
 
     def _stops_cycle(self, cash, positions, mv, prices, open_orders, hl, settled):
         st = self.stops
@@ -4762,18 +4759,9 @@ class Bot:
         self.wd_drawdown = float(hl.get("drawdown") or 0.0)       # the wind-down's budget past a fallback uses the kill headroom
         if self.stops is not None:
             # per-strategy stops: a pause stops only that strategy's NEW entries (exits, unwinds and quote cancels go on);
-            # the 30-min bot-wide switch below is off (killed stays False, so no exit path waits on it)
+            # the old bot-wide switch is deleted (Sizhe 3 Nov: its cancel_all could pull punt orders); killed stays False
             self.stops_cycle(cycle_cash if cycle_ok else None, positions, cycle_mv, prices, open_orders, hl, cycle_settled)
         killed = time.time() < self.killed_until
-        if (self.stops is None or getattr(self, "stops_fallback", False)) and not killed and (hl["drawdown"] > self.cfg.kill_drawdown or (hl["n_markout"] >= 20 and hl["markout30"] is not None and hl["markout30"] < self.cfg.kill_markout_ticks)):
-            self.killed_until = time.time() + self.cfg.kill_pause_sec
-            killed = True
-            log.warning("KILL SWITCH: drawdown %.0f, markout30 %s (n=%d); cancelling MM/tilt quotes for %ds", hl["drawdown"], hl["markout30"], hl["n_markout"], self.cfg.kill_pause_sec)
-            if not self.dry_run:
-                try:
-                    self.api.cancel_all()
-                except ApiError as e:
-                    log.warning("kill cancel-all: %s", e)
         log.info("HEALTH fills5=%s fills30=%s markout30=%s(n=%d) drawdown=%.0f netD=%+.0f killed=%s wave=%s hot=%d feed=[%s]", hl["fills5"], hl["fills30"],
                  None if hl["markout30"] is None else round(hl["markout30"], 2), hl["n_markout"], hl["drawdown"], expo.net_d_notional, killed,
                  self.mm.wave, sum(1 for ex in self.mm.quoted if self.mm.hot_until.get(ex, 0) > time.time()), self.feed_summary())

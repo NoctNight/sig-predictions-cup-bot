@@ -1,0 +1,275 @@
+diff --git a/sigbot/mm.py b/sigbot/mm.py
+index d3a5463..5b24236 100644
+--- a/sigbot/mm.py
++++ b/sigbot/mm.py
+@@ -366,6 +366,28 @@ class MarketMaker:
+             return True
+         return False
+ 
++    @staticmethod
++    def last_look(to_place: list, touch_fn, stats: Optional[dict] = None) -> list:
++        """Quotes (q, info) that do not cross the freshest touch. touch_fn(ex) -> (best bid, best ask) or None; one look
++        per exchange (it may cost a REST read while the feed is down); an unknown touch drops the quote instead of
++        sending it unchecked (sim 'day' 24 Oct: a bid went into the 0.76 ask during the feed outage)."""
++        kept, looked = [], {}
++        for q, info in to_place:
++            if q.exchange_id not in looked:
++                looked[q.exchange_id] = touch_fn(q.exchange_id)
++            t = looked[q.exchange_id]
++            st = stats if stats is not None else {}
++            if t is None:
++                st["unknown"] = st.get("unknown", 0) + 1
++                continue
++            bb, ba = t
++            if (q.side == "yes" and ba is not None and q.yes_price >= ba - 1e-9) or \
++               (q.side == "no" and bb is not None and q.yes_price <= bb + 1e-9):
++                st["crossing"] = st.get("crossing", 0) + 1
++                continue
++            kept.append((q, info))
++        return kept
++
+     def quote_cycle(self, books: dict[str, dict], positions: dict[str, float], pressures: dict[str, float],
+                     open_orders: dict[str, list], fills_count: dict[str, int], cash: float, cycle_id: int,
+                     write_budget: int) -> dict:
+@@ -424,6 +446,11 @@ class MarketMaker:
+             if writes + 1 + math.ceil((len(to_place) + len(quotes)) / self.cfg.batch_size) > write_budget:
+                 summary["skipped_budget"] += 1
+                 continue
++            tf = getattr(self, "touch_fn", None)
++            if tf is not None and tf(ex) is None:
++                # no touch to check new quotes against: keep the resting ones rather than cancel and go dark (review 24 Oct)
++                summary["skipped_unknown"] = summary.get("skipped_unknown", 0) + 1
++                continue
+             if oo or getattr(self, "force_cancel", False):
+                 if self.dry_run:
+                     log.info("[DRY] cancel-all exchange %s (%d orders)", ex, len(oo))
+@@ -444,22 +471,20 @@ class MarketMaker:
+         # last look before sending: the touch can move inside the cycle (another sleeve's taker order, a DMM requote),
+         # and a resting bid at or above the current ask fills at once as a taker (sim 'day' 23 Oct: bid 0.76 into a
+         # 0.75/0.76 book). Drop any quote that would cross the freshest book.
++        # One look per exchange (the touch_fn may cost a REST read when the feed is down). An unknown touch drops the
++        # quote rather than sending it unchecked (sim 'day' 24 Oct, feed outage).
+         touch_fn = getattr(self, "touch_fn", None)
+-        if touch_fn is not None and to_place:
+-            kept = []
+-            for q, info in to_place:
+-                t = touch_fn(q.exchange_id)
+-                if t is not None:
+-                    bb, ba = t
+-                    if q.side == "yes" and ba is not None and q.yes_price >= ba - 1e-9:
+-                        continue
+-                    if q.side == "no" and bb is not None and q.yes_price <= bb + 1e-9:
+-                        continue
+-                kept.append((q, info))
+-            summary["dropped_crossing"] = len(to_place) - len(kept)
+-            to_place = kept
++        summary["dropped_crossing"] = summary["dropped_unknown"] = 0
+         for i in range(0, len(to_place), self.cfg.batch_size):
+             chunk = to_place[i : i + self.cfg.batch_size]
++            if touch_fn is not None and chunk:
++                # looked right before each batch is sent, so a look is never several REST reads old (review 24 Oct)
++                st = {}
++                chunk = self.last_look(chunk, touch_fn, st)
++                summary["dropped_crossing"] += st.get("crossing", 0)
++                summary["dropped_unknown"] += st.get("unknown", 0)
++                if not chunk:
++                    continue
+             orders = [dict(exchangeId=q.exchange_id, side=q.side, action="buy", quantity=q.qty, price=q.price, expirationDate=ttl,
+                            tournamentId=self.api.tournament_id) for q, _ in chunk]
+             if self.dry_run:
+diff --git a/sigbot/run.py b/sigbot/run.py
+index 31c57a6..9267765 100644
+--- a/sigbot/run.py
++++ b/sigbot/run.py
+@@ -62,6 +62,9 @@ def cheapfav_races_of(bot) -> set:
+     return f() if callable(f) else set()
+ 
+ 
++LASTLOOK_MAX_AGE = 15.0     # seconds: the oldest REST touch the MM's last look accepts when the feed book is stale
++
++
+ class ExplainedDirection(DirectionTrader):
+     """Directional sleeve restricted to legs whose gap versus outside markets has been explained and marked tradable
+     (params/fair_explained.json verdict trade_yes / trade_no), value signals only, one leg per race (both legs of a
+@@ -333,6 +336,7 @@ class ArbScanner(threading.Thread):
+                 finally:
+                     b.mm.force_cancel = False
+             b.book_cache[ex] = (fb, bb, ba, fb.get("latestPrice"))
++            b.book_ts.pop(ex, None)                  # a feed book: never a last-look fallback under an older REST stamp
+             if summ.get("requoted"):
+                 self.fast_log.append(time.time())
+                 self.stats["fast_requotes"] = self.stats.get("fast_requotes", 0) + 1
+@@ -608,6 +612,7 @@ class Bot:
+         except Exception:
+             self.offload_live = False
+         self.latest_prices: tuple = ({}, 0.0)
++        self.book_ts: dict = {}                  # ex -> when book_cache[ex] was read from REST (MM last look)
+         self.rest_snapshot: tuple = ({}, 0.0)    # last REST bulk price snapshot (feed quotes are overlaid on it)
+         self.trade_lock = threading.Lock()
+         self.scanner = None
+@@ -1346,12 +1351,27 @@ class Bot:
+         return {ex: q - cu.get(ex, 0.0) for ex, q in positions.items()}
+ 
+     def mm_touch(self, ex: str):
+-        """Freshest (best bid, best ask) for the MM's last look before it sends quotes; None when no fresh book."""
+-        bk = self.fresh_book(ex, 10.0)
+-        if not bk:
+-            return None
+-        return ((bk.get("bids") or [{}])[0].get("price") if bk.get("bids") else None,
+-                (bk.get("asks") or [{}])[0].get("price") if bk.get("asks") else None)
++        """Freshest (best bid, best ask) for the MM's last look before it sends quotes, with no new read: the feed book when
++        the feed counts it fresh, else the newest of this cycle's REST order book for `ex` and the REST price snapshot
++        (rest_snapshot), if it is at most LASTLOOK_MAX_AGE old. None otherwise, and the MM then drops the quote. Before,
++        a stale feed book returned None and the quote went out unchecked (sim 'day' 24 Oct: during the feed outage an
++        MM bid went into the 0.76 ask on 932)."""
++        def touch(bk):
++            return ((bk.get("bids") or [{}])[0].get("price") if bk.get("bids") else None,
++                    (bk.get("asks") or [{}])[0].get("price") if bk.get("asks") else None)
++        bk = self.fresh_book(ex)
++        if bk:
++            return touch(bk)
++        now, best = time.time(), None
++        c, t = (self.book_cache.get(ex) or (None,))[0], (getattr(self, "book_ts", None) or {}).get(ex)
++        if c and t is not None and now - t <= LASTLOOK_MAX_AGE:
++            best = (t, touch(c))
++        snap, snap_ts = getattr(self, "rest_snapshot", None) or ({}, 0.0)   # stamped when REST was read (not when overlaid)
++        p = (snap or {}).get(ex) or {}
++        if (p.get("bestBid") is not None or p.get("bestAsk") is not None) and now - snap_ts <= LASTLOOK_MAX_AGE \
++                and (best is None or snap_ts > best[0]):
++            best = (snap_ts, (p.get("bestBid"), p.get("bestAsk")))
++        return best[1] if best else None
+ 
+     def catchup_cycle(self, dir_summary: dict, positions: dict, prices: dict, killed: bool):
+         """Catch-up sweep trial (proposals/outside_sweep.py): exits first (convergence, 12 h stop, outside disagreement or
+@@ -2089,6 +2109,7 @@ class Bot:
+                 if fb is not None:
+                     books[ex] = fb
+                     self.book_cache[ex] = (fb, fb.get("bestBid"), fb.get("bestAsk"), p.get("latestPrice"))
++                    self.book_ts.pop(ex, None)
+                     continue
+                 cached = self.book_cache.get(ex)
+                 st = self.mm.state.get(ex)
+@@ -2101,6 +2122,7 @@ class Bot:
+                     b = self.api.orderbook(ex, 10)
+                     books[ex] = b
+                     self.book_cache[ex] = (b,) + key
++                    self.book_ts[ex] = time.time()               # the MM's last look may use it while it is fresh
+                 except ApiError as e:
+                     log.warning("book %s: %s", ex, e)
+             write_budget = max(4, self.cfg.mm_write_budget - 4)   # leave room for the tilt sleeve
+diff --git a/tests/sim_pipeline.py b/tests/sim_pipeline.py
+index 0dc813b..d4db690 100644
+--- a/tests/sim_pipeline.py
++++ b/tests/sim_pipeline.py
+@@ -1552,6 +1552,53 @@ class FeedSilent(Scenario):
+                 v.shift(ex, -3)
+ 
+ 
++class MMOutageLastLook(Scenario):
++    name, cycles, seed = "mm_outage_lastlook", 90, 32
++    doc = "MM last look through a 10-min feed outage (sim 'day' 24 Oct): the feed goes silent while quoted touches keep moving; " \
++          "no MM quote may be sent for a market whose last look found no touch (it used to be sent unchecked)"
++
++    def bot_setup(self, sim):
++        b = sim.bot
++        self.last = {}
++        self.unchecked = []
++        orig = b.mm.touch_fn
++
++        def look(ex):
++            r = orig(ex)
++            self.last[str(ex)] = r
++            return r
++        b.mm.touch_fn = look
++        api = b.mm.api
++        orig_pb = api.place_batch
++
++        self.sent_in_outage = 0
++
++        def pb(orders, *a, **k):
++            for o in orders:
++                ex = str(o["exchangeId"])
++                if ex in self.last and self.last[ex] is None:
++                    self.unchecked.append((sim.v.now, ex, o["side"], o["price"]))
++            if sim.v.silent():
++                self.sent_in_outage += len(orders)
++            return orig_pb(orders, *a, **k)
++        api.place_batch = pb
++
++    def before_cycle(self, sim, i):
++        v = sim.v
++        if i == 20:
++            v.begin_silence(600)
++        if i in (22, 30, 38):
++            for ex in [ex for ex in sim.bot.mm.quoted if 0.2 <= v.mid(ex) <= 0.8][:4]:
++                v.shift(ex, -1 if i != 30 else 1)
++
++    def final_checks(self, sim):
++        for t, ex, side, px in self.unchecked:
++            sim.chk.violation("mm_quote_unchecked", f"{ex} {side} @{px} sent with no known touch (feed outage, t+{(t - T0) / 60:.1f} min)")
++        if self.sent_in_outage == 0:
++            sim.chk.violation("mm_dark_in_outage", "the MM sent no quote at all during the 10-min feed outage (checked quotes are expected)")
++        self.summary = {"unchecked": len(self.unchecked), "sent_in_outage": self.sent_in_outage}
++
++
+ class AonReject(Scenario):
+     name, cycles, seed = "aon_reject", 60, 19
+     doc = "standing 4% sell-sets in four races; baskets on two of them are always rejected (someone else takes the size first)"
+@@ -1722,7 +1769,7 @@ class Day(Scenario):
+ 
+ SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
+              ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
+-             Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
++             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, Day]
+ 
+ 
+ # ======================================================================================== main
+diff --git a/tests/test_guards.py b/tests/test_guards.py
+index 76c3563..b9e5f6c 100644
+--- a/tests/test_guards.py
++++ b/tests/test_guards.py
+@@ -1207,5 +1207,44 @@ finally:
+ check("cheapfav bot: an entry whose response has no orderId blocks that leg for 1 h (its fill could not be attributed)",
+       _n1 == 1 and len(_bad) == 1 and _b.cheapfav_skip.get("r1", 0) > 0, f"{_bad} {_b.cheapfav_skip}")
+ 
++# ---------------------------------------------------------------- 24 Oct: MM last look when the feed book is stale (sim 'day' cycle 1500)
++from sigbot.mm import MarketMaker as _MMk  # noqa: E402
++_Q = lambda ex, side, yp: types.SimpleNamespace(exchange_id=ex, side=side, yes_price=yp)
++_looks = []
++def _tf(ex):
++    _looks.append(ex)
++    return {"932": (0.75, 0.76), "940": None}.get(ex, (0.40, 0.45))
++_llst = {}
++_kept = _MMk.last_look([(_Q("932", "yes", 0.76), {}), (_Q("932", "yes", 0.755), {}), (_Q("932", "no", 0.75), {}), (_Q("932", "no", 0.765), {}),
++                        (_Q("940", "yes", 0.30), {}), (_Q("950", "yes", 0.41), {})], _tf, _llst)
++check("mm last look: a bid at the ask and an ask at the bid are dropped, passive quotes kept",
++      [(q.exchange_id, q.side, q.yes_price) for q, _ in _kept] == [("932", "yes", 0.755), ("932", "no", 0.765), ("950", "yes", 0.41)],
++      str([(q.exchange_id, q.side, q.yes_price) for q, _ in _kept]))
++check("mm last look: an unknown touch drops the quote instead of sending it unchecked", not any(q.exchange_id == "940" for q, _ in _kept))
++check("mm last look: one look per exchange per batch", sorted(_looks) == ["932", "940", "950"], str(_looks))
++check("mm last look: unknown-touch drops are counted apart from crossings", _llst == {"crossing": 2, "unknown": 1}, str(_llst))
++_now = time.time()
++def _mtb(feed=None, cache=None, cache_ts=None, snap=None, snap_ts=0.0):
++    return types.SimpleNamespace(fresh_book=lambda ex, age=None: feed, book_cache={"932": (cache, 0, 0, 0)} if cache else {},
++                                 book_ts={"932": cache_ts} if cache_ts is not None else {}, rest_snapshot=(snap or {}, snap_ts))
++_bk = lambda b, a: {"bids": [{"price": b, "quantity": 5}], "asks": [{"price": a, "quantity": 5}]}
++check("mm_touch: a fresh feed book is used as is", R.Bot.mm_touch(_mtb(feed=_bk(0.70, 0.72)), "932") == (0.70, 0.72))
++check("mm_touch: stale feed book -> this cycle's REST book (3 s old): touch 0.75/0.76, so the 0.76 bid is dropped",
++      R.Bot.mm_touch(_mtb(cache=_bk(0.75, 0.76), cache_ts=_now - 3), "932") == (0.75, 0.76))
++check("mm_touch: stale feed book -> the newer of the REST book and the price snapshot",
++      R.Bot.mm_touch(_mtb(cache=_bk(0.75, 0.765), cache_ts=_now - 10, snap={"932": {"bestBid": 0.755, "bestAsk": 0.76}}, snap_ts=_now - 2), "932")
++      == (0.755, 0.76))
++check("mm_touch: stale feed book and only touches older than 15 s -> None (the quote is dropped, never sent unchecked)",
++      R.Bot.mm_touch(_mtb(cache=_bk(0.75, 0.76), cache_ts=_now - 40, snap={"932": {"bestBid": 0.75, "bestAsk": 0.76}}, snap_ts=_now - 40), "932") is None
++      and R.Bot.mm_touch(_mtb(), "932") is None)
++check("mm_touch: a book_cache entry without a REST read time (a feed book) is never used as a fallback",
++      R.Bot.mm_touch(_mtb(cache=_bk(0.75, 0.76)), "932") is None)
++_mmsrc = open(os.path.join(ROOT, "sigbot", "mm.py")).read()
++check("mm: with no touch to check against, a market keeps its resting quotes (no cancel, not left dark)",
++      _mmsrc.find("if tf is not None and tf(ex) is None:") != -1 and _mmsrc.find("if tf is not None and tf(ex) is None:") < _mmsrc.find("self.api.cancel_all(exchange_id=ex)\n                        self.store.mark_orders"))
++_rs7 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
++check("mm_touch: the snapshot fallback is the REST snapshot stamped at read time; feed books written to book_cache clear its REST stamp",
++      'getattr(self, "rest_snapshot", None)' in _rs7 and _rs7.count("book_ts.pop(ex, None)") >= 2)
++
+ print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
+ sys.exit(1 if FAILS else 0)

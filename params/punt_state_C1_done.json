@@ -1,0 +1,164 @@
+{
+ "plan_id": "C1",
+ "sha": "d1d46ffe3d646e665383b5aefc5b39af044000a2ecc6b8d038619e9640ae275b",
+ "steps": {
+  "c1_buy": {
+   "status": "done",
+   "base": 856.0,
+   "n": 3,
+   "orders": [
+    {
+     "id": 74805603,
+     "key": "punt-C1-c1_buy-0-d1d46ffe",
+     "ex": "842",
+     "side": "no",
+     "qty": 3529,
+     "price": 0.255,
+     "t": 1793476810.139562,
+     "exp": 1793476835.970198,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 74806883,
+     "key": "punt-C1-c1_buy-1-d1d46ffe",
+     "ex": "842",
+     "side": "no",
+     "qty": 3529,
+     "price": 0.255,
+     "t": 1793476878.516609,
+     "exp": 1793476907.7512991,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 74808381,
+     "key": "punt-C1-c1_buy-2-d1d46ffe",
+     "ex": "842",
+     "side": "no",
+     "qty": 3138,
+     "price": 0.255,
+     "t": 1793476948.036543,
+     "exp": 1793476977.0951731,
+     "purpose": "punt",
+     "closed": true
+    }
+   ],
+   "last": 1793476948.036543,
+   "errors": 0,
+   "committed": 2599.98,
+   "polls": 0,
+   "chosen": null,
+   "filled": 10196.0,
+   "cleared": [
+    "842"
+   ],
+   "pending": null
+  },
+  "c1_exit": {
+   "status": "done",
+   "base": 11052.0,
+   "n": 4,
+   "orders": [
+    {
+     "id": 79061637,
+     "key": "punt-C1-c1_exit-0-d1d46ffe",
+     "ex": "842",
+     "side": "yes",
+     "qty": 3000,
+     "price": 0.8,
+     "t": 1793725214.413811,
+     "exp": 1793725236.673392,
+     "purpose": "punt_exit",
+     "closed": true
+    },
+    {
+     "id": 79074214,
+     "key": "punt-C1-c1_exit-1-d1d46ffe",
+     "ex": "842",
+     "side": "yes",
+     "qty": 3000,
+     "price": 0.8,
+     "t": 1793725818.530833,
+     "exp": 1793725848.115026,
+     "purpose": "punt_exit",
+     "closed": true
+    },
+    {
+     "id": 79085975,
+     "key": "punt-C1-c1_exit-2-d1d46ffe",
+     "ex": "842",
+     "side": "yes",
+     "qty": 3000,
+     "price": 0.8,
+     "t": 1793726430.238776,
+     "exp": 1793726458.729099,
+     "purpose": "punt_exit",
+     "closed": true
+    },
+    {
+     "id": 79097716,
+     "key": "punt-C1-c1_exit-3-d1d46ffe",
+     "ex": "842",
+     "side": "yes",
+     "qty": 1196,
+     "price": 0.8,
+     "t": 1793727035.315988,
+     "exp": 1793727064.844914,
+     "purpose": "punt_exit"
+    }
+   ],
+   "last": 1793727035.315988,
+   "errors": 0,
+   "committed": 0.0,
+   "polls": 0,
+   "chosen": null,
+   "bought": 10196.0,
+   "sold": 9000.0,
+   "cleared": [
+    "842"
+   ],
+   "pending": null
+  }
+ },
+ "aborted": null,
+ "log": [
+  [
+   1793476810.140057,
+   "c1_buy: BUY 842 no x3529 limit 0.255 (key punt-C1-c1_buy-0-d1d46ffe)"
+  ],
+  [
+   1793476878.516934,
+   "c1_buy: BUY 842 no x3529 limit 0.255 (key punt-C1-c1_buy-1-d1d46ffe)"
+  ],
+  [
+   1793476948.0372999,
+   "c1_buy: BUY 842 no x3138 limit 0.255 (key punt-C1-c1_buy-2-d1d46ffe)"
+  ],
+  [
+   1793477017.021467,
+   "c1_buy: complete: 10196 shares for ~2600"
+  ],
+  [
+   1793725214.415901,
+   "c1_exit: SELL 842 yes x3000 limit 0.8 (key punt-C1-c1_exit-0-d1d46ffe)"
+  ],
+  [
+   1793725818.5322392,
+   "c1_exit: SELL 842 yes x3000 limit 0.8 (key punt-C1-c1_exit-1-d1d46ffe)"
+  ],
+  [
+   1793726430.239584,
+   "c1_exit: SELL 842 yes x3000 limit 0.8 (key punt-C1-c1_exit-2-d1d46ffe)"
+  ],
+  [
+   1793727035.316374,
+   "c1_exit: SELL 842 yes x1196 limit 0.8 (key punt-C1-c1_exit-3-d1d46ffe)"
+  ],
+  [
+   1793727043.8841002,
+   "c1_exit: sold 9000 (nothing left to sell)"
+  ]
+ ],
+ "timed_until": null
+}

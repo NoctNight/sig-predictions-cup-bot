@@ -1,7 +1,194 @@
-{"plan_id": "C1", "budget": 2600, "cap_exempt": false,
+{
+ "plan_id": "P2",
+ "note": "3 Nov live re-price (research_notes/punt_live_3nov.md). Approved by Sizhe in chat 3 Nov ('Yes, run P2'). Budget 81k -> 125k 3 Nov 23:3x UTC: Sizhe 'it should be all in' (non-punt holdings sold into stage 1).",
+ "budget": 125000,
+ "cap_exempt": true,
  "steps": [
-  {"id": "c1_buy", "kind": "buy", "exchange_id": "842", "side": "no", "max_price": 0.26, "max_cash": 2600, "chunk_cash": 900,
-   "start": "2026-10-31T16:00:00-04:00", "stop": "2026-11-01T16:00:00-05:00", "min_gap_sec": 60, "abort_if_outside_below": 0.24},
-  {"id": "c1_exit", "kind": "sell", "of_step": "c1_buy", "min_price": 0.20, "chunk_shares": 3000, "timed_exit": true,
-   "start": "2026-11-03T12:00:00-05:00", "stop": "2026-11-03T15:00:00-05:00", "min_gap_sec": 600}
- ]}
+  {
+   "id": "s1",
+   "kind": "buy",
+   "exchange_id": "875",
+   "side": "yes",
+   "max_price": 0.205,
+   "max_cash": 125000,
+   "chunk_cash": 5000,
+   "start": "2026-11-03T17:30:00-05:00",
+   "stop": "2026-11-03T19:45:00-05:00",
+   "min_gap_sec": 20,
+   "abort_if_outside_below": 0.05
+  },
+  {
+   "id": "s1_sell",
+   "kind": "sell",
+   "of_step": "s1",
+   "min_price": 0.85,
+   "chunk_shares": 20000,
+   "outside_min": 0.95,
+   "outside_polls": 3,
+   "single_venue_min": 0.97,
+   "start": "2026-11-03T19:45:00-05:00",
+   "stop": "2026-11-04T04:00:00-05:00",
+   "min_gap_sec": 20
+  },
+  {
+   "id": "s2",
+   "kind": "target_buy",
+   "after_step": "s1_sell",
+   "min_sold_frac": 0.7,
+   "target_min": 1350000,
+   "target_k_leader": 1.12,
+   "target_fallback": 1400000,
+   "max_cash": 400000,
+   "candidates": [
+    {
+     "exchange_id": "1023",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "934",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "1046",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "884",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "992",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "896",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "905",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "983",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "1022",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "1048",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "907",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "1020",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "957",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "1004",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "933",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "1041",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "858",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "867",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "1050",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "903",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "937",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "915",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "899",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    },
+    {
+     "exchange_id": "1026",
+     "side": "yes",
+     "max_price": 0.2,
+     "min_price": 0.02
+    }
+   ],
+   "chunk_cash": 10000,
+   "start": "2026-11-03T22:00:00-05:00",
+   "stop": "2026-11-04T04:00:00-05:00",
+   "min_gap_sec": 20
+  }
+ ]
+}

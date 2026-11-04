@@ -1,0 +1,759 @@
+diff --git a/config.json b/config.json
+index e3ab3a4..6e8b56e 100644
+--- a/config.json
++++ b/config.json
+@@ -128,5 +128,13 @@
+   "churn_capital": 4000.0,
+   "churn_cash_floor": 3000.0,
+   "churn_kill": -200.0,
+-  "churn_skip_holding": 4000.0
++  "churn_skip_holding": 4000.0,
++  "cheapfav_enabled": true,
++  "cheapfav_budget": 15000.0,
++  "cheapfav_min_edge": 0.02,
++  "cheapfav_leg_cap": 2000.0,
++  "cheapfav_order_notional": 500.0,
++  "cheapfav_cash_floor": 1000.0,
++  "cheapfav_net_max": 2000.0,
++  "cheapfav_headroom": 1000.0
+ }
+\ No newline at end of file
+diff --git a/sigbot/config.py b/sigbot/config.py
+index 3824e60..16b1d7a 100644
+--- a/sigbot/config.py
++++ b/sigbot/config.py
+@@ -201,6 +201,14 @@ class BotConfig:
+     churn_cash_floor: float = 3000.0
+     churn_kill: float = -600.0
+     churn_skip_holding: float = 4000.0   # no entries in races where we already hold > this many shares on a leg (0 = off)
++    cheapfav_enabled: bool = False       # cheap safe favourites (proposals/cheap_favourites): buy fast-count favourites SIG prices
++    cheapfav_budget: float = 15000.0     # >= cheapfav_min_edge under the outside fair, hold through the call; total cost cap,
++    cheapfav_min_edge: float = 0.02      # min edge at the touch (+1c on single-venue legs),
++    cheapfav_leg_cap: float = 2000.0     # cost per race outcome,
++    cheapfav_order_notional: float = 500.0   # per order (touch only, <= 80% of the touch),
++    cheapfav_cash_floor: float = 1000.0  # never spend cash below this
++    cheapfav_net_max: float = 2000.0     # the sleeve's own net D cost stays within +-this whatever the book
++    cheapfav_headroom: float = 1000.0    # an add that widens the book's |net D| keeps it this far under the partisan cap
+     election_per_race_cap: float = 5000.0
+     election_total_cap: float = 90000.0
+     election_poll_sec: float = 4.0
+diff --git a/sigbot/run.py b/sigbot/run.py
+index 118f13f..638d509 100644
+--- a/sigbot/run.py
++++ b/sigbot/run.py
+@@ -48,12 +48,19 @@ from .proposals.dmm_lag_follow import LagFollower
+ from .proposals.inside_quoter import InsideQuoter
+ from .proposals.volatile_moves import MoveDetector, VolatileMoves
+ from .proposals.outside_sweep import CatchupSweep, pnl_from_fills, rows_from_venue_quotes
++from .proposals import cheap_favourites as CF
+ from .proposals.dev_churn import (DevChurn, overround_series, medians_from_series, vol_ratio, mid_overround, big_holding,
+                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
+ from .proposals import election_night as EN
+ from .proposals.own_book import OwnLevels
+ 
+ 
++def cheapfav_races_of(bot) -> set:
++    """Races the cheap-favourites sleeve holds (empty when the sleeve is not wired, e.g. on test stubs)."""
++    f = getattr(bot, "cheapfav_races", None)
++    return f() if callable(f) else set()
++
++
+ class ExplainedDirection(DirectionTrader):
+     """Directional sleeve restricted to legs whose gap versus outside markets has been explained and marked tradable
+     (params/fair_explained.json verdict trade_yes / trade_no), value signals only, one leg per race (both legs of a
+@@ -421,9 +428,10 @@ class ArbScanner(threading.Thread):
+         if time.time() - b.last_free_unwind < b.cfg.free_unwind_scan_sec:
+             return
+         held = {}
++        cf_races = cheapfav_races_of(b)                  # a cheap-favourite NO next to another sleeve's NO is not a set
+         for rname in list(b.arb.committed):
+             race = b.universe.races.get(rname)
+-            if race is None:
++            if race is None or rname in cf_races:
+                 continue
+             fb = {ex: b.fresh_book(ex, 30.0) for ex in race.exchange_ids}
+             if all(v is not None for v in fb.values()):
+@@ -507,6 +515,18 @@ class Bot:
+                 log.info("catchup: %d stored quote rows loaded as history (%d legs)", len(boot), len({r["exchange_id"] for r in boot}))
+             except Exception as e:
+                 log.warning("catchup history load: %s", e)
++        self.cheapfav = None
++        if getattr(cfg, "cheapfav_enabled", False):
++            same = CF.same_terms_exchanges(os.path.join(HERE, "data", "research_contract_rules", "tc_mapping.json"))
++            if same is None:
++                log.warning("cheapfav: data/research_contract_rules/tc_mapping.json missing: sleeve stays off")
++            else:
++                self.cheapfav = CF.CheapFavourites(budget=cfg.cheapfav_budget, min_edge=cfg.cheapfav_min_edge, leg_cap=cfg.cheapfav_leg_cap,
++                                                   order_notional=cfg.cheapfav_order_notional, cash_floor=cfg.cheapfav_cash_floor,
++                                                   hold_limit=getattr(cfg, "churn_skip_holding", 4000.0) or 4000.0, same_terms=same,
++                                                   net_max=cfg.cheapfav_net_max, headroom=cfg.cheapfav_headroom)
++                log.warning("CHEAPFAV sleeve enabled: budget %.0f, min edge %.3f, %.0f per leg, %d same-terms legs",
++                            cfg.cheapfav_budget, cfg.cheapfav_min_edge, cfg.cheapfav_leg_cap, len(same))
+         self.churn = (DevChurn(capital=cfg.churn_capital, cash_floor=cfg.churn_cash_floor, kill=cfg.churn_kill)
+                       if getattr(cfg, "churn_enabled", False) else None)
+         self.churn_state_path = os.path.join(HERE, "params", "churn_state.json")
+@@ -532,6 +552,17 @@ class Bot:
+         if self.churn is not None:
+             self.arb.protected = lambda: {l["race"] for l in self.churn.lots}
+             self.arb.no_buy = self.churn_no_buy
++        self.cheapfav_open: dict = {}
++        self.cheapfav_skip: dict = {}            # exchange -> until: an entry whose response had no orderId (ledger blind)
++        if self.cheapfav is not None:
++            # races holding cheap-favourite positions are never unwound by the recycler / free unwinds / offload: a cheapfav
++            # R-NO next to another sleeve's D-NO looks like an arb set to every set path (review 24 Oct)
++            _prot = self.arb.protected
++            self.arb.protected = lambda: set(_prot()) | self.cheapfav_races()
++            try:
++                self.cheapfav_refresh()
++            except Exception as e:
++                log.warning("cheapfav ledger at start-up: %s", e)
+         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
+         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
+         self.tilt = TiltHarvester(self.api, self.store, cfg.tilt, self.universe, cfg.starting_cash, dry_run)
+@@ -1132,6 +1163,8 @@ class Bot:
+                 race = self.universe.races.get(rname)
+                 if race is None or len(race.exchange_ids) != 2 or rname in CHURN_EXCLUDE or ch.held(rname) > 0:
+                     continue
++                if rname in cheapfav_races_of(self):
++                    continue                                   # cheap-favourite NO legs are not sets: held to the call
+                 n = venue_sets(race)
+                 if n <= 0:
+                     continue
+@@ -1150,6 +1183,8 @@ class Bot:
+             for race in self.universe.races.values():
+                 if not ch.eligible(race, now) or race.name in self.arb.hostile or self.arb.cooldown.get(race.name, 0) > now:
+                     continue
++                if race.name in cheapfav_races_of(self):
++                    continue                                   # cheap-favourite race: the two ledgers stay apart
+                 med = self.churn_med.get(race.name)
+                 if med is None:
+                     continue
+@@ -1225,9 +1260,11 @@ class Bot:
+         log.info("order books saved: %d markets -> data/books_latest.json", len(books))
+ 
+     def mm_positions(self, positions: dict) -> dict:
+-        """Positions the MM manages: the venue's, minus the catch-up sweep's own open positions (the MM used to count
+-        them as inventory and skew to unload them before they converged; review 23 Oct)."""
+-        cu = getattr(self, "catchup_open", None) or {}
++        """Positions the MM manages: the venue's, minus the catch-up sweep's and the cheap-favourites sleeve's own open
++        positions (the MM used to count them as inventory and skew to unload them before they converged; review 23 Oct)."""
++        cu = dict(getattr(self, "catchup_open", None) or {})
++        for ex, q in (getattr(self, "cheapfav_open", None) or {}).items():   # held to the call: not MM inventory either
++            cu[ex] = cu.get(ex, 0.0) + q
+         if not cu:
+             return positions
+         return {ex: q - cu.get(ex, 0.0) for ex, q in positions.items()}
+@@ -1341,6 +1378,157 @@ class Bot:
+             except OSError as e:
+                 log.warning("catchup state: %s", e)
+ 
++    def cheapfav_races(self) -> set:
++        """Races where the cheap-favourites sleeve holds a position (its ledger, rebuilt from fills)."""
++        bx = self.universe.by_exchange
++        return {bx[ex][0] for ex in (getattr(self, "cheapfav_open", None) or {}) if ex in bx}
++
++    def cheapfav_refresh(self):
++        race_of = {ex: (r[0], r[1]) for ex, r in self.universe.by_exchange.items()}
++        fills = [dict(r) for r in self.store.rows("SELECT order_id, exchange_id, quantity, price FROM fills WHERE purpose IN ('cheapfav','cheapfav_exit') "
++                                                  "AND price IS NOT NULL ORDER BY filled_at")]
++        open_pos, _cost, held, deployed = CF.ledger(fills, race_of)
++        self.cheapfav_open = dict(open_pos)          # the MM excludes these from its inventory; the set paths leave their races alone
++        return fills, race_of, open_pos, held, deployed
++
++    def cheapfav_cycle(self, dir_summary: dict, positions: dict, prices: dict, killed: bool):
++        """Cheap safe favourites (proposals/cheap_favourites.py): exits only on a reversed edge, then entries on a fresh
++        directional poll. The ledger is the fills table (purposes cheapfav / cheapfav_exit), so a restart cannot lose a
++        position. One order per exchange in flight (60 s TTL); at most 3 entries per poll."""
++        cf = self.cheapfav
++        if cf is None or self.dry_run or self.store is None:
++            return
++        now = time.time()
++        rows = getattr(self.direction, "rows", None) or []
++        byex = {str(r["exchange_id"]): r for r in rows if r.get("exchange_id")}
++        fills, race_of, open_pos, held, deployed = self.cheapfav_refresh()
++        # entry orders of the last 3 min (60 s TTL + ingest lag) not yet in the fills table count as held: a lagging fill
++        # ingest must not let the sleeve buy the same leg twice, and their notional counts on the partisan axis (review 24 Oct)
++        filled_by_order: dict = {}
++        for f in fills:
++            k = str(f.get("order_id"))
++            filled_by_order[k] = filled_by_order.get(k, 0.0) + abs(float(f["quantity"]))
++        recent = [dict(r) for r in self.store.rows("SELECT order_id, exchange_id, side, price, quantity FROM orders WHERE purpose='cheapfav' "
++                                                   "AND placed_at > ?", (now - 180,))]
++        pend, pend_total = CF.pending(recent, filled_by_order, race_of)
++        own_filled = sum(x if k[1] == "D" else -x for k, x in held.items())       # the sleeve's filled net D cost
++        for k, x in pend.items():
++            held[k] = held.get(k, 0.0) + x
++        deployed += pend_total
++        # partisan: pending counted one-sided (D only against D adds, R only against R adds; review 24 Oct)
++        cf_pend = (own_filled, sum(x for k, x in pend.items() if k[1] == "D"), sum(x for k, x in pend.items() if k[1] == "R"))
++        resting = {str(r["exchange_id"]) for r in self.store.rows(
++            "SELECT exchange_id FROM orders WHERE purpose IN ('cheapfav','cheapfav_exit') AND status='open' AND placed_at > ?", (now - 90,))}
++        cf_ids = {str(r["order_id"]) for r in self.store.rows("SELECT order_id FROM orders WHERE purpose IN ('cheapfav','cheapfav_exit') AND placed_at > ?",
++                                                             (now - 6 * 3600,))}
++        for ex_o, lst in (self.open_orders_cache or {}).items():
++            if any(str(o.get("id")) in cf_ids for o in lst):
++                resting.add(str(ex_o))                 # the venue still shows one of our orders resting here
++        ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
++        lock = getattr(self, "trade_lock", None)
++        if lock is None:
++            self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary)
++            return
++        with lock:                                   # the scanner thread trades sets between cycles: read its snapshot here
++            self._cheapfav_trade(cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary)
++
++    def _cheapfav_trade(self, cf, now, rows, byex, race_of, open_pos, held, deployed, cf_pend, resting, ttl, positions, prices, killed, dir_summary):
++        positions = getattr(self, "positions_snapshot", None) or positions
++        # one exit per leg per 5 min, filled or not: if the fill ingest fails after an exit filled, the ledger still shows
++        # the holding and a second exit would flip it (review 24 Oct); a reversed edge is not urgent
++        exited = {str(r["exchange_id"]) for r in self.store.rows(
++            "SELECT exchange_id FROM orders WHERE purpose='cheapfav_exit' AND placed_at > ?", (now - 300,))}
++        for ex, q in open_pos.items():
++            if ex in resting or ex in exited or ex not in race_of:
++                continue
++            why = cf.exit_reason(ex, q, byex.get(ex), race_of[ex][0], now)
++            if not why:
++                continue
++            bk = self.fresh_book(ex, 10.0)
++            if not bk:
++                continue                               # a reversed edge is not urgent: wait for a fresh book
++            # close exactly the sleeve's own holding (its fills ledger), not the venue's net position: other sleeves trade the
++            # same legs (the MM and lag-follow can be net short where this sleeve is long), every sleeve keeps its own ledger,
++            # and mm_positions subtracts this one's, so closing the ledger quantity keeps all books consistent. Clamping to
++            # the venue's net (sim cheapfav, 24 Oct: ledger +174 YES, venue -1,426 after a lag-follow short) blocks the exit.
++            n = int(abs(q))
++            if q > 0 and bk.get("bids") and n >= 1 and bk["bids"][0]["price"] - byex[ex]["fair"] >= CF.REVERSE - 1e-9:
++                side, px = "no", round(1 - bk["bids"][0]["price"], 3)
++            elif q < 0 and bk.get("asks") and n >= 1 and byex[ex]["fair"] - bk["asks"][0]["price"] >= CF.REVERSE - 1e-9:
++                side, px = "yes", round(bk["asks"][0]["price"], 3)
++            else:
++                continue
++            try:
++                resp = self.api.place_order(ex, side, "buy", n, px, expiration=ttl, key=self.api.new_key("cfx"))
++                self.store.record_order(resp.get("orderId"), ex, None, side, "buy", px, n, "cheapfav_exit", response=resp)
++                log.info("CHEAPFAV exit %s %s x%d @%.3f (%s)", ex, side, n, px, why)
++            except ApiError as e:
++                log.warning("cheapfav exit %s: %s", ex, e)
++        if killed or not dir_summary.get("polled") or now > cf.last_entry or not positions:
++            return                                   # no positions (read failed): every holding guard would be blind
++        race_legs = {r.name: list(r.exchange_ids) for r in self.universe.races.values()}
++        ch = getattr(self, "churn", None)               # races the high-frequency arb holds sets in: its ledger books what
++        skip = getattr(self, "cheapfav_skip", None) or {}
++        # the catch-up sweep has priority: never trade a race where it holds a position or an entry context
++        cu_ex = set(getattr(self, "catchup_open", None) or {}) | set(getattr(getattr(self, "catchup", None), "ctx", None) or {})
++        cu_races = {self.universe.by_exchange[e][0] for e in cu_ex if e in self.universe.by_exchange}
++        cands = [c for c in cf.candidates(rows, positions, race_legs) if c["exchange_id"] not in resting   # the venue shows,
++                 and not (ch is not None and ch.held(c["race"])) and skip.get(c["exchange_id"], 0) <= now   # keep them apart
++                 and c["race"] not in cu_races]
++        if not cands:
++            return
++        touch = {}
++        for c in cands:
++            bk = self.fresh_book(c["exchange_id"], 10.0)
++            if not bk:
++                continue
++            if c["side"] == "yes" and bk.get("asks"):
++                touch[c["exchange_id"]] = (bk["asks"][0]["price"], bk["asks"][0]["quantity"])
++            elif c["side"] == "no" and bk.get("bids"):
++                touch[c["exchange_id"]] = (round(1 - bk["bids"][0]["price"], 3), bk["bids"][0]["quantity"])
++        # the book's net D from a positions read made now, under the lock: the catch-up sweep, the direction sleeve and the
++        # scanner may have traded since the cycle started (review 24 Oct: a stale snapshot let the book pass 5,000)
++        fr = getattr(self, "fresh_positions", None)
++        if callable(fr):
++            fresh = fr()
++            if fresh is None:
++                return                                   # read failed: no entries this cycle
++            positions = fresh
++        expo = risk.exposure(self.universe, positions, prices)
++        # unfilled entry orders of the directional sleeves, one-sided like ours: placed in the last 330 s (the longest TTL,
++        # the inside quoter's 300 s) or still resting at the venue (tilt orders can rest for hours); review 24 Oct
++        resting_ids = {str(o.get("id")) for lst in (getattr(self, "open_orders_cache", None) or {}).values() for o in lst}
++        others = [dict(r) for r in self.store.rows("SELECT order_id, exchange_id, side, quantity, price, placed_at FROM orders WHERE purpose IN "
++                                                   "('catchup','direction','tilt','inside') AND (placed_at > ? OR status='open')", (now - 330,))]
++        others = [o for o in others if float(o.get("placed_at") or 0) > now - 330 or str(o.get("order_id")) in resting_ids]
++        o_filled: dict = {}
++        if others:
++            for f in self.store.rows("SELECT order_id, quantity FROM fills WHERE purpose IN ('catchup','direction','tilt','inside') "
++                                     "AND ingested_at > ?", (now - 6 * 3600,)):
++                o_filled[str(f["order_id"])] = o_filled.get(str(f["order_id"]), 0.0) + abs(float(f["quantity"]))
++        pend_d, pend_r = cf_pend[1], cf_pend[2]
++        for o in others:
++            left = float(o["quantity"]) - o_filled.get(str(o.get("order_id")), 0.0)
++            d = risk.adds(self.universe, str(o["exchange_id"]), o["side"])
++            if left >= 1 and d in ("D", "R"):
++                n = left * float(o["price"])
++                pend_d, pend_r = (pend_d + n, pend_r) if d == "D" else (pend_d, pend_r + n)
++        orders = cf.entries(cands, held, deployed, self.cash, now, touch, positions, expo.net_d_notional,
++                            cap=self.cfg.mm.portfolio_max_partisan_notional, pend=(pend_d, pend_r), own=cf_pend,
++                            blocked=set(getattr(getattr(self, "mm", None), "blocked", None) or set()))   # the bot's block this cycle
++        for o in orders:
++            try:
++                resp = self.api.place_order(o["exchange_id"], o["side"], "buy", o["qty"], o["price"], expiration=ttl, key=self.api.new_key("cf"))
++                self.store.record_order(resp.get("orderId"), o["exchange_id"], None, o["side"], "buy", o["price"], o["qty"], "cheapfav", response=resp)
++                if resp.get("orderId") is None:          # its fill cannot be attributed: never buy this leg again blind
++                    self.cheapfav_skip = dict(getattr(self, "cheapfav_skip", None) or {}, **{o["exchange_id"]: now + 3600})
++                    log.error("CHEAPFAV entry %s: no orderId in the response; leg skipped for 1 h", o["exchange_id"])
++                self.cash -= o["notional"]
++                log.info("CHEAPFAV enter %s %s (%s %s) x%d @%.3f: fair %.3f, edge %.1fc", o["race"], o["win_party"], o["exchange_id"], o["side"],
++                         o["qty"], o["price"], o["p_win"], 100 * (o["p_win"] - o["price"]))
++            except ApiError as e:
++                log.warning("cheapfav entry %s: %s", o["exchange_id"], e)
++
+     def volatile_cycle(self):
+         """research_notes/volatile_moves.md: after a sweep of 5+ ticks, quotes on the retrace side lost about 1 tick over the
+         next hour (t -5.4), so the MM's level-1 quote on that side is paused for an hour (after an up move: the ask). The
+@@ -1886,6 +2074,13 @@ class Bot:
+         self.mm.xv_fair = {r["exchange_id"]: (r.get("fair"), r.get("pm"), r.get("kalshi"), r.get("ts") or time.time())
+                            for r in (getattr(self.direction, "rows", None) or []) if r.get("fair") is not None and r.get("exchange_id")}
+ 
++        # ---- cheap safe favourites: buy fast-count favourites SIG prices >= 2c under the outside fair, hold to the call
++        if self.cheapfav is not None:
++            try:
++                self.cheapfav_cycle(dir_summary, positions, prices, killed)
++            except Exception as e:                   # the sleeve must never kill the loop
++                log.exception("cheapfav cycle failed: %s", e)
++
+         # ---- volatile moves: pause the MM's retrace side after a 5+ tick move (verified), paper-log the move trades
+         if self.feed_ok():
+             try:
+@@ -1906,7 +2101,10 @@ class Bot:
+             if self.arb.committed and time.time() - self.last_free_unwind > self.cfg.free_unwind_every_sec:
+                 self.last_free_unwind = time.time()
+                 held_books = {}
++                cf_races = cheapfav_races_of(self)       # a cheap-favourite NO next to another sleeve's NO is not a set
+                 for rname in list(self.arb.committed):
++                    if rname in cf_races:
++                        continue
+                     try:
+                         held_books[rname] = {ex: self.get_book(ex, 50) for ex in self.universe.races[rname].exchange_ids}
+                     except ApiError as e:
+diff --git a/tests/sim_pipeline.py b/tests/sim_pipeline.py
+index e826c5e..090d6bb 100644
+--- a/tests/sim_pipeline.py
++++ b/tests/sim_pipeline.py
+@@ -104,6 +104,10 @@ def make_sandbox() -> str:
+         src = os.path.join(ROOT, "data", f)
+         if os.path.exists(src):
+             shutil.copyfile(src, os.path.join(sb, "data", f))   # copyfile: fresh mtime, so the volume cache counts as recent
++    tc = os.path.join(ROOT, "data", "research_contract_rules", "tc_mapping.json")
++    if os.path.exists(tc):                                        # the cheap-favourites sleeve trades same-terms legs only
++        os.makedirs(os.path.join(sb, "data", "research_contract_rules"))
++        shutil.copyfile(tc, os.path.join(sb, "data", "research_contract_rules", "tc_mapping.json"))
+     return sb
+ 
+ 
+@@ -807,6 +811,82 @@ class Catchup(Scenario):
+         self.summary = {"entries": len(entries), "exits": len(calls) - len(entries), "open_at_end": {e: q for e, q in pos.items() if abs(q) >= 1}}
+ 
+ 
++class CheapFav(Scenario):
++    name, cycles, seed = "cheapfav", 240, 31
++    cfg = {"cheapfav_enabled": True, "cheapfav_budget": 6000.0, "cheapfav_leg_cap": 1500.0}
++    doc = "cheap safe favourites: the outside fair de-compresses SIG's mids (favourites 2-5c cheap on SIG); buy fast-count favourites only (same terms, p >= 0.80, edge >= 2c, no punt or slow-count race), <= 6k in total and 1.5k per race outcome, never past 4,000 shares on a leg; at cycle 150 the outside fair of one held leg falls 4c under SIG: exit that leg only"
++
++    def before_cycle(self, sim, i):
++        v = sim.v
++        if i == 150:
++            held = getattr(sim.bot, "cheapfav_open", None) or {}
++            self.reversed = None
++            for ex, q in sorted(held.items()):
++                race = sim.universe.race_of(ex)
++                if race is None or len(race.legs) != 2:
++                    continue
++                other = [e for e in race.exchange_ids if e != ex][0]
++                if q > 0:                                       # held YES: fair falls 4c under SIG's bid
++                    v.outside[ex] = round(SV.P(v.bid_t[ex]) - 0.04, 4)
++                else:                                           # held NO: fair rises 4c over SIG's ask
++                    v.outside[ex] = round(SV.P(v.ask_t[ex]) + 0.04, 4)
++                v.outside[other] = round(1 - v.outside[ex], 4)
++                self.reversed, self.t_rev = ex, v.now
++                break
++
++    def final_checks(self, sim):
++        CF = sim.M["cheap_favourites"]
++        same = CF.same_terms_exchanges(os.path.join(sim.sb, "data", "research_contract_rules", "tc_mapping.json")) or set()
++        calls = [c for c in sim.v.calls if c["kind"] == "order" and c["prefix"] in ("cf", "cfx")]
++        entries = [c for c in calls if c["prefix"] == "cf"]
++        exits = [c for c in calls if c["prefix"] == "cfx"]
++        if not entries:
++            sim.chk.violation("cheapfav_none", "no cheap-favourite entry although SIG's favourites sit 2-5c under the outside fair")
++        rev = getattr(self, "reversed", None)
++        for c in entries:
++            race = sim.universe.race_of(c["ex"])
++            st = CF.race_state(race.name) if race else None
++            if race is None or c["ex"] not in same or st not in CF.FAST_CLOSE_ET or race.name in CF.PUNT_RACES or "I" in race.legs:
++                sim.chk.violation("cheapfav_bad_leg", f"{c['key']} {c['ex']} ({race.name if race else '?'}): not a same-terms fast-count two-party race")
++                continue
++            if c["ex"] == rev and c["t"] >= self.t_rev:
++                sim.chk.violation("cheapfav_after_reversal", f"{c['key']} bought {c['ex']} after its edge reversed")
++            if c["ex"] != rev or c["t"] < self.t_rev:
++                f = sim.v.outside[c["ex"]] if c["ex"] != rev else None
++                if f is not None:
++                    p_win = f if c["side"] == "yes" else 1 - f
++                    if p_win < 0.80 - 1e-9 or p_win - c["price"] < 0.02 - 1e-9:
++                        sim.chk.violation("cheapfav_no_edge", f"{c['key']} {c['ex']} {c['side']} @{c['price']}: P(win) {p_win:.3f}, edge {p_win - c['price']:.3f}")
++            after = c["pos_before"] + (c["qty"] if c["side"] == "yes" else -c["qty"])
++            if abs(after) > 4000 + 1e-9:
++                sim.chk.violation("cheapfav_over_4000", f"{c['key']} {c['ex']}: leg position {after:+.0f} shares > 4,000")
++        fills = [dict(r) for r in sim.bot.store.rows("SELECT exchange_id, quantity, price FROM fills WHERE purpose IN ('cheapfav','cheapfav_exit') ORDER BY filled_at")]
++        race_of = {ex: r for ex, r in sim.universe.by_exchange.items()}
++        tot, per = 0.0, {}
++        for f in fills:
++            q, p = float(f["quantity"]), float(f["price"])
++            if any(e["ex"] == f["exchange_id"] for e in exits) and f["exchange_id"] == rev:
++                continue
++            paid = q * p if q > 0 else -q * (1 - p)
++            r = race_of.get(f["exchange_id"])
++            win = r[1] if q > 0 else ("R" if r[1] == "D" else "D")
++            per[(r[0], win)] = per.get((r[0], win), 0.0) + paid
++            tot += paid
++        if tot > 6000 + 1:
++            sim.chk.violation("cheapfav_budget", f"sleeve bought {tot:.0f} > budget 6,000")
++        for k, x in per.items():
++            if x > 1500 + 1:
++                sim.chk.violation("cheapfav_leg_cap", f"{k}: {x:.0f} > 1,500 per race outcome")
++        for c in exits:
++            if c["ex"] != rev:
++                sim.chk.violation("cheapfav_exit_unwanted", f"{c['key']} exited {c['ex']} although its edge never reversed")
++        if rev and not exits:
++            sim.chk.violation("cheapfav_no_exit", f"{rev}: edge reversed by 4c, held position not closed")
++        _op, _c, _h, dep = CF.ledger(fills, race_of)
++        self.summary = {"entries": len(entries), "exits": len(exits), "deployed": round(dep), "legs": len(_op), "reversed": rev,
++                        "per_outcome_max": round(max(per.values())) if per else 0}
++
++
+ class DevChurnSim(Scenario):
+     name, cycles, seed = "churn", 200, 29
+     cfg = {"churn_enabled": True}
+@@ -1640,7 +1720,7 @@ class Day(Scenario):
+                         "killed": ch.killed, "vol_paused": ch.vol_paused}
+ 
+ 
+-SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
++SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
+              ChurnMany, ChurnManyLowCash, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
+              Offload, SlowWrites, FeedSilent, AonReject, InsideOn, Day]
+ 
+@@ -1652,6 +1732,7 @@ def import_sandbox(sb):
+     names = ["config", "api", "universe", "store", "risk", "arb", "mm", "tilt", "direction", "allocator", "run"]
+     mods = {n: importlib.import_module("sigbot." + n) for n in names}
+     mods["xv_gate"] = importlib.import_module("sigbot.proposals.mm_upgrade").xv_gate
++    mods["cheap_favourites"] = importlib.import_module("sigbot.proposals.cheap_favourites")
+     assert os.path.dirname(os.path.dirname(os.path.abspath(mods["run"].__file__))) == sb, "sigbot was not imported from the sandbox"
+     return mods
+ 
+diff --git a/tests/test_guards.py b/tests/test_guards.py
+index 9061779..36e5f1c 100644
+--- a/tests/test_guards.py
++++ b/tests/test_guards.py
+@@ -887,5 +887,311 @@ check("offload unwind_set: a failed re-read sends nothing",
+ check("recycle and offload call sites pass the re-read hook",
+       _rs6.count("refresh=b.fresh_positions") >= 2 and "cycle_id, refresh=self.fresh_positions)" in _rs6 and _rs6.count("refresh=self.fresh_positions") >= 3)
+ 
++# ---------------------------------------------------------------- 24 Oct: cheap safe favourites (proposals/cheap_favourites.py)
++from sigbot.proposals import cheap_favourites as CF  # noqa: E402
++_same = CF.same_terms_exchanges(os.path.join(ROOT, "data", "research_contract_rules", "tc_mapping.json"))
++check("cheapfav: contract map: Rhode Island Senate legs are same-terms; GA Senate (runoff, late) is not; a missing file gives None",
++      _same is not None and {"1076", "1077"} <= _same and not any(
++          v.get("race") == "Georgia Senate" and str(k) in _same for k, v in __import__("json").load(open(os.path.join(ROOT, "data", "research_contract_rules", "tc_mapping.json"))).items()
++          if isinstance(v, dict)) and CF.same_terms_exchanges("/nonexistent/tc.json") is None)
++
++
++def _fr(race, party, ex, fair, bid, ask, pm=None, k=None):
++    pm = fair if pm is None else pm
++    k = fair if k is None else k
++    return {"race": race, "party": party, "exchange_id": ex, "fair": fair, "sig_bid": bid, "sig_ask": ask, "pm": pm, "kalshi": k}
++
++
++_RI = [_fr("Rhode Island Senate", "D", "d1", 0.984, 0.865, 0.875), _fr("Rhode Island Senate", "R", "r1", 0.016, 0.135, 0.14)]
++_cf = CF.CheapFavourites(same_terms={"d1", "r1", "d2", "r2", "d3", "r3", "d4", "r4", "d5", "r5", "d6", "r6", "i6", "d7", "r7"})
++_c = _cf.candidates(_RI, {})
++check("cheapfav: one route per race outcome: RI Senate D via R-NO at 0.865 (edge 11.9c) beats D-YES at 0.875",
++      len(_c) == 1 and _c[0]["exchange_id"] == "r1" and _c[0]["side"] == "no" and abs(_c[0]["price"] - 0.865) < 1e-9 and _c[0]["win_party"] == "D", str(_c))
++_c = _cf.candidates(_RI, {"r1": 300.0})
++check("cheapfav: never a route that trades against a holding on that leg (held R YES -> buy D YES instead of R NO)",
++      len(_c) == 1 and _c[0]["exchange_id"] == "d1" and _c[0]["side"] == "yes", str(_c))
++check("cheapfav: no candidates in a race where we hold > 4,000 shares on a leg", _cf.candidates(_RI, {"d1": -4100.0}) == [])
++check("cheapfav: legs not in the same-terms map are never traded", CF.CheapFavourites(same_terms={"zz"}).candidates(_RI, {}) == []
++      and CF.CheapFavourites(same_terms=None).candidates(_RI, {}) == [])
++_slow = [_fr("Arizona Governor", "D", "d2", 0.95, 0.88, 0.89), _fr("Arizona Governor", "R", "r2", 0.05, 0.11, 0.12)]
++_late = [_fr("Alaska Senate", "D", "d3", 0.95, 0.88, 0.89), _fr("Alaska Senate", "R", "r3", 0.05, 0.11, 0.12)]
++_punt = [_fr("Minnesota Senate", "D", "d4", 0.95, 0.88, 0.89), _fr("Minnesota Senate", "R", "r4", 0.05, 0.11, 0.12)]
++check("cheapfav: slow-count states (AZ, AK) and the punt's candidate races (MN Senate) are skipped",
++      _cf.candidates(_slow + _late + _punt, {}) == [])
++_lowfav = [_fr("Ohio Senate", "D", "d5", 0.70, 0.60, 0.61), _fr("Ohio Senate", "R", "r5", 0.30, 0.39, 0.40)]
++check("cheapfav: favourites only (p >= 0.80): a 0.70 leg 9c cheap is not bought", _cf.candidates(_lowfav, {}) == [])
++_ind = [_fr("Nebraska Senate", "D", "d6", 0.02, 0.01, 0.02), _fr("Nebraska Senate", "R", "r6", 0.95, 0.90, 0.91),
++        _fr("Nebraska Senate", "I", "i6", 0.03, 0.02, 0.03)]
++check("cheapfav: no race with an Independent leg", _cf.candidates(_ind, {}) == [])
++_dis = [_fr("Rhode Island Senate", "D", "d1", 0.95, 0.88, 0.89, pm=0.97, k=0.92), _fr("Rhode Island Senate", "R", "r1", 0.05, 0.11, 0.12, pm=0.03, k=0.08)]
++check("cheapfav: no entry while Polymarket and Kalshi disagree by > 4 pts", _cf.candidates(_dis, {}) == [])
++_one = [_fr("Kentucky Senate", "D", "d7", 0.026, 0.050, 0.055, k=None), _fr("Kentucky Senate", "R", "r7", 0.974, 0.94, 0.95, k=None)]
++_one[0]["kalshi"] = _one[1]["kalshi"] = None
++_c = _cf.candidates(_one, {})
++check("cheapfav: single-venue legs need 3c: KY Senate R via D-NO at 0.950 (2.4c) skipped, at 0.945 (2.9c) still skipped",
++      _c == [] and _cf.candidates([dict(_one[0], sig_bid=0.04), dict(_one[1], sig_ask=0.96)], {}) == [])
++_c4 = _cf.candidates([dict(_one[0], sig_bid=0.06), dict(_one[1], sig_ask=0.96)], {})
++check("cheapfav: ... and at 0.940 (3.4c) bought", len(_c4) == 1 and _c4[0]["side"] == "no", str(_c4))
++
++_cands = [{"race": "B Senate", "win_party": "D", "exchange_id": "b", "side": "yes", "price": 0.875, "p_win": 0.984, "edge": 0.109, "weight": 6.8},
++          {"race": "A Senate", "win_party": "R", "exchange_id": "a", "side": "no", "price": 0.935, "p_win": 0.987, "edge": 0.052, "weight": 4.0},
++          {"race": "C Senate", "win_party": "R", "exchange_id": "c", "side": "yes", "price": 0.910, "p_win": 0.949, "edge": 0.039, "weight": 0.8}]
++_cf2 = CF.CheapFavourites(budget=3000, leg_cap=1500, order_notional=500)
++_t = _cf2.targets(_cands)
++check("cheapfav: targets spend the budget by weight, each leg capped at 1,500", abs(sum(_t.values()) - 3000) < 1 and max(_t.values()) <= 1500 + 1e-6
++      and _t[("B Senate", "D")] == 1500, str(_t))
++_touch = {"a": (0.935, 5000), "b": (0.875, 5000), "c": (0.910, 5000)}
++_P = {"other": 10.0}                       # a non-empty positions read (empty = the read failed)
++_o = _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 6300.0)
++check("cheapfav: book over the partisan cap on the D side (+6,300): D favourites blocked, R favourites bought (orders <= 500)",
++      [x["exchange_id"] for x in _o] == ["a", "c"] and all(x["notional"] <= 500 + 1e-6 for x in _o), str(_o))
++_o = _cf2.entries(_cands[:1], {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 3600.0)
++_o2 = _cf2.entries(_cands[:1], {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 3400.0)
++check("cheapfav: 1,000 of partisan headroom left to the other sleeves: a 500 D order is refused at +3,600 (4,100) and allowed at +3,400",
++      _o == [] and len(_o2) == 1, f"{_o} {_o2}")
++_o = _cf2.entries(_cands[:1], {("X Senate", "D"): 1800.0}, 1800.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 0.0)
++_o2 = _cf2.entries(_cands[1:2], {("X Senate", "R"): 1800.0}, 1800.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 6300.0)
++check("cheapfav: the sleeve's own net D stays within +-2,000 whatever the book (own +1,800: no 500 D; own -1,800: no 500 R even "
++      "while the book is long D)", _o == [] and _o2 == [], f"{_o} {_o2}")
++_D3 = [dict(_cands[0], race=r, exchange_id=e) for r, e in (("B Senate", "b"), ("E Senate", "e"), ("F Senate", "f"))]
++_t3 = {"b": (0.875, 5000), "e": (0.875, 5000), "f": (0.875, 5000)}
++_o = _cf2.entries(_D3, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _t3, _P, 3400.0, pend=(0.0, 1500.0), own=(0.0, 0.0, 1500.0))
++check("cheapfav: unfilled R orders never make room for D adds (book +3,400 with 1,500 R pending that expired: one 500 D, not three)",
++      len(_o) == 1, str(_o))
++_o = _cf2.entries(_D3, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _t3, _P, 3000.0, pend=(1200.0, 0.0))
++check("cheapfav: another sleeve's unfilled D orders count against D adds (book +3,000, 1,200 D in flight: no D add)", _o == [], str(_o))
++_o = _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 0.0, blocked={"D"})
++check("cheapfav: never adds to a direction the bot blocked this cycle (D blocked at net D 0: only R favourites)",
++      [x["win_party"] for x in _o] == ["R", "R"], str(_o))
++_o = _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 6300.0)
++check("cheapfav: book long D over the cap: R favourites (narrowing the book) are bought within the own-net band",
++      [x["win_party"] for x in _o] == ["R", "R"] and sum(x["notional"] for x in _o) > 0, str(_o))
++_o = _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 0.0)
++check("cheapfav: with room: one order per leg, highest weight first, at the touch", [x["exchange_id"] for x in _o] == ["b", "a", "c"]
++      and _o[0]["qty"] == int(500 / 0.875), str(_o))
++check("cheapfav: no entries after 3 Nov 17:30 ET", _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY + 1, _touch, _P, 0.0) == [])
++check("cheapfav: budget used up -> no entries; cash floor respected",
++      _cf2.entries(_cands, {}, 3000.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 0.0) == []
++      and sum(x["notional"] for x in _cf2.entries(_cands, {}, 0.0, 1600.0, CF.LAST_ENTRY - 3600, _touch, _P, 0.0)) <= 600 + 1e-6)
++check("cheapfav: a leg's target reached -> no more orders on it",
++      "b" not in [x["exchange_id"] for x in _cf2.entries(_cands, {("B Senate", "D"): 1500.0}, 1500.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 0.0)])
++_o = _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, {"b": (0.875, 5000)}, {"b": 3800.0}, 0.0)
++check("cheapfav: never takes a leg past 4,000 shares (held 3,800 -> at most 200 more)", len(_o) == 1 and _o[0]["qty"] == 200, str(_o))
++_o = _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, {"b": (0.97, 5000), "a": (0.935, 100)}, _P, 0.0)
++check("cheapfav: fresh book without the edge -> skipped; small touch -> at most 80% of it", [(x["exchange_id"], x["qty"]) for x in _o] == [("a", 80)], str(_o))
++
++_now = CF.LAST_ENTRY - 3600
++check("cheapfav: no exit while the edge holds; exit when SIG's bid is >= 2c above the fair on a held YES",
++      _cf.exit_reason("d1", 500.0, _fr("Rhode Island Senate", "D", "d1", 0.95, 0.94, 0.945), "Rhode Island Senate", _now) is None
++      and _cf.exit_reason("d1", 500.0, _fr("Rhode Island Senate", "D", "d1", 0.95, 0.97, 0.975), "Rhode Island Senate", _now) is not None)
++check("cheapfav: held NO exits when SIG's ask is >= 2c under the fair",
++      _cf.exit_reason("r1", -500.0, _fr("Rhode Island Senate", "R", "r1", 0.05, 0.025, 0.03), "Rhode Island Senate", _now) is not None)
++check("cheapfav: no exit after the state's polls close (RI 20:00 ET), or while the venues disagree",
++      _cf.exit_reason("d1", 500.0, _fr("Rhode Island Senate", "D", "d1", 0.95, 0.97, 0.975), "Rhode Island Senate",
++                      CF.poll_close_ts("RI") + 1) is None
++      and _cf.exit_reason("d1", 500.0, _fr("Rhode Island Senate", "D", "d1", 0.95, 0.97, 0.975, pm=0.99, k=0.92), "Rhode Island Senate", _now) is None)
++_op, _cost, _held, _dep = CF.ledger([{"exchange_id": "r1", "quantity": -1000.0, "price": 0.135},
++                                     {"exchange_id": "r1", "quantity": 400.0, "price": 0.11},
++                                     {"exchange_id": "d1", "quantity": 500.0, "price": 0.875}], {"r1": ("RI", "R"), "d1": ("RI", "D")})
++check("cheapfav: ledger from fills: NO 1,000 @0.865 then 400 closed -> 600 held costing 519; D outcome holds both legs",
++      _op == {"r1": -600.0, "d1": 500.0} and abs(_cost["r1"] - 519.0) < 1e-6 and abs(_held[("RI", "D")] - (519.0 + 437.5)) < 1e-6
++      and abs(_dep - 956.5) < 1e-6, f"{_op} {_cost} {_held} {_dep}")
++
++
++class _FStore:
++    def __init__(self, fills, recent=()): self.fills, self.orders, self.recent = fills, [], list(recent)
++    def rows(self, q, a=()):
++        if "FROM fills" in q: return self.fills
++        if "FROM orders WHERE purpose='cheapfav' AND placed_at" in q: return self.recent
++        if "FROM orders WHERE purpose='cheapfav_exit' AND placed_at" in q: return getattr(self, "recent_exits", [])
++        if "FROM orders WHERE purpose IN ('catchup'" in q: return getattr(self, "others", [])
++        return []
++    def record_order(self, oid, ex, mid, side, act, px, q, purpose, **k): self.orders.append((ex, side, px, q, purpose))
++
++
++def _cfbot(fills, rows, positions, net_d, killed=False, polled=True, now_ok=True, dry=False, recent=(), extra_bx=None):
++    sent = []
++    uni = types.SimpleNamespace(by_exchange=dict({"d1": ("Rhode Island Senate", "D"), "r1": ("Rhode Island Senate", "R")}, **(extra_bx or {})), races={})
++    bks = {"d1": {"bids": [{"price": 0.865, "quantity": 5000}], "asks": [{"price": 0.875, "quantity": 5000}]},
++           "r1": {"bids": [{"price": 0.135, "quantity": 5000}], "asks": [{"price": 0.14, "quantity": 5000}]}}
++    cf = CF.CheapFavourites(budget=3000, leg_cap=1500, same_terms={"d1", "r1"})
++    if not now_ok:
++        cf.last_entry = 0.0
++    b = types.SimpleNamespace(cheapfav=cf, dry_run=dry, store=_FStore(fills, recent), direction=types.SimpleNamespace(rows=rows), universe=uni,
++                              open_orders_cache={}, cash=20000.0, cfg=types.SimpleNamespace(mm=types.SimpleNamespace(portfolio_max_partisan_notional=5000.0)),
++                              fresh_book=lambda ex, age=None: bks.get(ex),
++                              api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: sent.append((ex, side, q, px, key)) or {"orderId": len(sent)},
++                                                        new_key=lambda p: p))
++    b.cheapfav_refresh = lambda: R.Bot.cheapfav_refresh(b)
++    b._cheapfav_trade = lambda *x: R.Bot._cheapfav_trade(b, *x)
++    _orig = R.risk.exposure
++    R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=net_d)
++    try:
++        R.Bot.cheapfav_cycle(b, {"polled": polled}, positions, {}, killed)
++    finally:
++        R.risk.exposure = _orig
++    return b, sent
++
++
++_b, _sent = _cfbot([], _RI, _P, 0.0)
++check("cheapfav bot: one entry (RI Senate D via R NO @0.865 = 1 - 0.135), purpose cheapfav, <= 500 notional",
++      len(_sent) == 1 and _sent[0][:2] == ("r1", "no") and abs(_sent[0][3] - 0.865) < 1e-9 and _sent[0][2] * _sent[0][3] <= 500 + 1e-6
++      and _b.store.orders[0][4] == "cheapfav", str(_sent))
++check("cheapfav bot: nothing when the kill switch is on, without a fresh poll, after the last entry, or in dry run",
++      _cfbot([], _RI, _P, 0.0, killed=True)[1] == [] and _cfbot([], _RI, _P, 0.0, polled=False)[1] == []
++      and _cfbot([], _RI, _P, 0.0, now_ok=False)[1] == [] and _cfbot([], _RI, _P, 0.0, dry=True)[1] == [])
++check("cheapfav bot: D favourite blocked while the book is over the partisan cap", _cfbot([], _RI, _P, 6300.0)[1] == [])
++_rev = [_fr("Rhode Island Senate", "D", "d1", 0.84, 0.865, 0.875), _fr("Rhode Island Senate", "R", "r1", 0.16, 0.135, 0.14)]
++_b, _sent = _cfbot([{"exchange_id": "r1", "quantity": -600.0, "price": 0.135}], _rev, {"r1": -600.0}, 0.0)
++check("cheapfav bot: reversed edge (SIG R ask 0.14 <= fair 0.16 - 2c) -> close the 600 held NO by buying YES @0.14, purpose cheapfav_exit",
++      ("r1", "yes", 600, 0.14, "cfx") in _sent and any(o[4] == "cheapfav_exit" for o in _b.store.orders), str(_sent))
++_b, _sent = _cfbot([{"exchange_id": "r1", "quantity": -600.0, "price": 0.135}], _RI, {"r1": -600.0}, 0.0)
++check("cheapfav bot: restart-safe: the held position is rebuilt from fills, not exited while the edge holds, and the MM does not see it",
++      not any(x[4] == "cfx" for x in _sent) and _b.cheapfav_open == {"r1": -600.0}
++      and R.Bot.mm_positions(types.SimpleNamespace(catchup_open={}, cheapfav_open={"r1": -600.0}), {"r1": -650.0}) == {"r1": -50.0}, str(_sent))
++check("cheapfav: off by default", __import__("sigbot.config", fromlist=["BotConfig"]).BotConfig().cheapfav_enabled is False)
++check("cheapfav: live config.json runs it at the approved 15k (24 Oct): edge 2c, 2,000 per leg, 500 orders, floor 1,000",
++      _live.get("cheapfav_enabled") is True and _live.get("cheapfav_budget") == 15000.0 and _live.get("cheapfav_min_edge") == 0.02
++      and _live.get("cheapfav_leg_cap") == 2000.0 and _live.get("cheapfav_order_notional") == 500.0 and _live.get("cheapfav_cash_floor") == 1000.0)
++# review 24 Oct (Fable): holes found in the first draft
++check("cheapfav bot: positions read failed (empty map): no entries, the 4,000-share / no-crossing / partisan guards would be blind",
++      _cfbot([], _RI, {}, 0.0)[1] == [] and _cf2.entries(_cands, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, {}, 0.0) == [])
++_b, _sent = _cfbot([], _RI, _P, 0.0, recent=[{"order_id": 9, "exchange_id": "r1", "side": "no", "price": 0.865, "quantity": 1734}])
++check("cheapfav bot: an entry order not yet in the fills table counts as held: the leg is not bought twice while the ingest lags",
++      _sent == [], str(_sent))
++_b, _sent = _cfbot([{"order_id": 9, "exchange_id": "r1", "quantity": -578.0, "price": 0.135}], _RI, _P, 0.0,
++                   recent=[{"order_id": 9, "exchange_id": "r1", "side": "no", "price": 0.865, "quantity": 578}])
++check("cheapfav bot: ... and a filled order is counted once (fills), not twice (fills + pending): the leg keeps buying to its target",
++      len(_sent) == 1 and _sent[0][0] == "r1", str(_sent))
++_c = _cf.candidates([dict(_one[0], sig_bid=0.06), dict(_one[1], sig_ask=0.96)], {})
++check("cheapfav: single-venue leg: the fresh-book recheck keeps the 3c bar (2.5c at the touch -> no order)",
++      len(_c) == 1 and _c[0]["need"] > 0.029 and _cf.entries(_c, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, {_c[0]["exchange_id"]: (0.949, 5000)}, _P, 0.0) == []
++      and len(_cf.entries(_c, {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, {_c[0]["exchange_id"]: (0.94, 5000)}, _P, 0.0)) == 1, str(_c))
++check("cheapfav: the > 4,000-share race skip also sees legs without a directional row",
++      _cf.candidates(_RI[:1], {"r1": -4100.0}, {"Rhode Island Senate": ["d1", "r1"]}) == [] and len(_cf.candidates(_RI[:1], {"r1": -4100.0})) == 1)
++check("cheapfav: the headroom follows the cap (cap 3,000: no D add at +2,850)",
++      _cf2.entries(_cands[:1], {}, 0.0, 20000.0, CF.LAST_ENTRY - 3600, _touch, _P, 2850.0, cap=3000.0) == [])
++_b, _sent = _cfbot([{"exchange_id": "r1", "quantity": -600.0, "price": 0.135}], _rev, {"r1": -200.0}, 0.0)
++_b0, _ = _cfbot([], _RI, _P, 0.0)
++_b0.churn = types.SimpleNamespace(held=lambda race: 2000 if race == "Rhode Island Senate" else 0)
++_sent0 = []
++_b0.api = types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: _sent0.append((ex, side, q, px)) or {"orderId": 1},
++                                new_key=lambda p: p)
++_b0.store = _FStore([])
++_b0.cheapfav_refresh = lambda: R.Bot.cheapfav_refresh(_b0)
++_b0._cheapfav_trade = lambda *x: R.Bot._cheapfav_trade(_b0, *x)
++_orig_e = R.risk.exposure
++R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=0.0)
++try:
++    R.Bot.cheapfav_cycle(_b0, {"polled": True}, _P, {}, False)
++finally:
++    R.risk.exposure = _orig_e
++check("cheapfav bot: no entries in a race where the high-frequency arb holds sets (the two ledgers stay apart)", _sent0 == [], str(_sent0))
++def _cfbot2(**attrs):
++    b, _ = _cfbot([], _RI, _P, 0.0, dry=True)          # built, then run live with extra attributes
++    b.dry_run = False
++    for k, v in attrs.items():
++        setattr(b, k, v)
++    sent = []
++    b.api = types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: sent.append((ex, side, q, px)) or {"orderId": 1},
++                                  new_key=lambda p: p)
++    b.store = _FStore([])
++    _o = R.risk.exposure
++    R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=0.0)
++    try:
++        R.Bot.cheapfav_cycle(b, {"polled": True}, _P, {}, False)
++    finally:
++        R.risk.exposure = _o
++    return sent
++check("cheapfav bot: honours the bot's own partisan block (mm.blocked = {'D'}: no D favourite; precheck inside_on 24 Oct)",
++      _cfbot2(mm=types.SimpleNamespace(blocked={"D"})) == [] and len(_cfbot2(mm=types.SimpleNamespace(blocked=set()))) == 1)
++import time as _tm
++def _cfbot3(net_d, others=(), fresh=lambda: {"other": 10.0}):
++    b, _ = _cfbot([], _RI, _P, 0.0, dry=True)
++    b.dry_run, b.fresh_positions = False, fresh
++    sent = []
++    b.api = types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: sent.append((ex, side, q, px)) or {"orderId": 1},
++                                  new_key=lambda p: p)
++    b.store = _FStore([])
++    b.store.others = list(others)
++    _o = R.risk.exposure
++    R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=net_d)
++    try:
++        R.Bot.cheapfav_cycle(b, {"polled": True}, _P, {}, False)
++    finally:
++        R.risk.exposure = _o
++    return sent
++check("cheapfav bot: a catch-up D order sent earlier this cycle and not yet filled counts against D adds (book 3,000 + 1,200 in flight)",
++      _cfbot3(3000.0, [{"order_id": 77, "exchange_id": "d1", "side": "yes", "quantity": 1300, "price": 0.92, "placed_at": _tm.time() - 20}]) == []
++      and len(_cfbot3(3000.0)) == 1)
++check("cheapfav bot: entries use a positions read made under the lock; none if that read fails", _cfbot3(0.0, fresh=lambda: None) == [])
++import time as _tm
++check("cheapfav bot: an inside-quoter D order 4 min old (300 s TTL) still counts against D adds (book 3,000 + 1,200)",
++      _cfbot3(3000.0, [{"order_id": 78, "exchange_id": "d1", "side": "yes", "quantity": 1300, "price": 0.92, "placed_at": _tm.time() - 240}]) == [])
++check("cheapfav bot: the catch-up sweep has priority: no entry in a race where it holds a position or an entry context",
++      _cfbot2(catchup_open={"d1": 300.0}) == [] and _cfbot2(catchup=types.SimpleNamespace(ctx={"r1": {}})) == [])
++check("cheapfav bot: an exit closes the sleeve's own ledger (600 NO) even when the venue's net is smaller (other sleeves trade the leg)",
++      ("r1", "yes", 600, 0.14, "cfx") in _sent, str(_sent))
++_b, _sent = _cfbot([{"exchange_id": "r1", "quantity": -600.0, "price": 0.135}], _rev, {"r1": 1426.0}, 0.0)
++check("cheapfav bot: ... and when another sleeve is net the other way on that leg (sim cheapfav 24 Oct: a clamp to the venue blocked it)",
++      ("r1", "yes", 600, 0.14, "cfx") in _sent, str(_sent))
++_b, _ = _cfbot([], _rev, _P, 0.0)
++_xs = []
++_b.store = _FStore([{"exchange_id": "r1", "quantity": -600.0, "price": 0.135}])
++_b.store.recent_exits = [{"exchange_id": "r1"}]      # an exit sent 2 min ago; its fill not ingested yet
++_b.api = types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: _xs.append((ex, side, q, px, key)) or {"orderId": 1},
++                               new_key=lambda p: p)
++_orig_e = R.risk.exposure
++R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=0.0)
++try:
++    R.Bot.cheapfav_cycle(_b, {"polled": True}, {"r1": -600.0}, {}, False)
++finally:
++    R.risk.exposure = _orig_e
++check("cheapfav bot: no second exit on a leg within 5 min of the last one (a failed fill ingest cannot flip the position)",
++      not any(x[4] == "cfx" for x in _xs), str(_xs))
++# review 24 Oct (Fable, rebased patch)
++_c = _cf.candidates(_RI, {"d1": -300.0}, {"Rhode Island Senate": ["d1", "r1"]})
++check("cheapfav: never a NO next to a NO on another leg (D NO held -> no R NO route; D YES blocked by the no-crossing rule)",
++      _c == [], str(_c))
++_b, _sent = _cfbot([], _RI, _P, 0.0, recent=[{"order_id": 9, "exchange_id": "zz", "side": "yes", "price": 0.9, "quantity": 5000}],
++                   extra_bx={"zz": ("Ohio Senate", "D")})
++_b2, _sent2 = _cfbot([], _RI, _P, 0.0)
++check("cheapfav bot: unfilled cheap-favourite orders count on the partisan axis (4,500 D pending at net D 0 -> no D add; none pending -> buys)",
++      _sent == [] and len(_sent2) == 1, f"{_sent} {_sent2}")
++_b = _cfbot([{"exchange_id": "r1", "quantity": -600.0, "price": 0.135}], _RI, _P, 0.0)[0]
++_b.universe = types.SimpleNamespace(by_exchange={"d1": ("Rhode Island Senate", "D"), "r1": ("Rhode Island Senate", "R")}, races={})
++check("cheapfav bot: races it holds are protected from the set paths (cheapfav_races)", R.Bot.cheapfav_races(_b) == {"Rhode Island Senate"})
++_rs4 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
++check("cheapfav wiring: arb.protected includes cheap-favourite races; churn sell-all and churn entries skip them; entries trade under the lock",
++      "self.arb.protected = lambda: set(_prot()) | self.cheapfav_races()" in _rs4 and _rs4.count("in cheapfav_races_of(self):") >= 2
++      and "with lock:                                   # the scanner thread trades sets between cycles" in _rs4
++      and _rs4.count("in cf_races:") >= 1 and _rs4.count("or rname in cf_races:") >= 1)
++_fu_seen = []
++_fub = types.SimpleNamespace(arb=types.SimpleNamespace(committed={"Rhode Island Senate": 1.0, "Ohio Senate": 1.0},
++                                                       free_unwinds=lambda held, pos, cid, **k: _fu_seen.append(sorted(held)) or []),
++                             fresh_positions=lambda: {},
++                             feed_ok=lambda: True, killed_until=0.0, last_free_unwind=0.0, cfg=types.SimpleNamespace(free_unwind_scan_sec=0.0),
++                             universe=types.SimpleNamespace(races={"Rhode Island Senate": types.SimpleNamespace(exchange_ids=["d1", "r1"]),
++                                                                   "Ohio Senate": types.SimpleNamespace(exchange_ids=["d5", "r5"])}),
++                             fresh_book=lambda ex, age=None: {"bids": [], "asks": []}, trade_lock=threading.Lock(), positions_snapshot={},
++                             cheapfav_races=lambda: {"Rhode Island Senate"})
++R.ArbScanner.free_unwind_pass(types.SimpleNamespace(bot=_fub))
++check("cheapfav: the scanner's free unwinds never touch a race the cheap-favourites sleeve holds", _fu_seen == [["Ohio Senate"]], str(_fu_seen))
++_b, _sent = _cfbot([], _RI, _P, 0.0)
++_b.cheapfav_skip = {}
++_bad = []
++_b.api = types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: _bad.append(ex) or {}, new_key=lambda p: p)
++_b.store = _FStore([])
++_orig_e = R.risk.exposure
++R.risk.exposure = lambda u, p, pr: types.SimpleNamespace(net_d_notional=0.0)
++try:
++    R.Bot.cheapfav_cycle(_b, {"polled": True}, _P, {}, False)
++    _n1 = len(_bad)
++    R.Bot.cheapfav_cycle(_b, {"polled": True}, _P, {}, False)
++finally:
++    R.risk.exposure = _orig_e
++check("cheapfav bot: an entry whose response has no orderId blocks that leg for 1 h (its fill could not be attributed)",
++      _n1 == 1 and len(_bad) == 1 and _b.cheapfav_skip.get("r1", 0) > 0, f"{_bad} {_b.cheapfav_skip}")
++
+ print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
+ sys.exit(1 if FAILS else 0)

@@ -1,0 +1,105 @@
+diff --git a/sigbot/proposals/dev_churn.py b/sigbot/proposals/dev_churn.py
+index 6e3e5d2..f4734ea 100644
+--- a/sigbot/proposals/dev_churn.py
++++ b/sigbot/proposals/dev_churn.py
+@@ -4,7 +4,7 @@ round trip earns 2 ticks per set, or after 24 h; the cash is then reused for the
+ Evidence: research_notes/arb_convergence.md (a race's gap to payout sits around its own normal level and only the part
+ above that level reverts, halving in 2-5 h). Fable double-check: honest estimate +0.4k to 3 Nov (range -1k..+2k), 20%
+ of baskets rejected in the bot's own logs; Sizhe chose to run it live. Hence the caps: 12k pot, cash floor 3k, the sleeve
+-stops entering at -600 (realised + open at the touch) and then sells at the touch, a race 6 ticks per set under water is
++stops entering at -600 (realised + open at the touch) and then sells at the touch, a race 9 ticks per set under water is
+ sold at the touch (no re-entry there for 24 h), no entries after 1 Nov 00:00 UTC and every set in a race it traded sold by
+ 3 Nov 22:30 UTC (17:30 ET), before the punt.
+ 
+@@ -37,9 +37,10 @@ VOL_BASE = 72 * 3600.0          # ... vs the 3 days before it
+ VOL_PAUSE = 1.5                 # pause new entries when recent gap movement >= 1.5x normal
+ VOL_RESUME = 1.2                # resume only below 1.2x (no flapping)
+ SELL_ALL_AT = datetime(2026, 11, 3, 22, 30, tzinfo=timezone.utc).timestamp()   # 17:30 ET, before the punt
+-LOSS_EXIT = 0.030               # sell a race at the touch once its open loss reaches 6 ticks per set (Fable 24 Oct) ...
++LOSS_EXIT = 0.045               # sell a race at the touch once its open loss reaches 9 ticks per set (Fable 24 Oct: 6; widened
++                                # to 9 after research_notes/param_audit.md: 4 of 17 replayed trades sold at -6..-9 and recovered) ...
+ LOSS_REENTRY_GAP = 24 * 3600.0  # ... and leave that race alone for 24 h (no buy-lose-rebuy loop on a gap that keeps widening)
+-LOSS_WHY = "loss >= 6 ticks per set"
++LOSS_WHY = "loss >= 9 ticks per set"
+ STOP_WHY = "stop reached: sell at the touch"
+ 
+ 
+@@ -207,7 +208,7 @@ class DevChurn:
+ 
+     # ------------------------------------------------------------------ exits
+     def exit_reason(self, lot: dict, proceeds: Optional[float], now: float) -> Optional[str]:
+-        """proceeds = what selling one set back fetches now (unwind_quote, walked asks). The stop and a 6-tick loss per set
++        """proceeds = what selling one set back fetches now (unwind_quote, walked asks). The stop and a 9-tick loss per set
+         sell at the touch instead of holding to 24 h (Fable 24 Oct: a widening gap was held to the 24-h exit)."""
+         if sell_all_due(now):
+             return "sell everything before the 3 Nov punt"
+diff --git a/sigbot/run.py b/sigbot/run.py
+index 638d509..c9a7be1 100644
+--- a/sigbot/run.py
++++ b/sigbot/run.py
+@@ -1001,7 +1001,7 @@ class Bot:
+ 
+     def churn_cycle(self, positions: dict, killed: bool, cycle_id=None):
+         """Deviation churn (proposals/dev_churn.py), "high-frequency arb": exits first (+2 ticks/set, 24 h; the stop or a
+-        6-tick loss per set sells at the touch), reconciled against the sets actually held (sets another path closed are
++        9-tick loss per set sells at the touch), reconciled against the sets actually held (sets another path closed are
+         booked as an exit); from 3 Nov 22:30 UTC every two-leg set in a race it traded is sold, halving on thin asks,
+         retried every cycle; then entries in two-leg races whose mid overround is >= 4 ticks above its 24-h median and
+         whose sell-set clears the arb thresholds. Baskets are all-or-none via the arb engine; only what traded is booked."""
+diff --git a/tests/sim_pipeline.py b/tests/sim_pipeline.py
+index 090d6bb..0dc813b 100644
+--- a/tests/sim_pipeline.py
++++ b/tests/sim_pipeline.py
+@@ -1060,7 +1060,7 @@ class ChurnBase(Scenario):
+ 
+ class ChurnWiden(ChurnBase):
+     name, cycles, seed, n_races = "churn_widen", 420, 31, 3
+-    doc = "3 races: +6 ticks at cycle 20, then +2 ticks every 10 min up to +20: each race is sold at the touch at a 6-tick loss, never re-bought, loss bounded by the stop"
++    doc = "3 races: +6 ticks at cycle 20, then +2 ticks every 10 min up to +20: each race is sold at the touch at a 9-tick loss or by the stop, never re-bought, loss bounded by the stop"
+ 
+     def bot_setup(self, sim):
+         super().bot_setup(sim)
+diff --git a/tests/test_guards.py b/tests/test_guards.py
+index 36e5f1c..76c3563 100644
+--- a/tests/test_guards.py
++++ b/tests/test_guards.py
+@@ -793,19 +793,33 @@ try:
+ finally:
+     DC.SELL_ALL_AT = _old_sa
+ 
+-# fix 4: a 6-tick loss per set, or the stop, sells the race at the touch (not held to 24 h); no re-entry there for 24 h
+-_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.52, 0.525), lots=[("CA", 2000, 0.985, _t - 100)])
++# fix 4: a 9-tick loss per set (6 until param_audit.md, 24 Oct), or the stop, sells the race at the touch (not held to
++# 24 h); no re-entry there for 24 h. Cost 0.985 per set: loss = sum of the two asks - 1.015
++_b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.525, 0.53), lots=[("CA", 2000, 0.985, _t - 100)])
+ R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+-check("hf arb: a race 6+ ticks per set under water is sold at the touch, and is not bought again for 24 h",
++check("hf arb: a race 9+ ticks per set under water is sold at the touch, and is not bought again for 24 h",
+       _sold(_v) == [2000] and _ch.held("CA") == 0 and "CA" in _ch.last_loss and not _ch.eligible(_HR["CA"], time.time() + 23 * 3600)
+       and _ch.eligible(_HR["CA"], time.time() + 25 * 3600), str(_sold(_v)))
++# loss exit widened to 9 ticks: a set 7 or 8 ticks under water is held (no sale, no 24-h lockout); 9 and 10 ticks are sold
++_lx = {}
++for _tk, (_a1, _a2) in {7: (0.525, 0.525), 8: (0.525, 0.53), 9: (0.53, 0.53), 10: (0.53, 0.535)}.items():
++    _bk = dict(zip(_HR["CA"].exchange_ids, (_book(_a1 - 0.005, _a1, 50000), _book(_a2 - 0.005, _a2, 50000))))
++    _b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _bk, lots=[("CA", 2000, 0.985, _t - 100)])
++    R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
++    _lx[_tk] = (_sold(_v), _ch.held("CA"), "CA" in _ch.last_loss)
++check("hf arb: 7 and 8 ticks per set under water are held; 9 and 10 ticks are sold at the touch with the 24-h lockout",
++      _lx[7] == ([], 2000, False) and _lx[8] == ([], 2000, False) and _lx[9] == ([2000], 0, True) and _lx[10] == ([2000], 0, True),
++      str(_lx))
++check("hf arb: the loss exit is 9 ticks per set", abs(DC.LOSS_EXIT - 0.045) < 1e-12 and "9 ticks" in DC.LOSS_WHY, f"{DC.LOSS_EXIT} {DC.LOSS_WHY}")
+ _b, _v, _ch = _hbot({"CA1": -2000.0, "CA2": -2000.0}, _legs("CA", 0.51, 0.5175), lots=[("CA", 2000, 0.97, _t - 100)], kill=-5.0)
+ R.Bot.churn_cycle(_b, _b.positions_snapshot, False)
+ check("hf arb: when the stop trips, every churn set is sold at the touch in the same cycle", _ch.killed and _sold(_v) == [2000], str(_sold(_v)))
+-check("hf arb: exit reasons: stop and 6-tick loss before take-profit / 24 h",
++check("hf arb: exit reasons: stop and 9-tick loss before take-profit / 24 h (6 and 8 ticks under water are held)",
+       DC.DevChurn(kill=-1).exit_reason({"cost": 0.97, "ts": _t}, 0.969, _t) is None
+-      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.940, _t) == DC.LOSS_WHY
+-      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.9405, _t) is None)
++      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.925, _t) == DC.LOSS_WHY
++      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.9255, _t) is None
++      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.930, _t) is None
++      and DC.DevChurn().exit_reason({"cost": 0.97, "ts": _t}, 0.940, _t) is None)
+ _k = DC.DevChurn(); _k.killed = True
+ check("hf arb: a tripped stop gives the stop exit", _k.exit_reason({"cost": 0.97, "ts": _t}, 0.99, _t) == DC.STOP_WHY)
+ 

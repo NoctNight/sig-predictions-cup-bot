@@ -739,7 +739,7 @@ def fig():
     axes[0].set_title('A. Does the forecast pick the legs that move most in the next 24 hours?', loc='left', fontweight='bold')
     axes[0].set_ylabel('Realised volatility, next 24 h\n(ticks; root of summed squared hourly moves)')
     axes[0].set_ylim(bottom=0)
-    axes[0].legend(loc='upper left', bbox_to_anchor=(0, -0.06), frameon=False)
+    axes[0].legend(loc='upper left', bbox_to_anchor=(0, -0.11), frameon=False)
     hc = {4: 'tab:green', 24: 'tab:purple'}
     for (grp, h), rows in B.items():
         ls = ':' if grp == 'train' else '-'
@@ -759,13 +759,13 @@ def fig():
           Line2D([], [], color=hc[24], lw=2, label='Bought (or sold) with the move, sold 24 h later'),
           Line2D([], [], color='0.3', ls=':', marker='^', label='dotted: Training days (8-16 Oct), average'),
           Line2D([], [], color='0.3', ls='-', marker='o', label='solid: Test days (17-23 Oct), average; band = 95% range')]
-    axes[1].legend(handles=hl, loc='upper left', bbox_to_anchor=(0, -0.06), frameon=False)
+    axes[1].legend(handles=hl, loc='upper left', bbox_to_anchor=(0, -0.11), frameon=False)
     axes[2].axhline(0, color='0.4', lw=1)
     axes[2].set_title('C. How bad does it get? (worst 1 trade in 20, and the single worst)', loc='left', fontweight='bold')
     axes[2].set_ylabel('Profit per share, worst 5% of trades\n(ticks)')
     axes[2].legend(handles=hl[:3] + [Line2D([], [], color='0.3', ls='-', marker='o', label='solid: Test days (17-23 Oct), 5th percentile'),
                                      Line2D([], [], color='0.3', ls='', marker='x', label='x: Test days, single worst trade')],
-                   loc='upper left', bbox_to_anchor=(0, -0.13), frameon=False)
+                   loc='upper left', bbox_to_anchor=(0, -0.16), frameon=False)
     for ax in axes:
         ax.set_xticks(xs, ['1\ncalmest fifth', '2', '3', '4', '5\nmost volatile fifth'])
         ax.grid(alpha=0.3)

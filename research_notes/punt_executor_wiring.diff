@@ -1,0 +1,1789 @@
+diff --git a/config.json b/config.json
+index 37ee6e2..8a4723d 100644
+--- a/config.json
++++ b/config.json
+@@ -155,5 +155,6 @@
+   "shock_poll_sec": 5.0,
+   "shock_full_sec": 30.0,
+   "shock_exit_maker": true,
+-  "strategy_stops_enabled": true
++  "strategy_stops_enabled": true,
++  "punt_enabled": false
+ }
+diff --git a/research_notes/punt_plan_P1_template.json b/research_notes/punt_plan_P1_template.json
+new file mode 100644
+index 0000000..02aba77
+--- /dev/null
++++ b/research_notes/punt_plan_P1_template.json
+@@ -0,0 +1,170 @@
++{
++ "plan_id": "P1-template",
++ "note": "TEMPLATE for research_notes/punt_plan.md P1. Not approved. Re-price on 3 Nov; Sizhe approves the exact file in chat.",
++ "budget": 90000,
++ "cap_exempt": true,
++ "steps": [
++  {
++   "id": "s1",
++   "kind": "buy",
++   "exchange_id": "1007",
++   "side": "yes",
++   "max_price": 0.35,
++   "max_cash": 90000,
++   "chunk_cash": 5000,
++   "start": "2026-11-03T17:30:00-05:00",
++   "stop": "2026-11-03T19:45:00-05:00",
++   "min_gap_sec": 20,
++   "abort_if_outside_below": 0.2
++  },
++  {
++   "id": "s1_sell",
++   "kind": "sell",
++   "of_step": "s1",
++   "min_price": 0.85,
++   "chunk_shares": 20000,
++   "outside_min": 0.95,
++   "outside_polls": 3,
++   "single_venue_min": 0.97,
++   "start": "2026-11-03T19:45:00-05:00",
++   "stop": "2026-11-04T04:00:00-05:00",
++   "min_gap_sec": 20
++  },
++  {
++   "id": "s2",
++   "kind": "target_buy",
++   "after_step": "s1_sell",
++   "min_sold_frac": 0.7,
++   "target_min": 1550000,
++   "target_k_leader": 1.12,
++   "target_fallback": 1600000,
++   "max_cash": 400000,
++   "candidates": [
++    {
++     "exchange_id": "1045",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "1046",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "949",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "950",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "992",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "993",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "982",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "983",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "1003",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "1004",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "922",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "923",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "1023",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "1024",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "934",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "935",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "1038",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "1039",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "912",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    },
++    {
++     "exchange_id": "913",
++     "side": "yes",
++     "max_price": 0.3,
++     "min_price": 0.08
++    }
++   ],
++   "chunk_cash": 10000,
++   "start": "2026-11-03T22:00:00-05:00",
++   "stop": "2026-11-04T04:00:00-05:00",
++   "min_gap_sec": 20
++  }
++ ]
++}
+\ No newline at end of file
+diff --git a/sigbot/config.py b/sigbot/config.py
+index e091f1f..7923d54 100644
+--- a/sigbot/config.py
++++ b/sigbot/config.py
+@@ -253,6 +253,13 @@ class BotConfig:
+     shock_kill: float = -1500.0          # sleeve P&L stop: entries off, open positions closed
+     shock_exit_maker: bool = False       # R3: rest the exit at the 70%-convergence price (the DMM's walk fills it) instead of
+                                          # taking the bid at convergence; any exit rule cancels it and takes. Off: see shock_mode.md
++    punt_enabled: bool = False           # the 3 Nov punt executor (proposals/punt_executor.py). Only ever switched on by a session in
++                                         # which Sizhe approved the exact plan in chat; the plan file must hash to punt_plan_sha256
++    punt_plan_path: str = "params/punt_plan.json"
++    punt_plan_sha256: str = ""           # SHA-256 of the approved plan file; any other bytes are refused
++    punt_tick_sec: float = 10.0          # executor thread cadence (2 reads a tick while a step is in its window)
++    punt_max_budget: float = 150000.0    # hard ceiling on a plan's budget (cash brought in from outside the punt)
++    punt_cash_floor: float = 100.0       # free cash the executor never spends
+     strategy_stops_enabled: bool = False     # strategy_stops.py: per-strategy P&L stops replace the bot-wide kill switch
+     stop_limits: dict = field(default_factory=dict)   # {strategy: P&L floor since armed}; defaults in strategy_stops.DEFAULT_LIMITS
+     unattributed_limit: float = 2000.0       # unexplained account loss that pauses the strategies on its legs (or all entries)
+diff --git a/sigbot/proposals/punt_executor.py b/sigbot/proposals/punt_executor.py
+new file mode 100644
+index 0000000..ddfe279
+--- /dev/null
++++ b/sigbot/proposals/punt_executor.py
+@@ -0,0 +1,662 @@
++"""3 Nov punt executor (BACKLOG 0000; research_notes/punt_plan.md). OFF unless config punt_enabled is true.
++
++Sizhe approves the exact plan in chat (memory sig-punt-execution); the session then writes the plan file, puts its
++SHA-256 in config punt_plan_sha256 and sets punt_enabled. The executor refuses any plan whose bytes do not match that
++hash, so an edited file never trades. It never places anything without a valid, hash-matched plan.
++
++Plan file (JSON):
++  {"plan_id": "P1", "budget": 90000, "cap_exempt": true,
++   "steps": [
++     {"id": "s1", "kind": "buy", "exchange_id": "1007", "side": "yes", "max_price": 0.35, "max_cash": 90000,
++      "chunk_cash": 5000, "start": "2026-11-03T17:30:00-05:00", "stop": "2026-11-03T19:45:00-05:00", "min_gap_sec": 20,
++      "abort_if_outside_below": 0.20},
++     {"id": "s1_sell", "kind": "sell", "of_step": "s1", "min_price": 0.85, "chunk_shares": 20000,
++      "outside_min": 0.95, "outside_polls": 3, "single_venue_min": 0.97,
++      "start": "2026-11-03T19:00:00-05:00", "stop": "2026-11-04T04:00:00-05:00", "min_gap_sec": 20},
++     {"id": "s2", "kind": "target_buy", "after_step": "s1_sell", "min_sold_frac": 0.7,
++      "target_min": 1550000, "target_k_leader": 1.12, "target_fallback": 1600000,
++      "candidates": [{"exchange_id": "1045", "side": "yes", "max_price": 0.30, "min_price": 0.08}, ...],
++      "chunk_cash": 10000, "start": "2026-11-03T22:00:00-05:00", "stop": "2026-11-04T04:00:00-05:00", "min_gap_sec": 20}]}
++
++Kinds:
++  buy         buy `side` on `exchange_id` in chunks: each order is a capped limit order (limit = the book level that fills
++              the chunk, never above max_price) with a short TTL; at most `max_cash` (and the plan budget) committed,
++              counted at the limit price until the venue's fills say otherwise.
++  sell        sell what step `of_step` bought (buy the opposite side at 1 - limit; the venue nets YES against NO), never
++              below `min_price`, once Polymarket AND Kalshi show our side >= outside_min for outside_polls consecutive
++              ticks (or one venue >= single_venue_min when the other is missing). Never more than the venue position.
++  target_buy  after `after_step` sold min_sold_frac (or finished): target T = max(target_min, k x best live rival), else
++              target_fallback; pick the first candidate whose capped ladder turns the cash into >= T shares; buy it
++              like `buy`. No candidate fits by `stop`: keep the cash.
++Progress is the venue position (server record) relative to the position when the step started. Orders use deterministic
++idempotency keys (plan, step, chunk number): after a 5xx or a timeout the same key is retried, so a restart or a lost
++response never doubles an order. State is params/punt_state.json (atomic writes).
++Aborts: params/punt_abort exists (everything stops, our resting orders cancelled), the plan hash or validation fails
++(never starts), 3 rejected orders in a row (that step), a buy step whose outside price fell below abort_if_outside_below,
++the window closing (that step ends; resting orders cancelled).
++Dry run: the bot's dry-run mode, or the CLI below, logs the orders it would send and fills them virtually at the walked
++book prices, so the whole sequence prints:
++    python3 -m sigbot.proposals.punt_executor --plan params/punt_plan.json --books data/books_latest.json --at 2026-11-03T17:31:00-05:00
++"""
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++import logging
++import math
++import os
++import sys
++import tempfile
++import time
++from datetime import datetime
++from typing import Callable, Optional
++
++log = logging.getLogger("sigbot")
++HERE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++TICK = 0.005
++KINDS = ("buy", "sell", "target_buy")
++MAX_STEPS = 8
++ORDER_TTL = 30.0                     # seconds a chunk order rests before it expires on the venue
++MIN_ORDER_CASH = 50.0
++MAX_ERRORS = 3
++TRANSIENT = (0, 429, 500, 502, 503, 504)   # 0 = no response (timeout / connection): retry with the same key
++
++
++def sha256_file(path: str) -> str:
++    return hashlib.sha256(open(path, "rb").read()).hexdigest()
++
++
++def ts_of(s: str) -> float:
++    d = datetime.fromisoformat(s)
++    if d.tzinfo is None:
++        raise ValueError(f"time {s!r} has no UTC offset (3 Nov is EST: -05:00)")
++    return d.timestamp()
++
++
++def on_tick(p: float) -> bool:
++    return abs(p / TICK - round(p / TICK)) < 1e-6
++
++
++def validate(plan: dict, known: Callable[[str], bool], max_budget: float) -> list:
++    """Every reason the plan cannot run; empty when it is valid."""
++    err = []
++    if not isinstance(plan, dict):
++        return ["plan is not an object"]
++    if not plan.get("plan_id"):
++        err.append("plan_id missing")
++    b = plan.get("budget")
++    if not isinstance(b, (int, float)) or not 0 < b <= max_budget:
++        err.append(f"budget {b!r} not in (0, {max_budget:.0f}]")
++    if not isinstance(plan.get("cap_exempt"), bool):
++        err.append("cap_exempt must be true or false (Sizhe's partisan-cap answer)")
++    steps = plan.get("steps")
++    if not isinstance(steps, list) or not 1 <= len(steps) <= MAX_STEPS:
++        return err + [f"steps must be a list of 1-{MAX_STEPS}"]
++    ids = [s.get("id") for s in steps]
++    if len(set(ids)) != len(ids) or not all(ids):
++        err.append("step ids missing or repeated")
++    for i, s in enumerate(steps):
++        sid = s.get("id", f"#{i}")
++        k = s.get("kind")
++        if k not in KINDS:
++            err.append(f"{sid}: kind {k!r}")
++            continue
++        try:
++            if ts_of(s["stop"]) <= ts_of(s["start"]):
++                err.append(f"{sid}: stop before start")
++        except (KeyError, ValueError, TypeError) as e:
++            err.append(f"{sid}: start/stop: {e}")
++        if not isinstance(s.get("min_gap_sec"), (int, float)) or s["min_gap_sec"] < 5:
++            err.append(f"{sid}: min_gap_sec >= 5 required")
++        legs = []
++        if k == "buy":
++            legs = [(s.get("exchange_id"), s.get("side"), s.get("max_price"))]
++            for f in ("max_cash", "chunk_cash"):
++                if not isinstance(s.get(f), (int, float)) or s[f] <= 0:
++                    err.append(f"{sid}: {f} must be > 0")
++        elif k == "sell":
++            src = next((x for x in steps[:i] if x.get("id") == s.get("of_step")), None)
++            if src is None or src.get("kind") not in ("buy", "target_buy"):
++                err.append(f"{sid}: of_step must name an earlier buy step")
++            else:
++                try:
++                    if ts_of(s["start"]) < ts_of(src["stop"]):
++                        err.append(f"{sid}: starts before {src['id']} stops (its base position would include buys still coming)")
++                except (KeyError, ValueError, TypeError):
++                    pass
++            p = s.get("min_price")
++            if not isinstance(p, (int, float)) or not 0.01 <= p <= 0.99 or not on_tick(p):
++                err.append(f"{sid}: min_price {p!r} not a tick in [0.01, 0.99]")
++            if not isinstance(s.get("chunk_shares"), (int, float)) or s["chunk_shares"] < 1:
++                err.append(f"{sid}: chunk_shares >= 1 required")
++            if not isinstance(s.get("outside_min"), (int, float)) or not 0.5 <= s["outside_min"] <= 1.0:
++                err.append(f"{sid}: outside_min in [0.5, 1] required")
++            if not isinstance(s.get("outside_polls", 3), int) or s.get("outside_polls", 3) < 1:
++                err.append(f"{sid}: outside_polls >= 1 required")
++        else:
++            if not any(x.get("id") == s.get("after_step") for x in steps[:i]):
++                err.append(f"{sid}: after_step must name an earlier step")
++            c = s.get("candidates")
++            if not isinstance(c, list) or not c:
++                err.append(f"{sid}: candidates required")
++                c = []
++            legs = [(x.get("exchange_id"), x.get("side"), x.get("max_price")) for x in c]
++            for f in ("target_min", "target_fallback", "chunk_cash", "max_cash"):
++                if not isinstance(s.get(f), (int, float)) or s[f] <= 0:
++                    err.append(f"{sid}: {f} must be > 0")
++        for ex, side, px in legs:
++            if not known(str(ex)):
++                err.append(f"{sid}: unknown exchange {ex!r}")
++            if side not in ("yes", "no"):
++                err.append(f"{sid}: side {side!r}")
++            if not isinstance(px, (int, float)) or not 0.01 <= px <= 0.99 or not on_tick(px):
++                err.append(f"{sid}: max_price {px!r} not a tick in [0.01, 0.99]")
++    return err
++
++
++def asks_for(book: dict, side: str) -> list:
++    """Cheapest-first (price, qty) to BUY `side`: YES asks, or NO via 1 - YES bids."""
++    if side == "yes":
++        lad = [(float(l["price"]), float(l["quantity"])) for l in book.get("asks") or [] if float(l.get("quantity") or 0) > 0]
++    else:
++        lad = [(round(1 - float(l["price"]), 3), float(l["quantity"])) for l in book.get("bids") or [] if float(l.get("quantity") or 0) > 0]
++    return sorted(lad)
++
++
++def walk(lad: list, cash: float, cap: float) -> tuple:
++    """(shares, cost, limit) buying with `cash` through levels priced <= cap; limit = the last level touched."""
++    sh = cost = 0.0
++    limit = None
++    for px, q in lad:
++        if px > cap + 1e-9 or cash - cost < px:
++            break
++        n = min(q, math.floor((cash - cost) / px))
++        if n <= 0:
++            break
++        sh += n
++        cost += n * px
++        limit = px
++    return sh, cost, limit
++
++
++class PuntExecutor:
++    """One tick at a time; the adapter does all I/O. Adapter interface:
++      now() -> epoch s;  positions() -> {exchange: YES qty} (raises on failure);  book(ex) -> {bids, asks} or None (stale);
++      cash() -> free cash;  outside(ex, side) -> (polymarket p, kalshi p) of `side` winning, either may be None;
++      leader() -> best rival balance or None;  place(ex, side, qty, price, key, expires_at_epoch, purpose) -> order id (raises with .status);
++      cancel_ours(order_ids) -> None;  dry -> bool;  abort_requested() -> bool;  fills_cost(order_ids) -> (shares, cost) or None;
++      optional: known(ex) -> bool, outside_stamp(ex) -> poll time, clear_others(ex, keep_ids) -> None, settled() -> set of exchanges"""
++
++    def __init__(self, plan_path: str, state_path: str, expected_sha: str, adapter, max_budget: float, cash_floor: float = 0.0):
++        self.a = adapter
++        self.plan_path, self.state_path = plan_path, state_path
++        self.cash_floor = cash_floor
++        self.refused = None
++        self.plan: dict = {}
++        try:
++            raw = open(plan_path, "rb").read()
++            got = hashlib.sha256(raw).hexdigest()
++            if not expected_sha or got != expected_sha:
++                self.refused = f"plan hash {got[:12]} does not match the approved {str(expected_sha)[:12] or '(none)'}"
++            else:
++                self.plan = json.loads(raw)
++                errs = validate(self.plan, getattr(adapter, "known", lambda ex: True), max_budget)
++                if errs:
++                    self.refused = "invalid plan: " + "; ".join(errs)
++        except (OSError, ValueError) as e:
++            self.refused = f"plan unreadable: {e}"
++        if self.refused:
++            log.warning("PUNT refused: %s", self.refused)
++        self.state = self._load()
++
++    # ---------------------------------------------------------------- state
++    def _load(self) -> dict:
++        try:
++            st = json.load(open(self.state_path))
++            if st.get("plan_id") == self.plan.get("plan_id") and st.get("sha") == self._sha():
++                return st
++            log.warning("PUNT state belongs to another plan: starting fresh")
++        except FileNotFoundError:
++            pass
++        except ValueError as e:
++            log.warning("PUNT state unreadable (%s): starting fresh", e)
++        return {"plan_id": self.plan.get("plan_id"), "sha": self._sha(), "steps": {}, "aborted": None, "log": []}
++
++    def _sha(self) -> Optional[str]:
++        try:
++            return sha256_file(self.plan_path) if self.plan else None
++        except OSError:
++            return None
++
++    def save(self):
++        d = os.path.dirname(self.state_path) or "."
++        fd, tmp = tempfile.mkstemp(dir=d, prefix=".punt_state.")
++        with os.fdopen(fd, "w") as f:
++            json.dump(self.state, f, indent=1)
++        os.replace(tmp, self.state_path)
++
++    def note(self, msg: str):
++        log.warning("PUNT %s", msg)
++        self.state["log"] = (self.state.get("log") or [])[-199:] + [[self.a.now(), msg]]
++
++    def st(self, sid: str) -> dict:
++        return self.state["steps"].setdefault(sid, {"status": "pending", "base": None, "n": 0, "orders": [], "last": 0.0,
++                                                     "errors": 0, "committed": 0.0, "polls": 0, "chosen": None})
++
++    # ---------------------------------------------------------------- helpers
++    def legs(self) -> set:
++        """Every exchange the plan may trade (the bot keeps its other sleeves off these races)."""
++        out = set()
++        for s in self.plan.get("steps") or []:
++            if s.get("exchange_id"):
++                out.add(str(s["exchange_id"]))
++            for c in s.get("candidates") or []:
++                out.add(str(c.get("exchange_id")))
++        return out
++
++    def held(self, pos: dict, ex: str, side: str) -> float:
++        q = float(pos.get(str(ex), 0.0))
++        return q if side == "yes" else -q
++
++    def our_orders(self) -> list:
++        return [o for v in self.state["steps"].values() for o in v.get("orders", [])]
++
++    def spent(self, step: dict, filled: float, limit_cap: float) -> float:
++        """Cash this step has used: the venue's own fill cost when the fills ingested match the position, else filled shares
++        at the cap (an upper bound, so the budget is never overrun when the fill feed lags)."""
++        ids = [o["id"] for o in step.get("orders", []) if o.get("id") is not None]
++        fc = self.a.fills_cost(ids) if ids else None
++        if fc is not None and abs(fc[0] - filled) < 0.5:
++            return fc[1]
++        # upper bound: every share filled at no more than its own order's limit; give the fills to the highest limits first
++        left, cost = filled, 0.0
++        for o in sorted(step.get("orders", []), key=lambda o: -o["price"]):
++            n = min(left, o["qty"])
++            cost += n * o["price"]
++            left -= n
++        return cost + max(0.0, left) * limit_cap
++
++    def budget_left(self) -> float:
++        """The plan budget bounds the cash brought in from outside the punt: the "buy" steps. A target_buy reinvests what
++        the sell steps raised and is bounded by its own max_cash and the free cash."""
++        b = float(self.plan.get("budget") or 0.0)
++        kinds = {x["id"]: x["kind"] for x in self.plan.get("steps") or []}
++        return b - sum(v.get("committed", 0.0) for k, v in self.state["steps"].items() if kinds.get(k) == "buy")
++
++    def abort_all(self, why: str):
++        if self.state.get("aborted"):
++            return
++        self.state["aborted"] = why
++        self.note(f"ABORT: {why}")
++        live = [o["id"] for o in self.our_orders() if o.get("id") is not None and self.a.now() - o.get("t", 0) < ORDER_TTL + 5]
++        if live and not self.a.dry:
++            try:
++                self.a.cancel_ours(live)
++            except Exception as e:
++                self.note(f"cancel on abort failed: {e}")
++        self.save()
++
++    # ---------------------------------------------------------------- tick
++    def tick(self) -> Optional[str]:
++        """Do at most one order. Returns a short description of what it did, or None."""
++        if self.refused or self.state.get("aborted"):
++            return None
++        if self.a.abort_requested():
++            self.abort_all("abort file present")
++            return "abort"
++        now = self.a.now()
++        steps = self.plan["steps"]
++        if all(self.st(s["id"])["status"] in ("done", "aborted") for s in steps):
++            return None
++        active = [s for s in steps if self.st(s["id"])["status"] not in ("done", "aborted") and ts_of(s["start"]) <= now]
++        if not active:
++            return None
++        try:
++            pos = self.a.positions()
++        except Exception as e:
++            log.warning("PUNT positions read failed (%s): nothing this tick", e)
++            return None
++        for s in steps:
++            v = self.st(s["id"])
++            if v["status"] in ("done", "aborted") or ts_of(s["start"]) > now:
++                continue
++            if now > ts_of(s["stop"]):
++                v["status"] = "done"
++                self.note(f"{s['id']}: window closed ({v.get('why') or 'time'})")
++                self._cancel_step(v)
++                self.save()
++                continue
++            if v.get("pending"):
++                did = self._send_pending(s, v)       # the same payload, next tick (it expires within ORDER_TTL)
++            else:
++                did = getattr(self, "_" + s["kind"])(s, v, pos, now)
++            self.save()
++            if did:
++                return did
++        return None
++
++    def _cancel_step(self, v: dict):
++        live = [o["id"] for o in v.get("orders", []) if o.get("id") is not None and self.a.now() - o.get("t", 0) < ORDER_TTL + 5]
++        if live and not self.a.dry:
++            try:
++                self.a.cancel_ours(live)
++            except Exception as e:
++                self.note(f"cancel failed: {e}")
++
++    def _send(self, s: dict, v: dict, ex: str, side: str, qty: int, price: float, what: str) -> Optional[str]:
++        """Place one capped limit order with the step's next idempotency key. The exact payload (incl. its expiry) is saved
++        BEFORE the send, so a lost response, a 5xx or a crash resends exactly that payload (the venue replays it; a changed
++        payload under a used key is a 409)."""
++        now = self.a.now()
++        last = v["orders"][-1] if v.get("orders") else None
++        if last is not None and not last.get("closed"):
++            # review B4: the venue's expiry sweep lags the TTL, so the previous chunk may still rest: cancel it and size the
++            # next one on the next tick's position (an order of unknown id is waited out instead)
++            if last["id"] is not None and not self.a.dry:
++                try:
++                    self.a.cancel_ours([last["id"]])
++                except Exception as e:
++                    if int(getattr(e, "status", 0) or 0) in TRANSIENT:
++                        self.note(f"{s['id']}: cancel of {last['id']} failed ({e}): next tick")
++                        v["last"] = now
++                        return None                  # 4xx: already filled, expired or cancelled
++            elif last["id"] is None and now - last["t"] < ORDER_TTL + 60:
++                return None
++            last["closed"] = True
++            v["last"] = now
++            self.save()
++            return None
++        if ex not in (v.get("cleared") or []) and not self.a.dry:
++            # the venue never matches us with ourselves: any other resting order of ours on this leg (MM, a sleeve) is
++            # cancelled before the first punt order there
++            try:
++                getattr(self.a, "clear_others", lambda ex, keep: None)(ex, {o["id"] for o in self.our_orders()})
++            except Exception as e:
++                self.note(f"{s['id']}: clearing other orders on {ex} failed ({e}): next tick")
++                v["last"] = now
++                return None
++            v["cleared"] = (v.get("cleared") or []) + [ex]
++        # the plan hash is in the key: a revised plan reusing its plan_id never collides with the old keys (review R2-6)
++        v["pending"] = {"key": f"punt-{self.plan['plan_id']}-{s['id']}-{v['n']}-{str(self.state.get('sha') or '')[:8]}", "ex": ex, "side": side, "qty": int(qty),
++                        "price": round(price, 3), "exp": now + ORDER_TTL, "purpose": "punt_exit" if what == "SELL" else "punt",
++                        "what": what}
++        self.save()
++        return self._send_pending(s, v)
++
++    def _send_pending(self, s: dict, v: dict) -> Optional[str]:
++        p, now = v["pending"], self.a.now()
++        if now > p["exp"] - 2:
++            # never resend an expired payload; it may have been placed: count it at its limit and move to the next key
++            return self._booked(s, v, None, "outcome unknown, payload expired: counted at its limit")
++        try:
++            oid = self.a.place(p["ex"], p["side"], p["qty"], p["price"], p["key"], p["exp"], p["purpose"])
++        except Exception as e:
++            status = int(getattr(e, "status", 0) or 0)
++            if status == 409:                        # our own pending key was already used by this payload: it exists
++                return self._booked(s, v, None, f"409 on our pending key ({e}): counted at its limit")
++            if status in TRANSIENT:
++                self.note(f"{s['id']}: {p['what']} {p['ex']} {p['side']} x{p['qty']} @{p['price']} outcome unknown ({e}): "
++                          "same payload next tick")
++                v["last"] = now
++                return None
++            v["pending"] = None                      # rejected: the order does not exist; the next order takes a new key
++            v["n"] += 1
++            v["errors"] += 1
++            self.note(f"{s['id']}: {p['what']} rejected ({e}); {v['errors']} in a row")
++            if v["errors"] >= MAX_ERRORS:
++                v["status"] = "aborted"
++                v["why"] = "3 rejected orders"
++                self.note(f"{s['id']}: ABORTED after {MAX_ERRORS} rejected orders")
++            v["last"] = now
++            return None
++        self._booked(s, v, oid, "")
++        return f"{s['id']} {p['what']}"
++
++    def _booked(self, s: dict, v: dict, oid, why: str) -> None:
++        p, now = v["pending"], self.a.now()
++        v["pending"] = None
++        v["orders"].append({"id": oid, "key": p["key"], "ex": p["ex"], "side": p["side"], "qty": p["qty"], "price": p["price"], "t": now})
++        v["n"] += 1
++        v["errors"] = 0
++        v["last"] = now
++        self.note(f"{s['id']}: {'DRY ' if self.a.dry else ''}{p['what']} {p['ex']} {p['side']} x{p['qty']} limit {p['price']} "
++                  f"(key {p['key']}){': ' + why if why else ''}")
++        return None
++
++    def _waiting(self, s: dict, v: dict, now: float) -> bool:
++        """One order at a time per step, at least min_gap_sec apart, the last one expired."""
++        return now - v["last"] < max(float(s["min_gap_sec"]), ORDER_TTL + 2 if v.get("orders") else 0.0)
++
++    def _buy_into(self, s: dict, v: dict, pos: dict, now: float, ex: str, side: str, cap: float, max_cash: float) -> Optional[str]:
++        if v["base"] is None:
++            v["base"] = self.held(pos, ex, side)
++            v["status"] = "active"
++        filled = max(0.0, self.held(pos, ex, side) - v["base"])
++        v["filled"] = filled
++        if self._waiting(s, v, now):
++            return None                              # the last order may still rest: keep it counted at its limit
++        used = self.spent(v, filled, cap)
++        v["committed"] = used
++        budget = self.budget_left() if s["kind"] == "buy" else float("inf")
++        room = min(max_cash - used, budget, float(self.a.cash()) - self.cash_floor, float(s["chunk_cash"]))
++        if not self.plan.get("cap_exempt"):
++            room = min(room, 5000.0 - used)          # no exemption: the 5,000 partisan cap bounds the whole step
++        if room < MIN_ORDER_CASH:
++            if max_cash - used < MIN_ORDER_CASH or budget < MIN_ORDER_CASH:
++                v["status"] = "done"
++                self.note(f"{s['id']}: complete: {filled:.0f} shares for ~{used:.0f}")
++            return None
++        book = self.a.book(ex)
++        if not book:
++            return None
++        sh, cost, limit = walk(asks_for(book, side), room, cap)
++        if not sh or limit is None:
++            return None                              # touch above the cap: wait (never chase)
++        qty = math.floor(room / limit)
++        v["committed"] = used + qty * limit          # counted at the limit until the venue says otherwise
++        return self._send(s, v, ex, side, qty, limit, "BUY")
++
++    def _buy(self, s, v, pos, now):
++        lo = s.get("abort_if_outside_below")
++        if lo is not None:
++            o = [x for x in self.a.outside(str(s["exchange_id"]), s["side"]) if x is not None]
++            if o and max(o) < lo:
++                v["status"] = "aborted"
++                v["why"] = f"outside price {max(o):.3f} below {lo}"
++                self.note(f"{s['id']}: ABORTED: outside {max(o):.3f} < {lo} (called against us)")
++                self._cancel_step(v)
++                return None
++        return self._buy_into(s, v, pos, now, str(s["exchange_id"]), s["side"], float(s["max_price"]), float(s["max_cash"]))
++
++    def _sell(self, s, v, pos, now):
++        src = next(x for x in self.plan["steps"] if x["id"] == s["of_step"])
++        sv = self.st(src["id"])
++        ch = sv.get("chosen") or {}
++        ex = str(src.get("exchange_id") or ch.get("exchange_id") or "")
++        side = src.get("side") or ch.get("side")
++        if not ex or side is None:
++            return None
++        if ex in (getattr(self.a, "settled", lambda: set())() or set()):
++            # review B2: a settled market drops out of the positions read; never read that as a sale (stage 2 stays shut)
++            v["status"] = "aborted"
++            v["why"] = "stage-1 market settled: no sale; stage 2 stays shut (by hand from here)"
++            self.note(f"{s['id']}: ABORTED: {ex} settled")
++            return None
++        bought = float(sv.get("filled") or 0.0)
++        have = self.held(pos, ex, side)
++        if v["base"] is None:
++            if bought < 1:
++                return None
++            v["base"] = have
++            v["bought"] = bought
++            v["status"] = "active"
++        sold = min(max(0.0, v["base"] - have), float(sum(o["qty"] for o in v.get("orders", []))))   # only what our sells can explain
++        v["sold"] = sold
++        left = min(v.get("bought", bought) - sold, have)          # never more than the venue position on that side
++        if left < 1:
++            if sold > 0 or have < 1:
++                v["status"] = "done"
++                self.note(f"{s['id']}: sold {sold:.0f} (nothing left to sell)")
++            return None
++        pm, k = self.a.outside(ex, side)
++        both = pm is not None and k is not None and min(pm, k) >= float(s["outside_min"])
++        single = (pm is None) != (k is None) and max(x for x in (pm, k) if x is not None) >= float(s.get("single_venue_min", 0.97))
++        stamp = getattr(self.a, "outside_stamp", lambda ex: None)(ex)    # count each outside poll once, not each tick
++        if stamp is None or stamp != v.get("stamp"):
++            v["stamp"] = stamp
++            v["polls"] = v["polls"] + 1 if (both or single) else 0
++        elif not (both or single):
++            v["polls"] = 0
++        if v["polls"] < int(s.get("outside_polls", 3)) or self._waiting(s, v, now):
++            return None
++        q = int(min(left, float(s["chunk_shares"])))
++        if q < 1:
++            return None
++        opp = "no" if side == "yes" else "yes"     # selling `side` at >= p = buying the other side at <= 1 - p
++        return self._send(s, v, ex, opp, q, round(1 - float(s["min_price"]), 3), "SELL")
++
++    def _target_buy(self, s, v, pos, now):
++        if v.get("chosen") is None:
++            # the gate is checked only until a candidate is chosen (review R2-1: a sell step that aborts later, e.g. the
++            # market settles after 80% was sold, must not freeze a stage 2 already under way)
++            prev = self.st(s["after_step"])
++            prev_s = next(x for x in self.plan["steps"] if x["id"] == s["after_step"])
++            if prev_s["kind"] == "sell":
++                frac = float(prev.get("sold") or 0.0) / max(1.0, float(prev.get("bought") or 0.0))
++                if prev["status"] == "aborted" or frac < float(s.get("min_sold_frac", 1.0)):
++                    return None                      # review S6: a sale that sold nothing never opens stage 2
++                proceeds = float(prev.get("sold") or 0.0) * float(prev_s["min_price"])
++            else:
++                if prev["status"] != "done":
++                    return None
++                proceeds = 0.0
++            if v.get("target") is None:
++                lead = None
++                for _ in range(2):
++                    try:
++                        lead = self.a.leader()
++                    except Exception as e:
++                        log.warning("PUNT leaderboard read failed: %s", e)
++                    if lead:
++                        break
++                t = max(float(s["target_min"]), float(s.get("target_k_leader", 0.0)) * lead) if lead else float(s["target_fallback"])
++                v["target"] = t
++                self.note(f"{s['id']}: target {t:,.0f} (best rival {lead if lead else 'unread'})")
++            # review B2/S9: stage 2 reinvests what the sale raised (at its floor) plus what is left of the plan budget
++            cash = min(float(self.a.cash()) - self.cash_floor, float(s["max_cash"]), proceeds + max(0.0, self.budget_left()))
++            for c in s["candidates"]:
++                book = self.a.book(str(c["exchange_id"]))
++                if not book:
++                    continue
++                lad = asks_for(book, c["side"])
++                if not lad or lad[0][0] < float(c.get("min_price", 0.0)) or lad[0][0] > float(c["max_price"]):
++                    continue
++                sh, cost, limit = walk(lad, cash, float(c["max_price"]))
++                if sh + (cash - cost) >= v["target"]:
++                    v["chosen"] = {"exchange_id": str(c["exchange_id"]), "side": c["side"], "cap": limit, "cash": cash}
++                    self.note(f"{s['id']}: chose {c['exchange_id']} {c['side']}: {sh:,.0f} shares for {cost:,.0f} (cap {limit})")
++                    break
++            if v.get("chosen") is None:
++                v["why"] = "no candidate reaches the target: cash kept"
++                return None
++        ch = v["chosen"]
++        return self._buy_into(s, v, pos, now, ch["exchange_id"], ch["side"], float(ch["cap"]), float(ch["cash"]))
++
++
++# ---------------------------------------------------------------- dry-run CLI against a book dump
++class BookAdapter:
++    """Dry adapter over a book dump: orders fill virtually at once at the walked prices (the position moves), so the
++    whole plan prints. Outside prices come from --outside {exchange: [pm, kalshi]} JSON (default: none)."""
++
++    dry = True
++
++    def __init__(self, books: dict, cash: float, at: float, outside: Optional[dict] = None, leader: Optional[float] = None):
++        self.books, self.c, self.t = books, cash, at
++        self.pos: dict = {}
++        self.out = outside or {}
++        self.lead = leader
++        self.sent: list = []
++
++    def now(self):
++        return self.t
++
++    def positions(self):
++        return dict(self.pos)
++
++    def book(self, ex):
++        return self.books.get(str(ex))
++
++    def cash(self):
++        return self.c
++
++    def outside(self, ex, side):
++        v = self.out.get(str(ex))
++        if not v:
++            return (None, None)
++        return tuple(None if x is None else (x if side == "yes" else 1 - x) for x in v)
++
++    def leader(self):
++        return self.lead
++
++    def known(self, ex):
++        return str(ex) in self.books
++
++    def abort_requested(self):
++        return False
++
++    def fills_cost(self, ids):
++        rows = [r for r in self.sent if r[6] in set(ids)]
++        return (sum(r[4] for r in rows), sum(r[5] for r in rows))
++
++    def cancel_ours(self, ids):
++        pass
++
++    def place(self, ex, side, qty, price, key, expires_at, purpose="punt"):
++        lad = asks_for(self.books[str(ex)], side)
++        got = cost = 0.0
++        for px, q in lad:
++            if px > price + 1e-9 or got >= qty:
++                break
++            n = min(q, qty - got)
++            got += n
++            cost += n * px
++        held = self.pos.get(str(ex), 0.0)
++        pairs = min(got, max(0.0, -held if side == "yes" else held))   # the venue nets YES against NO: each pair pays 1
++        self.c += pairs - cost
++        self.pos[str(ex)] = held + (got if side == "yes" else -got)
++        oid = f"dry-{len(self.sent) + 1}"
++        self.sent.append((ex, side, qty, price, got, cost, oid))
++        return oid
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(description="punt executor dry run against a book dump (sends nothing)")
++    ap.add_argument("--plan", required=True)
++    ap.add_argument("--books", default=os.path.join(HERE, "data", "books_latest.json"))
++    ap.add_argument("--cash", type=float, default=87000.0)
++    ap.add_argument("--at", required=True, help="ISO time with offset, e.g. 2026-11-03T17:31:00-05:00")
++    ap.add_argument("--minutes", type=float, default=30.0, help="simulated minutes to run, one tick per 10 s")
++    ap.add_argument("--outside", default=None, help='JSON {"exchange": [pm, kalshi]}')
++    ap.add_argument("--leader", type=float, default=None)
++    a = ap.parse_args(argv)
++    logging.basicConfig(level=logging.WARNING, format="%(message)s")
++    books = json.load(open(a.books))
++    ad = BookAdapter(books, a.cash, ts_of(a.at), json.loads(a.outside) if a.outside else None, a.leader)
++    st = os.path.join(tempfile.mkdtemp(prefix="punt_dry_"), "state.json")
++    ex = PuntExecutor(a.plan, st, sha256_file(a.plan), ad, max_budget=200000.0)
++    if ex.refused:
++        print("REFUSED:", ex.refused)
++        return 1
++    for _ in range(int(a.minutes * 6)):
++        ex.tick()
++        ad.t += 10.0
++    for row in ad.sent:
++        print("order %s %s x%d limit %.3f -> filled %d for %.0f (%s)" % row)
++    print("cash left %.0f, positions %s" % (ad.c, {k: round(v) for k, v in ad.pos.items()}))
++    print(json.dumps({k: {kk: vv for kk, vv in v.items() if kk != "orders"} for k, v in ex.state["steps"].items()}, indent=1))
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main(sys.argv[1:]))
+diff --git a/sigbot/run.py b/sigbot/run.py
+index 7b0d8a9..c2ca951 100644
+--- a/sigbot/run.py
++++ b/sigbot/run.py
+@@ -59,6 +59,7 @@ from .proposals.dev_churn import (DevChurn, overround_series, medians_from_serie
+                                   sell_all_due, LAST_ENTRY as CHURN_LAST_ENTRY, VOL_RECENT, VOL_BASE, EXCLUDE as CHURN_EXCLUDE)
+ from .proposals import election_night as EN
+ from .proposals import wind_down as WD
++from .proposals import punt_executor as PE
+ from .proposals.own_book import OwnLevels
+ from . import strategy_monitor as SMON
+ from . import strategy_stops as STOPS
+@@ -79,6 +80,120 @@ def shock_races_of(bot) -> set:
+     return g() if callable(g) else set()
+ 
+ 
++def punt_races_of(bot) -> set:
++    """Races the punt executor or the election-night sleeve trade (any fill or order of WD.HOLD_PURPOSES) plus every race
++    of an enabled punt plan (BACKLOG 0c / 0000). No other path sells, unwinds, quotes, clips or enters them (empty when
++    not wired, e.g. on test stubs)."""
++    g = getattr(bot, "punt_races", None)
++    return g() if callable(g) else set()
++
++
++class _PuntAdapter:
++    """The punt executor's I/O on the live bot (proposals/punt_executor.py). In the bot's dry-run mode orders are logged
++    and filled virtually at the walked feed book, so a dry run shows the whole sequence."""
++
++    def __init__(self, bot):
++        self.b = bot
++        self.vpos: dict = {}
++        self.vcash = 0.0
++
++    @property
++    def dry(self) -> bool:
++        return bool(self.b.dry_run)
++
++    def now(self) -> float:
++        return time.time()
++
++    def positions(self) -> dict:
++        p = self.b.api.positions(self.b.slug)           # raises on failure: the executor does nothing that tick
++        m = {str(x["exchangeId"]): float(x["quantity"]) for x in p.get("positions", []) if not x.get("settled")}
++        self._settled = {str(x["exchangeId"]) for x in p.get("positions", []) if x.get("settled")}
++        for ex, q in self.vpos.items():
++            m[ex] = m.get(ex, 0.0) + q
++        return m
++
++    def book(self, ex):
++        return self.b.fresh_book(str(ex), 30.0)
++
++    def cash(self) -> float:
++        try:
++            c = float(self.b.api.account().get("balance"))
++        except Exception as e:                          # unread: the cycle's figure (the venue rejects an overdraft anyway)
++            log.warning("PUNT account read: %s", e)
++            c = float(getattr(self.b, "cash", 0.0) or 0.0)
++        return c - self.vcash - shock_reserve(self.b)   # shock's reserve is not ours (0 once its last entry has passed, 3 Nov)
++
++    def _row(self, ex):
++        return next((r for r in (getattr(self.b.direction, "rows", None) or []) if str(r.get("exchange_id")) == str(ex)), None)
++
++    def outside(self, ex, side):
++        r = self._row(ex)
++        if not r:
++            return (None, None)
++        f = lambda x: None if x is None else (float(x) if side == "yes" else 1.0 - float(x))
++        return f(r.get("pm")), f(r.get("kalshi"))
++
++    def outside_stamp(self, ex):
++        r = self._row(ex)
++        return r.get("ts") if r else None
++
++    def leader(self):
++        r = self.b.api.get(f"/tournaments/{self.b.slug}/leaderboard", period="all", sort="pnl", limit=5, offset=0)
++        mine = r.get("myRank")
++        rows = [x for x in r.get("leaderboard") or [] if x.get("rank") != mine]
++        return 100000.0 + max(float(x["pnl"]) for x in rows) if rows else None
++
++    def known(self, ex) -> bool:
++        return str(ex) in self.b.universe.by_exchange
++
++    def abort_requested(self) -> bool:
++        return os.path.exists(os.path.join(HERE, "params", "punt_abort"))
++
++    def fills_cost(self, ids):
++        ids = [i for i in ids if i is not None and not str(i).startswith("dry-")]
++        if not ids or self.b.store is None:
++            return None
++        rows = self.b.store.rows(f"SELECT side, ABS(quantity) q, price FROM fills WHERE order_id IN ({','.join('?' * len(ids))})", ids)
++        if any(r["side"] != "yes" for r in rows):
++            return None                                 # NO-side fill prices are stored in YES terms: use the upper bound
++        return sum(r["q"] for r in rows), sum(r["q"] * r["price"] for r in rows)
++
++    def cancel_ours(self, ids):
++        for i in ids:
++            try:
++                self.b.api.cancel_order(i)
++            except ApiError as e:
++                log.warning("PUNT cancel %s: %s", i, e)
++
++    def clear_others(self, ex, keep):
++        for o in self.b.api.open_orders(exchange_id=str(ex)) or []:
++            if o.get("id") not in keep:
++                self.b.api.cancel_order(o["id"])
++                log.warning("PUNT cancelled our other order %s on %s before trading it", o.get("id"), ex)
++
++    def settled(self) -> set:
++        return set(getattr(self, "_settled", set()))
++
++    def place(self, ex, side, qty, price, key, expires_at, purpose="punt"):
++        if self.dry:
++            got, cost = 0.0, 0.0
++            for px, q in PE.asks_for(self.book(ex) or {}, side):
++                if px > price + 1e-9 or got >= qty:
++                    break
++                n = min(q, qty - got)
++                got, cost = got + n, cost + n * px
++            held = self.positions().get(str(ex), 0.0)
++            pairs = min(got, max(0.0, -held if side == "yes" else held))
++            self.vcash += cost - pairs
++            self.vpos[str(ex)] = self.vpos.get(str(ex), 0.0) + (got if side == "yes" else -got)
++            return f"dry-{key}"
++        exp = datetime.fromtimestamp(expires_at, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")   # fixed per payload (review B1)
++        with self.b.trade_lock:
++            resp = self.b.api.place_order(str(ex), side, "buy", int(qty), price, expiration=exp, key=key)
++            self.b.store.record_order(resp.get("orderId"), str(ex), None, side, "buy", price, int(qty), purpose, response=resp)
++        return resp.get("orderId")
++
++
+ class ExplainedDirection(DirectionTrader):
+     """Directional sleeve restricted to legs whose gap versus outside markets has been explained and marked tradable
+     (params/fair_explained.json verdict trade_yes / trade_no), value signals only, one leg per race (both legs of a
+@@ -504,7 +619,7 @@ class ArbScanner(threading.Thread):
+         if time.time() - b.last_free_unwind < b.cfg.free_unwind_scan_sec:
+             return
+         held = {}
+-        cf_races = cheapfav_races_of(b) | shock_races_of(b)   # a cheap-favourite or shock position next to another
++        cf_races = cheapfav_races_of(b) | shock_races_of(b) | punt_races_of(b)   # a cheap-favourite / shock / punt position next to another
+         for rname in list(b.arb.committed):                  # sleeve's NO is not a set
+             race = b.universe.races.get(rname)
+             if race is None or rname in cf_races:
+@@ -719,6 +834,20 @@ class Bot:
+                 self.shock_ledger()
+             except Exception as e:
+                 log.warning("shock ledger at start-up: %s", e)
++        self.punt = None
++        if getattr(cfg, "punt_enabled", False):
++            try:
++                self.punt = PE.PuntExecutor(os.path.join(HERE, cfg.punt_plan_path), os.path.join(HERE, "params", "punt_state.json"),
++                                            cfg.punt_plan_sha256, _PuntAdapter(self), max_budget=cfg.punt_max_budget,
++                                            cash_floor=cfg.punt_cash_floor)
++                log.warning("PUNT executor enabled: plan %s, %s", cfg.punt_plan_path,
++                            "REFUSED: " + self.punt.refused if self.punt.refused else "hash matches, %d steps" % len(self.punt.plan["steps"]))
++            except Exception as e:
++                log.warning("punt executor disabled: %s", e)
++                self.punt = None
++        # punt / election-night races are never touched by the set paths (recycler, free unwinds, offload, churn)
++        _prot3 = self.arb.protected
++        self.arb.protected = lambda: set(_prot3()) | punt_races_of(self)
+         self.mm = MarketMaker(self.api, self.store, cfg.mm, self.universe, self.slug, cfg.starting_cash, dry_run, HERE)
+         self.mm.touch_fn = self.mm_touch       # last look at the freshest book before quotes are sent
+         self.cash_needs: dict = {}             # sleeve -> (cash short this cycle, why): what the cash raise may sell for
+@@ -889,10 +1018,22 @@ class Bot:
+                     held_side = "no" if o.get("side") == "yes" else "yes"   # an exit buying YES closes held NO
+                     rem = float(o.get("quantity") or 0) - float(o.get("quantityFilled") or o.get("filledQuantity") or 0)
+                     resting_exit[(str(ex_o), held_side)] = resting_exit.get((str(ex_o), held_side), 0.0) + max(0.0, rem)
++        # BACKLOG 0c: `held` sums fills GROSS, so it can exceed what the sleeves still hold. Never close punt / election legs
++        # (whole races), and never the shares that make up a held set (a set's legs all on one side: min |position|)
++        punt_ex = Bot.punt_legs(self) if getattr(self, "universe", None) is not None else set()
++        set_sh: dict = {}
++        for race in (getattr(getattr(self, "universe", None), "races", None) or {}).values():
++            qs = [positions.get(e, 0.0) for e in race.exchange_ids]
++            if len(qs) >= 2 and all(q < 0 for q in qs):
++                for e in race.exchange_ids:
++                    set_sh[(e, "no")] = min(-q for q in qs)
++            elif len(qs) >= 2 and all(q > 0 for q in qs):
++                for e in race.exchange_ids:
++                    set_sh[(e, "yes")] = min(qs)
+         done = 0
+         ttl = (datetime.now(timezone.utc) + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+         for (ex, side), q in held.items():
+-            if done >= write_budget or q < 1 or ex not in fair or ex in recent_exit:
++            if done >= write_budget or q < 1 or ex not in fair or ex in recent_exit or ex in punt_ex:
+                 continue
+             # catch-up / cheap favourites / shock keep their own: what they hold on this side is not ours to close. One-sided,
+             # so never more than the venue position alone allows (their ledgers and the positions read are taken at
+@@ -900,6 +1041,7 @@ class Bot:
+             sleeves = [(getattr(self, a, None) or {}).get(ex, 0.0) for a in ("catchup_open", "cheapfav_open", "shock_open")]
+             pos = positions.get(ex, 0.0)
+             cap = -pos - sum(max(0.0, -v) for v in sleeves) if side == "no" else pos - sum(max(0.0, v) for v in sleeves)
++            cap -= set_sh.get((ex, side), 0.0)            # set legs are the set paths' (0c)
+             q = int(min(q, cap) - resting_exit.get((ex, side), 0.0))   # never close more than held, net of resting exits
+             if q < 1:
+                 continue
+@@ -1136,6 +1278,9 @@ class Bot:
+             sk_now = shock_races_of(self)
+             busy_races |= sk_now
+             excl_races |= sk_now
++            pr_now = punt_races_of(self)             # punt / election races: never the raise's to sell
++            busy_races |= pr_now
++            excl_races |= pr_now
+             if set(needs) == {"shock_reserve"} and bool(getattr(self, "shock_active", lambda: False)()):
+                 return
+             # a clip of ours that may still rest anywhere: pulled before positions are read (review 3: a rested clip filling
+@@ -1574,7 +1719,7 @@ class Bot:
+             if now - t > self.cfg.inside_ttl_sec - 45:
+                 self.inside.last.pop(ex, None)
+         books = {ex: b for ex, b in self.feed.books().items() if ex not in self.mm.quoted}
+-        orders = self.inside.cycle(books, positions, exclude=set(self.mm.quoted), blocked=blocked, prices=prices)
++        orders = self.inside.cycle(books, positions, exclude=set(self.mm.quoted) | Bot.punt_legs(self), blocked=blocked, prices=prices)
+         by_ex: dict = {}
+         for o in orders:
+             by_ex.setdefault(str(o["exchangeId"]), []).append(o)
+@@ -1912,7 +2057,7 @@ class Bot:
+                 race = self.universe.races.get(rname)
+                 if race is None or len(race.exchange_ids) != 2 or rname in CHURN_EXCLUDE or ch.held(rname) > 0:
+                     continue
+-                if rname in cheapfav_races_of(self) or rname in shock_races_of(self):
++                if rname in cheapfav_races_of(self) or rname in shock_races_of(self) or rname in punt_races_of(self):
+                     continue                                   # cheap-favourite NO legs (held to the call) and shock positions are not sets
+                 n = venue_sets(race)
+                 if n <= 0:
+@@ -1933,7 +2078,7 @@ class Bot:
+             for race in self.universe.races.values():
+                 if not ch.eligible(race, now) or race.name in self.arb.hostile or self.arb.cooldown.get(race.name, 0) > now:
+                     continue
+-                if race.name in cheapfav_races_of(self) or race.name in shock_races_of(self):
++                if race.name in cheapfav_races_of(self) or race.name in shock_races_of(self) or race.name in punt_races_of(self):
+                     continue                                   # a cheap-favourite or shock race: the ledgers stay apart
+                 med = self.churn_med.get(race.name)
+                 if med is None:
+@@ -2022,6 +2167,7 @@ class Bot:
+         ({"races": [...], "exchanges": [...]}, written by hand or by the punt executor; read every call)."""
+         races = {r: "cheap favourites" for r in cheapfav_races_of(self)}
+         races.update({r: "shock mode" for r in shock_races_of(self)})   # shock closes its own (flat by 12:00 ET 3 Nov)
++        races.update({r: "punt / election night" for r in punt_races_of(self)})   # whole races, not just the traded leg
+         if self.churn is not None:
+             races.update({l["race"]: "high-frequency arb" for l in self.churn.lots})
+         legs = {str(e): "catch-up sweep" for e, q in (getattr(self, "catchup_open", None) or {}).items() if q}
+@@ -2710,7 +2856,8 @@ class Bot:
+         cu_races = {self.universe.by_exchange[e][0] for e in cu_ex if e in self.universe.by_exchange}
+         cands = [c for c in cf.candidates(rows, positions, race_legs) if c["exchange_id"] not in resting   # the venue shows,
+                  and not (ch is not None and ch.held(c["race"])) and skip.get(c["exchange_id"], 0) <= now   # keep them apart
+-                 and c["race"] not in cu_races and c["race"] not in shock_races_of(self)]   # nor shock's races
++                 and c["race"] not in cu_races and c["race"] not in shock_races_of(self)   # nor shock's races
++                 and c["race"] not in punt_races_of(self)]                                # nor the punt's
+         if not cands:
+             return
+         touch = {}
+@@ -2772,6 +2919,48 @@ class Bot:
+             except ApiError as e:
+                 log.warning("cheapfav entry %s: %s", o["exchange_id"], e)
+     # ------------------------------------------------------------------ shock mode (proposals/shock_mode.py)
++    # --------------------------------------------------------------- punt executor (BACKLOG 0000, research_notes/punt_plan.md)
++    def punt_races(self) -> set:
++        """Races of every leg with a punt / election fill or order (WD.HOLD_PURPOSES), plus the enabled plan's legs; read at
++        most every 30 s. A failed read keeps the last answer."""
++        now = time.time()
++        c = getattr(self, "_punt_races_c", None)
++        if c is not None and now - c[0] < 30.0:
++            return c[1]
++        ex = set()
++        if getattr(self, "store", None) is not None:
++            ph = ",".join("?" * len(WD.HOLD_PURPOSES))
++            try:
++                ex = {str(r["exchange_id"]) for r in self.store.rows(
++                    f"SELECT DISTINCT exchange_id FROM fills WHERE purpose IN ({ph}) UNION "
++                    f"SELECT DISTINCT exchange_id FROM orders WHERE purpose IN ({ph})", WD.HOLD_PURPOSES * 2)}
++            except Exception as e:
++                log.warning("punt races: %s", e)
++                if c is not None:
++                    return c[1]
++        pe = getattr(self, "punt", None)
++        if pe is not None:
++            ex |= pe.legs()
++        ro = getattr(getattr(self, "universe", None), "race_of", None)
++        races = {r.name for r in (ro(e) for e in ex) if r is not None} if ro is not None else set()
++        self._punt_races_c = (now, races)
++        return races
++
++    def punt_legs(self) -> set:
++        u = getattr(self, "universe", None)
++        races = punt_races_of(self)
++        return {e for r in races for e in (u.races[r].exchange_ids if u is not None and r in u.races else ())}
++
++    def punt_loop(self):
++        """Thread: one executor tick every punt_tick_sec; never dies."""
++        while not self.stop:
++            t0 = time.time()
++            try:
++                self.punt.tick()
++            except Exception as e:
++                log.exception("punt tick failed: %s", e)
++            time.sleep(max(1.0, self.cfg.punt_tick_sec - (time.time() - t0)))
++
+     def shock_races(self) -> set:
+         """Races where shock mode holds a position or has an entry in flight (its ledger plus entry contexts)."""
+         return set(getattr(self, "shock_races_cache", None) or ())   # published by shock_ledger / shock_tick under the lock
+@@ -3332,8 +3521,13 @@ class Bot:
+                 time.sleep(self.cfg.election_poll_sec)
+                 continue
+             ttl = (datetime.now(timezone.utc) + timedelta(seconds=en.cfg.ttl_sec)).strftime("%Y-%m-%dT%H:%M:%SZ")
++            pe = getattr(self, "punt", None)            # review B3: never trade a race of the enabled punt plan
++            pl = {e for x in (pe.legs() if pe is not None else ()) for r in [self.universe.race_of(x)] if r is not None for e in r.exchange_ids}
+             for o in orders:
+                 log.info("ELECTION %s %s %s x%s at %s: %s", o.get("kind"), o.get("exchangeId"), o.get("side"), o.get("quantity"), o.get("price"), o.get("reason"))
++                if str(o.get("exchangeId")) in pl:
++                    log.warning("ELECTION skips %s: a punt plan race", o.get("exchangeId"))
++                    continue
+                 if self.dry_run:
+                     continue
+                 if o.get("kind") != "exit" and strategy_paused(self, "election"):
+@@ -3481,13 +3675,17 @@ class Bot:
+             try:
+                 ranked = self.tracker.rank(n, price_band=(self.cfg.mm.min_price, self.cfg.mm.max_price))
+                 exs = [ex for ex, _ in ranked if (prices.get(ex) or {}).get("bestBid") is not None and (prices.get(ex) or {}).get("bestAsk") is not None]
++                pl = Bot.punt_legs(self)
++                exs = [ex for ex in exs if ex not in pl]          # never quote a punt / election leg (self-trade, nets the punt)
+                 if len(exs) >= max(4, n // 2):
+                     self.mm.quoted = exs[:n]
+                     log.info("mm markets by tracker edge: %d chosen (top %s)", len(self.mm.quoted), [(e, round(sc, 2)) for e, sc in ranked[:5]])
+                     return self.mm.quoted
+             except Exception as e:
+                 log.warning("tracker rank: %s", e)
+-        return self.mm.select_markets(prices, self.volume)
++        pl = Bot.punt_legs(self)
++        self.mm.quoted = [ex for ex in self.mm.select_markets(prices, self.volume) if ex not in pl]   # select_markets sets quoted itself
++        return self.mm.quoted
+ 
+     # --------------------------------------------------------------- realtime feed
+     def mm_gate_ready(self, killed: bool, now: Optional[float] = None) -> bool:
+@@ -3925,7 +4123,7 @@ class Bot:
+                     and not strategy_paused(self, "exit:unwinds")):
+                 self.last_free_unwind = time.time()
+                 held_books = {}
+-                cf_races = cheapfav_races_of(self) | shock_races_of(self)   # a cheap-favourite or shock position next to
++                cf_races = cheapfav_races_of(self) | shock_races_of(self) | punt_races_of(self)   # a cheap-favourite / shock / punt position next to
+                 for rname in list(self.arb.committed):                  # another sleeve's NO is not a set
+                     if rname in cf_races:
+                         continue
+@@ -4011,6 +4209,9 @@ class Bot:
+             self.scanner = ArbScanner(self)
+             self.scanner.start()
+             log.info("arb scanner started: every %.1fs at +%.1fs offset", self.cfg.arb_scan_sec, self.cfg.arb_scan_offset)
++        if getattr(self, "punt", None) is not None and not once:
++            threading.Thread(target=self.punt_loop, name="punt", daemon=True).start()
++            log.warning("PUNT executor thread started (%s): every %.0fs", "DRY" if self.dry_run else "LIVE", self.cfg.punt_tick_sec)
+         if self.shock is not None and not self.dry_run and not once:
+             threading.Thread(target=self.shock_loop, name="shock", daemon=True).start()
+             log.info("shock mode thread started: every %.0fs", self.cfg.shock_poll_sec)
+diff --git a/tests/sim_pipeline.py b/tests/sim_pipeline.py
+index 2803251..7de50c7 100644
+--- a/tests/sim_pipeline.py
++++ b/tests/sim_pipeline.py
+@@ -5,6 +5,7 @@
+     python3 tests/sim_pipeline.py --list          # scenario names
+     python3 tests/sim_pipeline.py --churn         # high-frequency arb (churn_enabled) on in every scenario's sandbox, incl. day
+     python3 tests/sim_pipeline.py --raise         # the cash raise, both tiers, on in every scenario's sandbox, incl. day
++    python3 tests/sim_pipeline.py --punt          # the punt executor on in every scenario's sandbox (3,000 stage-1 test plan)
+     python3 tests/sim_pipeline.py -v              # also print per-scenario activity counts
+     python3 tests/sim_pipeline.py --patch=fix.py  # exec fix.py (with `mods` = the sandbox sigbot modules) before running:
+                                                   # try a candidate fix on the sandbox copy without touching sigbot/
+@@ -48,6 +49,7 @@ replays logs in a thread), election night (off in config), thread interleaving b
+ from __future__ import annotations
+ 
+ import collections
++import hashlib
+ import json
+ import logging
+ import math
+@@ -94,12 +96,20 @@ def install_network_guard():
+         os.environ.pop(k, None)
+ 
+ 
++LIVE_STATE = ("churn_state.json", "catchup_state.json", "wind_down_state.json", "strategy_kill.json", "strategy_stops_state.json",
++              "strategy_monitor_state.json", "shock_state.json", "raise_state.json", "cheapfav_state.json", "punt_state.json",
++              "punt_plan.json", "punt_abort")
++
++
+ def make_sandbox() -> str:
+     sb = tempfile.mkdtemp(prefix="sigbot-sim-")
+     shutil.copytree(os.path.join(ROOT, "sigbot"), os.path.join(sb, "sigbot"),
+                     ignore=shutil.ignore_patterns("__pycache__", "*.bak*", "*.sleeves_wip", "*.pyc", "hft_data"))
+     shutil.copyfile(os.path.join(ROOT, "config.json"), os.path.join(sb, "config.json"))
+-    shutil.copytree(os.path.join(ROOT, "params"), os.path.join(sb, "params_master"), ignore=shutil.ignore_patterns("*.bak*"))
++    # the live bot's runtime state is not copied: a scenario starts from its own premise, not from tonight's live churn lots,
++    # catch-up ledger, strategy pauses or punt state (25 Oct: the live strategy_stops_state.json paused arb in every sandbox,
++    # so recycle_* failed on an unchanged tree and botctl's precheck refused every deploy)
++    shutil.copytree(os.path.join(ROOT, "params"), os.path.join(sb, "params_master"), ignore=shutil.ignore_patterns("*.bak*", *LIVE_STATE))
+     os.makedirs(os.path.join(sb, "data"))
+     for f in ("markets.json", "volume_cache.json", "volume_cache.json.vol"):
+         src = os.path.join(ROOT, "data", f)
+@@ -213,6 +223,8 @@ class Sim:
+         # (incl. the 24-h replay) runs the live config as deployed.
+         overrides = dict(ARB_CODE_CFG) if sc.name in ARB_CODE_SCENARIOS else {}
+         overrides.update(FORCE_CFG)
++        if PUNT_ALL and sc.name not in PUNT_SKIP:
++            overrides.update(punt_test_plan(self))
+         overrides.update(sc.cfg)
+         for k, val in overrides.items():
+             obj = cfg
+@@ -288,6 +300,9 @@ class Sim:
+             self.chk.sub = name
+             self.v.step = f"{self.chk.label} {name}"
+             getattr(s, name)()
++        if getattr(self.bot, "punt", None) is not None and self.sc.name != "punt":   # the executor's thread (punt_loop), in sequence
++            self.chk.sub = "punt_tick"
++            self.bot.punt.tick()
+         if getattr(self.bot, "shock", None) is not None:   # shock mode's own thread (shock_loop), run in sequence here
+             self.chk.sub = "shock_tick"
+             self.v.step = f"{self.chk.label} shock_tick"
+@@ -402,7 +417,7 @@ def set_race_bids_sum(sim, race_name, total, spread_ticks=1):
+ 
+ 
+ # ======================================================================================== invariants
+-EXEMPT_ADD = {"exit", "offload", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct)
++EXEMPT_ADD = {"exit", "offload", "arb", "unw", "fre", "seed", "hedge", "shk", "shx", "shm", "punt"}   # shk/shx/shm: shock mode, exempt from the partisan cap (Sizhe 24 Oct); punt: only with an approved plan's cap_exempt
+ RATE_LIMITS = {
+     # category: [(window_sec, max events per object), ...]   object = exchange or race
+     "requote": [(60, 5)],            # MM/tilt/inside cancel-all per exchange: 1 per 30-s cycle + fast requotes (3/min total)
+@@ -640,7 +655,7 @@ class Checker:
+         # its direction; every other sleeve still sees the total (shock included) and must stay inside the rest
+         sk_pos = {}                                     # the venue's own record of shk/shx fills (the bot's ledger lags a cycle)
+         for m in v.fill_meta.values():
+-            if m.get("prefix") in ("shk", "shx", "shm"):
++            if m.get("prefix") in ("shk", "shx", "shm", "punt"):     # (the punt scenario's plan is cap_exempt, as Sizhe's yes)
+                 sk_pos[m["ex"]] = sk_pos.get(m["ex"], 0.0) + (m["qty"] if m["side"] == "yes" else -m["qty"])
+         sk_pos = {ex: q for ex, q in sk_pos.items() if abs(q) >= 1}
+         sk_nd = risk.exposure(self.sim.universe, sk_pos, prices).net_d_notional if sk_pos else 0.0
+@@ -2339,6 +2354,144 @@ class ShockMakerPostOnly(ShockMaker):
+     post_only_dmm = True
+     doc = "R3 worst case: the DMM quotes post-only, so its walk stops one tick short of our resting exit and never fills it"
+ 
++# ---------------------------------------------------------------- 3 Nov punt executor (BACKLOG 0000, research_notes/punt_plan.md)
++class Punt(Scenario):
++    name, cycles, seed = "punt", 110, 53
++    doc = ("punt executor ON with the live config otherwise: a hash-matched plan buys stage 1 (17:30-17:45 ET) in capped chunks, "
++           "the clock jumps to 19:50 ET with the outside at 0.97 and SIG repriced so stage 1 is sold at >= 0.85 after 3 polls, then to "
++           "22:05 ET for stage 2; no punt order above its cap or outside its window, stage-1 cost <= budget, the sale never flips "
++           "the position, and no other sleeve sends an order on any punt race")
++
++    def venue_setup(self, sim):
++        WD = sys.modules["sigbot.proposals.wind_down"]
++        CLOCK.t = WD.et_ts(2026, 11, 3, 17, 25)
++        mids = two_leg_mid_races(sim, 0.25, 0.75)
++        self.r1, self.r2 = mids[0], mids[1]
++        self.ex1 = min(sim.legs(self.r1), key=lambda e: sim.v.mid(e))      # the cheaper leg (~0.25-0.45)
++        self.ex2 = min(sim.legs(self.r2), key=lambda e: sim.v.mid(e))
++        self.cap1 = round(SV.P(sim.v.ask_t[self.ex1]) + 0.02, 3)
++        self.budget = 6000.0
++        plan = {"plan_id": "SIM", "budget": self.budget, "cap_exempt": True, "steps": [
++            {"id": "s1", "kind": "buy", "exchange_id": self.ex1, "side": "yes", "max_price": self.cap1, "max_cash": self.budget,
++             "chunk_cash": 1500, "start": "2026-11-03T17:30:00-05:00", "stop": "2026-11-03T17:45:00-05:00", "min_gap_sec": 20},
++            {"id": "s1_sell", "kind": "sell", "of_step": "s1", "min_price": 0.85, "chunk_shares": 5000, "outside_min": 0.95,
++             "outside_polls": 3, "single_venue_min": 0.97, "start": "2026-11-03T19:45:00-05:00", "stop": "2026-11-03T21:30:00-05:00",
++             "min_gap_sec": 20},
++            {"id": "s2", "kind": "target_buy", "after_step": "s1_sell", "min_sold_frac": 0.7, "target_min": 1.0, "target_k_leader": 0.0,
++             "target_fallback": 1.0, "max_cash": 3000, "chunk_cash": 1500,
++             "candidates": [{"exchange_id": self.ex2, "side": "yes", "max_price": 0.6, "min_price": 0.05}],
++             "start": "2026-11-03T22:00:00-05:00", "stop": "2026-11-03T23:00:00-05:00", "min_gap_sec": 20}]}
++        os.makedirs(os.path.join(sim.sb, "params"), exist_ok=True)
++        path = os.path.join(sim.sb, "params", "punt_plan.json")
++        open(path, "w").write(json.dumps(plan))
++        for f in ("punt_state.json", "punt_abort"):
++            try:
++                os.remove(os.path.join(sim.sb, "params", f))
++            except FileNotFoundError:
++                pass
++        self.plan = plan
++        self.cfg = {"punt_enabled": True, "punt_plan_path": "params/punt_plan.json",
++                    "punt_plan_sha256": hashlib.sha256(open(path, "rb").read()).hexdigest()}
++
++    def bot_setup(self, sim):
++        b = sim.bot
++        if b.punt is None or b.punt.refused:
++            sim.chk.violation("punt_not_enabled", str(getattr(b.punt, "refused", "no executor")))
++        self.legs = set(sim.legs(self.r1)) | set(sim.legs(self.r2))
++        self.t_start = CLOCK.t
++
++    def before_cycle(self, sim, i):
++        WD = sys.modules["sigbot.proposals.wind_down"]
++        v = sim.v
++        if i == 40:                                  # stage 1 wins: the outside calls it, SIG reprices the leg to 0.90/0.91
++            CLOCK.t = max(CLOCK.t, WD.et_ts(2026, 11, 3, 19, 50))
++            v.outside[self.ex1] = 0.97
++            other = [e for e in sim.legs(self.r1) if e != self.ex1][0]
++            v.outside[other] = 0.03
++            v.set_touch(self.ex1, int(round(0.90 / SV.TICK)), int(round(0.91 / SV.TICK)))
++            v.set_touch(other, int(round(0.08 / SV.TICK)), int(round(0.09 / SV.TICK)))
++            sim.bot.mm_need_xv = True
++        if i == 75:
++            CLOCK.t = max(CLOCK.t, WD.et_ts(2026, 11, 3, 22, 5))
++            sim.bot.mm_need_xv = True
++
++    def on_tick(self, sim):
++        if sim.bot.punt is not None:
++            sim.step("punt tick", sim.bot.punt.tick)
++            q = sim.v.signed_positions().get(self.ex1, 0.0)
++            if q < -0.5 and not getattr(self, "flip", False):
++                self.flip = True
++                sim.chk.violation("punt_flip", f"stage-1 leg {self.ex1} went short ({q:+.0f}): the sale sold more than held")
++
++    def final_checks(self, sim):
++        v, st = sim.v, sim.bot.punt.state if sim.bot.punt else {}
++        WD = sys.modules["sigbot.proposals.wind_down"]
++        win = {s["id"]: (WD_ts(s["start"]), WD_ts(s["stop"])) for s in self.plan["steps"]}
++        bad, other, cost1 = [], [], 0.0
++        for o in v.orders.values():
++            if o.ex not in self.legs:
++                continue
++            if o.prefix == "punt":
++                sid = o.key.split("-")[2]
++                lo, hi = win[sid]
++                if not lo <= o.t <= hi:
++                    bad.append(f"{o.key} at {o.t - lo:+.0f}s outside its window")
++                if sid == "s1":
++                    if o.limit > self.cap1 + 1e-9:
++                        bad.append(f"{o.key} limit {o.limit} > cap {self.cap1}")
++                    cost1 += o.filled * o.limit
++                if sid == "s1_sell" and not (o.side == "no" and o.limit <= 0.15 + 1e-9):
++                    bad.append(f"{o.key} sells below 0.85 ({o.side} @{o.limit})")
++            elif o.prefix != "seed" and o.t >= self.t_start:
++                other.append(f"{o.key} {o.ex} {o.side} @{o.limit}")
++        def V(kind, detail):
++            sim.chk.viol.append({"scenario": self.name, "step": "end", "t": CLOCK.t, "kind": kind, "detail": detail, "trace": ""})
++        if bad:
++            V("punt_order", "; ".join(bad[:4]))
++        if other:
++            V("punt_race_touched", f"{len(other)} non-punt orders on punt races: " + "; ".join(other[:4]))
++        if cost1 > self.budget + 1e-6:
++            V("punt_budget", f"stage 1 cost (at limits) {cost1:.0f} > budget {self.budget:.0f}")
++        steps = st.get("steps", {})
++        n = {}
++        for o in v.orders.values():
++            if o.prefix == "punt":
++                k = o.key.split("-")[2]
++                n[k] = (n.get(k, (0, 0))[0] + 1, n.get(k, (0, 0))[1] + o.filled)
++        sim.chk.notes.append("punt orders (count, filled) " + json.dumps(n) + "; stage-1 cost at limits %.0f of %.0f" % (cost1, self.budget))
++        if not (steps.get("s1", {}).get("filled", 0) > 0 and steps.get("s1_sell", {}).get("sold", 0) > 0 and steps.get("s2", {}).get("filled", 0) > 0):
++            V("punt_incomplete", json.dumps({k: {kk: steps[k].get(kk) for kk in ("status", "filled", "sold", "why")} for k in steps}))
++
++
++PUNT_ALL = False          # --punt: the executor ON in every scenario's sandbox with a small test plan (stage 1 only)
++# --punt leaves out the scenarios built on a cash shortfall (the test plan's 3,000 buy changes their premise, the same reason
++# shock mode is off in them) and the punt scenario itself (it has its own plan)
++PUNT_SKIP = {"punt", "churn_many_lowcash", "cash_raise", "cash_raise_sets", "cash_raise_cheapfav", "recycle_oversize", "shock_reserve"}
++
++
++def punt_test_plan(sim) -> dict:
++    """--punt: a 3,000 stage-1 buy on the cheaper leg of a 0.25-0.75 race, from 60 s into the run for an hour, hash-matched."""
++    mids = two_leg_mid_races(sim, 0.25, 0.75)          # the last such race: scenarios build their premises on the first ones
++    ex = min(sim.legs(mids[-1]), key=lambda e: sim.v.mid(e))
++    iso = lambda t: datetime.fromtimestamp(t, timezone.utc).isoformat()
++    plan = {"plan_id": "SIMALL", "budget": 3000, "cap_exempt": True, "steps": [
++        {"id": "s1", "kind": "buy", "exchange_id": ex, "side": "yes", "max_price": round(SV.P(sim.v.ask_t[ex]) + 0.02, 3),
++         "max_cash": 3000, "chunk_cash": 1000, "start": iso(CLOCK.t + 60), "stop": iso(CLOCK.t + 3600), "min_gap_sec": 20}]}
++    path = os.path.join(sim.sb, "params", "punt_plan.json")
++    os.makedirs(os.path.dirname(path), exist_ok=True)
++    open(path, "w").write(json.dumps(plan))
++    try:
++        os.remove(os.path.join(sim.sb, "params", "punt_state.json"))
++    except FileNotFoundError:
++        pass
++    return {"punt_enabled": True, "punt_plan_path": "params/punt_plan.json",
++            "punt_plan_sha256": hashlib.sha256(open(path, "rb").read()).hexdigest()}
++
++
++def WD_ts(s):
++    return datetime.fromisoformat(s).timestamp()
++
++
+ # scenarios built on a cash shortfall: with the live config's shock_enabled true, the 15k shock reserve would take their
+ # cash before their own premise (low cash) is reached; shock with the reserve has its own scenarios (shock*, shock_reserve)
+ for _c in (ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, RecycleOversize):
+@@ -2346,7 +2499,7 @@ for _c in (ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, Recycl
+ 
+ SCENARIOS = [Calm, Sweep6, OutsideMove, Catchup, Shock, ShockMaker, ShockMakerPostOnly, CheapFav, DevChurnSim, ChurnWiden, ChurnReject, ChurnRestart, ChurnFreeFirst, ChurnInterleave, ChurnStaleFill, ChurnBlowout,
+              ChurnMany, ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, ShockReserve, Recycle, RecycleTail, RecycleStaleFill, RecycleRace, RecycleOversize, RecycleCash, RecycleCashGone, OwnBid, ExitsWrongSide,
+-             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Day]
++             Offload, SlowWrites, FeedSilent, MMOutageLastLook, AonReject, InsideOn, WindDown, Punt, Day]
+ 
+ 
+ # ======================================================================================== main
+@@ -2370,6 +2523,9 @@ def main(argv):
+         FORCE_CFG["raise_sets_enabled"] = True
+     if "--wind" in argv:                     # the wind-down on in every scenario's sandbox (it acts only from 31 Oct)
+         FORCE_CFG["wind_down_enabled"] = True
++    if "--punt" in argv:                     # the punt executor on in every scenario's sandbox with a small test plan
++        global PUNT_ALL
++        PUNT_ALL = True
+     names = [a for a in argv if not a.startswith("-")]
+     if "--list" in argv:
+         for s in SCENARIOS:
+diff --git a/tests/test_guards.py b/tests/test_guards.py
+index 0194874..641bb60 100644
+--- a/tests/test_guards.py
++++ b/tests/test_guards.py
+@@ -3082,5 +3082,315 @@ check("sim wind_down: a clock jump re-arms the MM's restart wait (no quote on a
+       _g1 is False and _g2 is True and _gb.mm_need_xv is False
+       and "                self.preload(sim)\n" in _sp and "sim.bot.mm_need_xv = True" in _sp, f"{_g1} {_g2}")
+ 
++# ---------------------------------------------------------------- punt executor (BACKLOG 0000 / 0c; research_notes/punt_plan.md)
++import json as _pj
++import tempfile as _ptf
++from sigbot.proposals import punt_executor as PE  # noqa: E402
++
++
++class _PuntFake:
++    """Fake venue for the executor: a fake clock, one book per leg, orders fill at once against the book up to their limit
++    (YES/NO netting pays 1 a pair), every order and cancel recorded; `fail` = statuses to raise on the next places."""
++    dry = False
++
++    def __init__(self, t, books, cash=100000.0):
++        self.t, self.books, self.c = t, _pj.loads(_pj.dumps(books)), cash
++        self.pos, self.sent, self.cancels, self.fail, self.out, self.stamp, self.lead = {}, [], [], [], {}, 0, None
++        self.abort = False
++
++    def now(self): return self.t
++    def positions(self): return dict(self.pos)
++    def book(self, ex): return self.books.get(str(ex))
++    def cash(self): return self.c
++    def outside(self, ex, side):
++        v = self.out.get(str(ex), (None, None))
++        return tuple(None if x is None else (x if side == "yes" else 1 - x) for x in v)
++    def outside_stamp(self, ex): return self.stamp
++    def leader(self): return self.lead
++    def known(self, ex): return str(ex) in self.books
++    def abort_requested(self): return self.abort
++    def fills_cost(self, ids): return None
++    def cancel_ours(self, ids): self.cancels.extend(ids)
++    def clear_others(self, ex, keep): pass
++
++    def place(self, ex, side, qty, price, key, expires_at, purpose="punt"):
++        self.calls = getattr(self, "calls", []) + [(key, ex, side, qty, price, expires_at)]
++        if self.fail:
++            st = self.fail.pop(0)
++            if st == "lost":                     # placed on the venue, response lost
++                self.fail.insert(0, 409) if False else None
++                self.placed_keys = getattr(self, "placed_keys", set()) | {key}
++            raise R.ApiError(502 if st == "lost" else st, "X", "fake %s" % st)
++        if key in getattr(self, "placed_keys", set()):
++            raise R.ApiError(409, "CONFLICT", "key used")
++        got = cost = 0.0
++        for px, q in PE.asks_for(self.books[str(ex)], side):
++            if px > price + 1e-9 or got >= qty:
++                break
++            n = min(q, qty - got)
++            got, cost = got + n, cost + n * px
++        held = self.pos.get(str(ex), 0.0)
++        pairs = min(got, max(0.0, -held if side == "yes" else held))
++        self.c += pairs - cost
++        self.pos[str(ex)] = held + (got if side == "yes" else -got)
++        self.sent.append(dict(ex=str(ex), side=side, qty=qty, price=price, key=key, got=got, cost=cost, purpose=purpose, t=self.t))
++        return "o%d" % len(self.sent)
++
++
++def _pbook(asks=(), bids=()):
++    return {"asks": [{"price": p, "quantity": q} for p, q in asks], "bids": [{"price": p, "quantity": q} for p, q in bids]}
++
++
++_T0 = PE.ts_of("2026-11-03T17:00:00-05:00")
++
++
++def _pplan(**over):
++    p = {"plan_id": "T", "budget": 20000, "cap_exempt": True, "steps": [
++        {"id": "s1", "kind": "buy", "exchange_id": "1007", "side": "yes", "max_price": 0.35, "max_cash": 20000, "chunk_cash": 5000,
++         "start": "2026-11-03T17:30:00-05:00", "stop": "2026-11-03T19:45:00-05:00", "min_gap_sec": 20, "abort_if_outside_below": 0.2},
++        {"id": "s1_sell", "kind": "sell", "of_step": "s1", "min_price": 0.85, "chunk_shares": 20000, "outside_min": 0.95,
++         "outside_polls": 3, "single_venue_min": 0.97, "start": "2026-11-03T19:45:00-05:00", "stop": "2026-11-04T04:00:00-05:00",
++         "min_gap_sec": 20},
++        {"id": "s2", "kind": "target_buy", "after_step": "s1_sell", "min_sold_frac": 0.7, "target_min": 300000,
++         "target_k_leader": 1.12, "target_fallback": 320000, "max_cash": 400000, "chunk_cash": 10000,
++         "candidates": [{"exchange_id": "2001", "side": "yes", "max_price": 0.30, "min_price": 0.08},
++                        {"exchange_id": "2002", "side": "yes", "max_price": 0.30, "min_price": 0.08}],
++         "start": "2026-11-03T22:00:00-05:00", "stop": "2026-11-04T04:00:00-05:00", "min_gap_sec": 20}]}
++    p.update(over)
++    return p
++
++
++def _pmk(plan, fake, sha=None, state=None):
++    d = _ptf.mkdtemp(prefix="punt_t_")
++    path = os.path.join(d, "plan.json")
++    open(path, "w").write(_pj.dumps(plan))
++    st = state or os.path.join(d, "state.json")
++    return PE.PuntExecutor(path, st, PE.sha256_file(path) if sha is None else sha, fake, max_budget=150000.0, cash_floor=100.0), path, st
++
++
++def _prun(ex, fake, until, step=10.0):
++    while fake.t < until:
++        ex.tick()
++        fake.t += step
++
++
++_books = {"1007": _pbook(asks=[(0.30, 20000), (0.32, 30000), (0.34, 40000), (0.40, 1e6)], bids=[(0.29, 1e5)]),
++          "2001": _pbook(asks=[(0.35, 1e6)]), "2002": _pbook(asks=[(0.10, 2e6), (0.12, 2e6)])}
++
++# refusals: hash mismatch, an invalid plan, a sell that starts before its buy stops
++_f = _PuntFake(_T0, _books)
++_e, _, _ = _pmk(_pplan(), _f, sha="0" * 64)
++_prun(_e, _f, _T0 + 3 * 3600)
++check("punt: a plan whose bytes do not hash to the approved SHA-256 is refused and sends nothing", bool(_e.refused) and not _f.sent, str(_e.refused))
++_bad = _pplan()
++_bad["steps"][0]["max_price"] = 1.2
++_bad["steps"][1]["start"] = "2026-11-03T19:00:00-05:00"
++_bad["steps"][2]["candidates"][0]["exchange_id"] = "9999"
++_f = _PuntFake(_T0, _books)
++_e, _, _ = _pmk(_bad, _f)
++_r = _e.refused or ""
++check("punt: validation refuses a max price above 0.99, a sell starting before its buy stops and an unknown exchange",
++      "max_price 1.2" in _r and "starts before s1 stops" in _r and "unknown exchange '9999'" in _r and not _f.sent, _r)
++_f = _PuntFake(_T0, _books)
++_e, _, _ = _pmk(_pplan(budget=500000), _f)
++check("punt: a budget above punt_max_budget is refused", bool(_e.refused) and "budget" in _e.refused, str(_e.refused))
++
++# the start / stop window on a fake clock; never above the max price; budget, max_cash and the cash floor
++_f = _PuntFake(_T0, _books, cash=15000.0)
++_e, _, _st = _pmk(_pplan(), _f)
++_prun(_e, _f, PE.ts_of("2026-11-03T17:30:00-05:00") - 1)
++check("punt: nothing is sent before the step's start (fake clock 17:00-17:29:59 ET)", not _f.sent, str(_f.sent[:1]))
++_prun(_e, _f, PE.ts_of("2026-11-03T19:45:00-05:00") + 600)
++_s1 = [o for o in _f.sent if o["key"].startswith("punt-T-s1-")]
++check("punt: buys start at the window and every limit is a capped tick <= max_price 0.35",
++      _s1 and min(o["t"] for o in _s1) >= PE.ts_of("2026-11-03T17:30:00-05:00") and all(o["price"] <= 0.35 for o in _s1), str(_s1[:2]))
++check("punt: no buy after the stop time", all(o["t"] <= PE.ts_of("2026-11-03T19:45:00-05:00") for o in _s1))
++check("punt: spend stays within free cash minus the 100 floor (15k account)", sum(o["cost"] for o in _s1) <= 15000 - 100 + 1e-6,
++      "%.0f" % sum(o["cost"] for o in _s1))
++check("punt: orders at least min_gap_sec and one TTL apart", all(b["t"] - a["t"] >= PE.ORDER_TTL for a, b in zip(_s1, _s1[1:])))
++check("punt: buy orders are recorded with purpose punt", all(o["purpose"] == "punt" for o in _s1))
++_f = _PuntFake(_T0, _books, cash=1e6)
++_e, _, _ = _pmk(_pplan(), _f)
++_prun(_e, _f, PE.ts_of("2026-11-03T19:50:00-05:00"))
++_cost = sum(o["cost"] for o in _f.sent)
++check("punt: total buy cost never exceeds the plan budget / max_cash (20k) with 1M of free cash", _cost <= 20000 + 1e-6 and _cost > 18000, "%.0f" % _cost)
++_f = _PuntFake(_T0, {"1007": _pbook(asks=[(0.40, 1e6)])} | {k: v for k, v in _books.items() if k != "1007"})
++_e, _, _ = _pmk(_pplan(), _f)
++_prun(_e, _f, PE.ts_of("2026-11-03T19:50:00-05:00"))
++check("punt: a touch above max_price is never chased (no order at all)", not _f.sent, str(_f.sent[:1]))
++
++# idempotency: a 502 keeps the key; a restart reuses the state and never repeats a key; 3 rejections abort the step
++_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
++_e, _pp, _st = _pmk(_pplan(), _f)
++_f.fail = [502]
++_e.tick(); _f.t += 10; _e.tick()
++check("punt: after a 502 the same idempotency key AND the identical payload (qty, price, expiry) are resent next tick",
++      [o["key"].rsplit("-", 1)[0] for o in _f.sent] == ["punt-T-s1-0"] and len(_f.calls) == 2 and _f.calls[0] == _f.calls[1], str(_f.calls))
++for _ in range(12):
++    _f.t += 10; _e.tick()
++_e2 = PE.PuntExecutor(_pp, _st, PE.sha256_file(_pp), _f, max_budget=150000.0, cash_floor=100.0)   # restart
++for _ in range(12):
++    _f.t += 10; _e2.tick()
++_keys = [o["key"] for o in _f.sent]
++check("punt: a restart resumes from the state file with new keys only (no key sent twice)", len(_keys) == len(set(_keys)) and len(_keys) >= 3, str(_keys))
++check("punt: the previous chunk is cancelled before the next one is sent (review B4)",
++      all(("o%d" % k) in _f.cancels for k in range(1, len(_f.sent))), f"{_f.cancels} {len(_f.sent)}")
++# review B1: the response is lost but the order was placed; the resend under the same key gets 409: counted, key advances
++_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
++_e, _, _ = _pmk(_pplan(), _f)
++_f.fail = ["lost"]
++_e.tick(); _f.t += 10; _e.tick()
++_v = _e.state["steps"]["s1"]
++check("punt: a lost response + 409 on the resend is booked as placed (counted at its limit), the key advances, no abort",
++      _v["status"] == "active" and _v["n"] == 1 and _v["orders"][0]["id"] is None and _v["errors"] == 0 and not _v.get("pending"), str(_v))
++for _ in range(15):
++    _f.t += 10; _e.tick()
++check("punt: after the 409 the next chunk goes out under the next key", any(o["key"].startswith("punt-T-s1-1-") for o in _f.sent), str([o["key"] for o in _f.sent]))
++# a crash after the payload was saved: the restart resends exactly that payload
++_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
++_e, _pp, _st = _pmk(_pplan(), _f)
++_e.st("s1")["status"] = "active"
++_e.st("s1")["base"] = 0.0
++_e.st("s1")["pending"] = {"key": "punt-T-s1-0-x", "ex": "1007", "side": "yes", "qty": 100, "price": 0.3, "exp": _f.t + 30, "purpose": "punt", "what": "BUY"}
++_e.save()
++_e2 = PE.PuntExecutor(_pp, _st, PE.sha256_file(_pp), _f, max_budget=150000.0, cash_floor=100.0)
++_f.t += 5; _e2.tick()
++check("punt: a restart resends the saved pending payload unchanged", getattr(_f, "calls", [])[:1] == [("punt-T-s1-0-x", "1007", "yes", 100, 0.3, _f.t - 5 + 30)],
++      str(getattr(_f, "calls", [])))
++_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
++_e, _, _ = _pmk(_pplan(), _f)
++_f.fail = [400, 403, 422]
++for _ in range(5):
++    _e.tick(); _f.t += 40
++check("punt: three rejected orders in a row abort that step and nothing more is sent",
++      _e.state["steps"]["s1"]["status"] == "aborted" and not _f.sent, str(_e.state["steps"]["s1"]))
++
++# outside called against stage 1: abort the buy; the sale waits for 3 distinct both-venue polls >= 0.95 and is capped
++_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
++_e, _, _ = _pmk(_pplan(), _f)
++_f.out = {"1007": (0.15, 0.12)}
++_e.tick()
++check("punt: a buy step aborts when the outside price falls below abort_if_outside_below", _e.state["steps"]["s1"]["status"] == "aborted" and not _f.sent)
++_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
++_e, _, _ = _pmk(_pplan(), _f)
++_prun(_e, _f, PE.ts_of("2026-11-03T19:46:00-05:00"))
++_held = _f.pos["1007"]
++_f.books["1007"] = _pbook(asks=[(0.92, 1e6)], bids=[(0.90, 1e6)])
++_f.out = {"1007": (0.97, 0.96)}
++for _ in range(6):                                       # same poll stamp: one poll however many ticks
++    _e.tick(); _f.t += 10
++check("punt: one outside poll seen on many ticks counts once (no sale before 3 polls)", not [o for o in _f.sent if "s1_sell" in o["key"]])
++for _ in range(2):
++    _f.stamp += 1; _e.tick(); _f.t += 10
++_sold0 = [o for o in _f.sent if "s1_sell" in o["key"]]
++check("punt: the sale needs 3 polls (2 so far: none)", not _sold0)
++_f.stamp += 1; _e.tick(); _f.t += 10
++_sl = [o for o in _f.sent if "s1_sell" in o["key"]]
++check("punt: the 3rd poll sells: buy NO at <= 0.15 (= sell YES at >= 0.85), purpose punt_exit",
++      len(_sl) == 1 and _sl[0]["side"] == "no" and abs(_sl[0]["price"] - 0.15) < 1e-9 and _sl[0]["purpose"] == "punt_exit", str(_sl))
++_f.pos["1007"] = 5000.0                                   # someone else's sale moved the position: never sell more than held
++for _ in range(20):
++    _f.stamp += 1; _e.tick(); _f.t += 40
++check("punt: never sells more than the venue position (no flip to short)", _f.pos["1007"] >= -1e-9, str(_f.pos["1007"]))
++
++# stage 2: target from the leaderboard; first candidate that reaches it (2002 at 0.10), not the first listed (2001 at 0.35)
++_f = _PuntFake(PE.ts_of("2026-11-03T22:00:00-05:00"), _books, cash=40000.0)
++_e, _, _ = _pmk(_pplan(), _f)
++_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=100000.0)
++_e.state["steps"]["s1_sell"] = dict(_e.st("s1_sell"), status="done", bought=100000.0, sold=100000.0)
++_f.lead = 250000.0
++_prun(_e, _f, PE.ts_of("2026-11-03T23:30:00-05:00"))
++_s2 = [o for o in _f.sent if "-s2-" in o["key"]]
++check("punt: stage 2 target = max(target_min, 1.12 x leader) and it buys the candidate that reaches it",
++      _e.state["steps"]["s2"]["target"] == 300000 and _s2 and all(o["ex"] == "2002" and o["price"] <= 0.30 for o in _s2), str(_e.state["steps"]["s2"].get("chosen")))
++_f = _PuntFake(PE.ts_of("2026-11-03T22:00:00-05:00"), _books, cash=20000.0)
++_e, _, _ = _pmk(_pplan(), _f)
++_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=1.0)
++_e.state["steps"]["s1_sell"] = dict(_e.st("s1_sell"), status="done", bought=1.0, sold=1.0)
++_prun(_e, _f, PE.ts_of("2026-11-04T04:10:00-05:00"))
++check("punt: no candidate reaches the target (20k cash): stage 2 keeps the cash and the step closes at its stop",
++      not _f.sent and _e.state["steps"]["s2"]["status"] == "done", str(_e.state["steps"]["s2"]))
++
++# review B2: a settled stage-1 market is never read as a sale; S6: a sale that sold nothing never opens stage 2
++_f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=1e6)
++_e, _, _ = _pmk(_pplan(), _f)
++_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=60000.0)
++_f.pos["1007"] = 60000.0
++_f.settled = lambda: {"1007"}
++_f.pos.pop("1007")
++_prun(_e, _f, PE.ts_of("2026-11-04T04:10:00-05:00"))
++check("punt: a settled (lost) stage-1 leg aborts the sale and stage 2 sends nothing",
++      _e.state["steps"]["s1_sell"]["status"] == "aborted" and not _f.sent, str({k: v.get("status") for k, v in _e.state["steps"].items()}))
++_f = _PuntFake(PE.ts_of("2026-11-03T19:46:00-05:00"), _books, cash=1e6)
++_e, _, _ = _pmk(_pplan(), _f)
++_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=60000.0)
++_f.pos["1007"] = 60000.0
++_prun(_e, _f, PE.ts_of("2026-11-04T04:10:00-05:00"))          # never called: nothing sold
++_f.pos["1007"] = 0.0                                          # and a position that vanished without our sells
++check("punt: a sale window that closes with nothing sold never opens stage 2", not _f.sent, str(_f.sent[:1]))
++
++# review R2-1: once stage 2 has chosen its leg, a sell step that aborts later (market settled) does not freeze it
++_f = _PuntFake(PE.ts_of("2026-11-03T22:00:00-05:00"), _books, cash=40000.0)
++_e, _, _ = _pmk(_pplan(), _f)
++_e.state["steps"]["s1"] = dict(_e.st("s1"), status="done", filled=100000.0)
++_e.state["steps"]["s1_sell"] = dict(_e.st("s1_sell"), status="done", bought=100000.0, sold=100000.0)
++_f.lead = 250000.0
++for _ in range(6):
++    _e.tick(); _f.t += 10
++_n0 = len(_f.sent)
++_e.state["steps"]["s1_sell"]["status"] = "aborted"
++_prun(_e, _f, PE.ts_of("2026-11-03T23:30:00-05:00"))
++check("punt: stage 2 keeps buying after its sell step aborts once a candidate is chosen (review R2-1)", _n0 >= 1 and len(_f.sent) > _n0, f"{_n0} {len(_f.sent)}")
++
++# abort file: our resting orders cancelled, nothing more
++_f = _PuntFake(PE.ts_of("2026-11-03T17:30:00-05:00"), _books, cash=1e6)
++_e, _, _ = _pmk(_pplan(), _f)
++_e.tick(); _f.t += 5
++_f.abort = True
++_e.tick()
++_n = len(_f.sent)
++_f.abort = False
++_prun(_e, _f, PE.ts_of("2026-11-03T19:00:00-05:00"))
++check("punt: the abort file cancels our resting orders and stops the executor for good", "o1" in _f.cancels and len(_f.sent) == _n == 1,
++      f"{_f.cancels} {len(_f.sent)}")
++
++# 0c: zero-EV exits never sell punt / election legs or the shares of a held set
++_prow = {"exchange_id": "1068", "fair": 0.95, "sig_bid": 0.955, "sig_ask": 0.96, "pm": 0.95, "kalshi": 0.95}
++_psent = []
++class _PStore:
++    def rows(self, q, a=()):
++        if "purpose IN ('direction','tilt')" in q:
++            return [{"exchange_id": "1068", "side": "yes", "q": 1203.0}]
++        return []
++    def record_order(self, *a, **k): pass
++_prace = types.SimpleNamespace(name="Massachusetts Senate", exchange_ids=["1068", "1069"])
++_puni = types.SimpleNamespace(races={"Massachusetts Senate": _prace})
++_pbot = types.SimpleNamespace(cfg=types.SimpleNamespace(exit_band=0.01), store=_PStore(), dry_run=False, open_orders_cache={}, universe=_puni,
++                              api=types.SimpleNamespace(place_order=lambda ex, side, act, q, px, expiration=None, key=None: _psent.append((ex, side, q)) or {"orderId": 1},
++                                                        new_key=lambda k: k))
++R.Bot.zero_ev_exits(_pbot, {"1068": 1203.0, "1069": 1000.0}, [_prow])          # 1,000 buy-sets (YES on both legs) + 203 direction
++check("0c: a zero-EV exit leaves a held set's shares alone (1,203 YES of which 1,000 are buy-set legs: closes 203)",
++      _psent == [("1068", "no", 203)], str(_psent))
++_psent.clear()
++_pbot.punt_races = lambda: {"Massachusetts Senate"}
++R.Bot.zero_ev_exits(_pbot, {"1068": 1203.0, "1069": 0.0}, [_prow])
++check("0c: a zero-EV exit never trades a punt / election race", _psent == [], str(_psent))
++
++_rsp = open(os.path.join(ROOT, "sigbot", "run.py")).read()
++check("punt: every set / exit / quote path excludes punt races (free unwinds x2, churn x2, cheap favourites, raise, wind-down, "
++      "arb.protected, MM, inside, zero-EV)",
++      _rsp.count("| punt_races_of(b)") == 1 and _rsp.count("| shock_races_of(self) | punt_races_of(self)") == 1
++      and _rsp.count("or rname in punt_races_of(self)") == 1 and _rsp.count("or race.name in punt_races_of(self)") == 1
++      and 'c["race"] not in punt_races_of(self)' in _rsp and "pr_now = punt_races_of(self)" in _rsp
++      and '"punt / election night" for r in punt_races_of(self)' in _rsp and "set(_prot3()) | punt_races_of(self)" in _rsp
++      and _rsp.count("Bot.punt_legs(self)") >= 4 and "ex in punt_ex" in _rsp)
++import sigbot.config as _pcfg  # noqa: E402
++_live = _pj.load(open(os.path.join(ROOT, "config.json")))
++check("punt: off by default in config.py and in config.json", _pcfg.BotConfig.__dataclass_fields__["punt_enabled"].default is False
++      and _live.get("punt_enabled") is False)
++from sigbot import strategy_stops as _pss  # noqa: E402
++check("punt: strategy stops attribute punt / punt_exit fills to 'punt' and give it no P&L stop (a punt loss pauses nothing)",
++      _pss.PURPOSE_LEDGER.get("punt") == "punt" and _pss.PURPOSE_LEDGER.get("punt_exit") == "punt" and "punt" not in _pss.DEFAULT_LIMITS)
++
+ print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
+ sys.exit(1 if FAILS else 0)

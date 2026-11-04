@@ -1,4 +1,4 @@
-"""Flow patterns: is some public taker flow systematically inefficient? Read-only. python3 research_notes/flow_patterns_study.py
+"""Flow patterns: is some public taker flow systematically inefficient? Read-only. uv run --with matplotlib python research_notes/flow_patterns_study.py
 Classifies every public print in `tape` (our own fills removed), measures the taker's markout at 1 min / 5 min / 30 min / 2 h
 against the half-spread paid, train = first half of prints by time, test = second half, t-stats clustered by market and by
 hour (the smaller |t| is reported). Outputs data/research_flow_patterns/results.json and research_notes/figures/flow_patterns.png.
@@ -293,7 +293,7 @@ json.dump(R, open(os.path.join(OUT, "results.json"), "w"), indent=1)
 
 plt.rcParams.update({"font.size": 10, "axes.titlesize": 11, "axes.labelsize": 10, "xtick.labelsize": 9, "ytick.labelsize": 9.5})
 fig = plt.figure(figsize=(13, 18))
-gs = fig.add_gridspec(5, 1, height_ratios=[1, 1, 0.9, 0.22, 0.62], hspace=0.62)
+gs = fig.add_gridspec(5, 1, height_ratios=[1, 1, 0.9, 0.06, 0.78], hspace=0.72)
 axA = fig.add_subplot(gs[0]); axB = fig.add_subplot(gs[1], sharex=axA); axC = fig.add_subplot(gs[2], sharex=axA)
 BLUE, RED, GREY = "#2471a3", "#c0392b", "#7f8c8d"
 
@@ -360,8 +360,8 @@ g2 = ("bursts: same trade size in 3+ markets within 5 seconds (a bot)\n"
       "training / test: first and second half of the trades by time;\n    a real pattern shows in both\n"
       "shaded bands: 95% range, standard errors clustered by market or hour\n    (the wider is used); |t| > 3 needed with ~250 tests\n"
       "S: SUSQies, the tournament's play money; the tape we record is a\n    sample of all trades, so totals are lower bounds")
-gax.text(0.012, 0.86, g1, ha="left", va="top", fontsize=9, transform=gax.transAxes, linespacing=1.4)
-gax.text(0.51, 0.86, g2, ha="left", va="top", fontsize=9, transform=gax.transAxes, linespacing=1.4)
+gax.text(0.012, 0.86, g1, ha="left", va="top", fontsize=9, transform=gax.transAxes, linespacing=1.35)
+gax.text(0.51, 0.86, g2, ha="left", va="top", fontsize=9, transform=gax.transAxes, linespacing=1.35)
 fig.savefig(FIG, dpi=110, facecolor="white", bbox_inches="tight")
 print("figure", FIG)
 print("excess t:", {k: T[k]["excess_t"] for k in SHOW[1:]})

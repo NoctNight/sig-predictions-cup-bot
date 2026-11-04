@@ -1,0 +1,46 @@
+{
+ "arb.capital_frac": {
+  "value": 0.7083,
+  "from": 0.9,
+  "config_value": 0.9,
+  "applied_at": "2026-10-23T11:34:24Z",
+  "by": "allocator",
+  "evidence": {
+   "target": 0.5166,
+   "confirmations": 2
+  }
+ },
+ "mm.capital_frac": {
+  "value": 0.198,
+  "from": 0.33,
+  "config_value": 0.33,
+  "applied_at": "2026-10-23T11:34:24Z",
+  "by": "allocator",
+  "evidence": {
+   "target": 0.066,
+   "confirmations": 2
+  }
+ },
+ "mm.level_ticks": {
+  "value": [
+   2,
+   4
+  ],
+  "from": [
+   1,
+   2
+  ],
+  "config_value": [
+   1,
+   2
+  ],
+  "applied_at": "2026-10-29T10:41:07Z",
+  "by": "shadow",
+  "evidence": {
+   "oos_gain": 87.2,
+   "confidence": 0.966,
+   "group": "mm_ladder",
+   "confirmations": 2
+  }
+ }
+}

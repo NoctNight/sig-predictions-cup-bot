@@ -1140,7 +1140,9 @@ class ChurnBase(Scenario):
                 q = c["legs"][0]["quantity"]
                 self.cost[sim.race_of(str(c["legs"][0]["exchangeId"]))] = (c["cash_before"] - c["cash_after"]) / q if q else 1.0
         self._ci = len(sim.v.calls)
-        per = {r: venue_sets(sim, r) * self.cost.get(r, 1.0) for r in self.races}
+        # churn_sets, not venue_sets: MM inventory is not churn's (3 Nov: 300 MM-only sets in ME-02, never entered by churn,
+        # put an unchanged main over the pot after the live volume cache changed which legs the sim's taker flow hits)
+        per = {r: churn_sets(sim, r) * self.cost.get(r, 1.0) for r in self.races}
         tot = sum(per.values())
         if tot > self.max_tot:
             self.max_tot = tot
@@ -1788,6 +1790,9 @@ class ChurnMany(ChurnBase):
 class ChurnManyLowCash(ChurnMany):
     name, seed, cash = "churn_many_lowcash", 38, 14000.0
     doc = "20 races +6 ticks at once with 14k cash: the 3k cash floor binds (churn keeps its own floor, not the 20k arb reserve)"
+    # high-frequency arb as the only cash user, as in cash_raise: the live cheap favourites (41k budget, 100 floor) spend the
+    # 14k in the first 10 min, before the gaps open, so the floor this scenario exists to test is never reached
+    cfg = dict(ChurnMany.cfg, cheapfav_enabled=False)
 
 
 class Recycle(Scenario):
@@ -2597,6 +2602,22 @@ def WD_ts(s):
 for _c in (ChurnManyLowCash, CashRaise, CashRaiseSets, CashRaiseCheapfav, RecycleOversize):
     _c.cfg = {**(getattr(_c, "cfg", None) or {}), "shock_enabled": False}
 
+def pos_less_mm(sim, since) -> dict:
+    """Venue positions less the fills of our MM's orders (purposes mm / inside) from `since` (the sale's end; None: none
+    netted): once the sale is done the MM quotes those races again, and what it collects there is MM inventory, not a set
+    leg the sale took through zero (3 Nov: a 2-share MM bid fill on AL-02's NO-set leg 15 min after 'done', when the live
+    volume cache changed where the taker flow lands). MM fills during the sale still count."""
+    pos = dict(sim.v.signed_positions())
+    if since is None:
+        return pos
+    for f in sim.v.fills:
+        t = datetime.fromisoformat(str(f["filledAt"]).replace("Z", "+00:00")).timestamp()
+        if t >= since and sim.chk.purpose(f.get("orderId")) in ("mm", "inside"):
+            ex = str(f["exchangeId"])
+            pos[ex] = pos.get(ex, 0.0) - float(f["quantity"])
+    return pos
+
+
 class OffloadSale(Scenario):
     name, cycles, seed = "offload_sale", 60, 59
     doc = ("offload executor ON (live config otherwise): an approved list of a NO set, a YES set and a single leg sells on the fake venue "
@@ -2657,7 +2678,7 @@ class OffloadSale(Scenario):
     def on_tick(self, sim):
         if sim.bot.offload is not None:
             sim.step("offload tick", sim.bot.offload.tick)
-            pos = sim.v.signed_positions()
+            pos = pos_less_mm(sim, sim.bot.offload.state.get("ended"))
             if any(pos.get(e, 0.0) > 0.5 for e in sim.legs(self.rn)) or any(pos.get(e, 0.0) < -0.5 for e in sim.legs(self.ry)):
                 if not getattr(self, "flip", False):
                     self.flip = True
@@ -2666,7 +2687,7 @@ class OffloadSale(Scenario):
     def final_checks(self, sim):
         v, off = sim.v, sim.bot.offload
         st = off.state
-        pos = v.signed_positions()
+        pos = pos_less_mm(sim, st.get("ended"))
         def V(kind, detail):
             sim.chk.viol.append({"scenario": self.name, "step": "end", "t": CLOCK.t, "kind": kind, "detail": detail, "trace": ""})
         if st["status"] == "waiting":

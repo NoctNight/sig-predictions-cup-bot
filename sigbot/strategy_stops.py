@@ -57,7 +57,8 @@ Safety: crossings are judged only on fills ingested after the stops first starte
 is never re-judged at deploy). After a position settles the unattributed check waits 10 min and re-baselines (a payout
 is not a loss). An unparseable kill file (a hand edit in progress) is never rewritten and nothing is re-armed from it;
 the stops decide from its last good content. A pause that disappears (cleared by hand, whoever wrote it) re-arms that
-strategy from then. If the stops fail 3 cycles in a row, today's bot-wide switch takes over until they work again.
+strategy from then. If the stops fail, the last pauses stay in force and nothing takes over (the bot-wide switch was
+deleted 3 Nov, as its cancel_all could pull punt orders).
 Quarantine: when a strategy other than the MM is paused, the MM keeps off that strategy's legs for kill_pause_sec (its
 quotes there are pulled, as during a news pause), the part of today's bot-wide switch that protects the markets where the
 loss is happening (sim churn_widen: an MM quote left on a dropped market blocked churn's all-or-none exit). Only entry

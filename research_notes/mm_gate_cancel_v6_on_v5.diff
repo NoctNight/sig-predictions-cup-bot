@@ -1,0 +1,116 @@
+diff --git a/sigbot/mm.py b/sigbot/mm.py
+index 5dd5feb..9647c0c 100644
+--- a/sigbot/mm.py
++++ b/sigbot/mm.py
+@@ -457,6 +457,13 @@ class MarketMaker:
+                     seen.add(str(r["order_id"]))
+         return out
+ 
++    def mark_ours_cancelled(self, ex: str):
++        """After an exchange-scoped cancel-all: every order of ours the store still holds open on the leg is off the venue now,
++        listed or not (this cycle's quotes, an earlier fast requote's), so mark them all; an unmarked one is a phantom a later
++        pull would spend a cancel on (review 2, finding 1)."""
++        self.store.exec("UPDATE orders SET status='cancelled' WHERE exchange_id=? AND purpose IN ('mm', 'inside') AND status='open' AND placed_at<=?",
++                        (str(ex), time.time()))
++
+     def pull_quotes(self, ex: str, oo: list, mine: list, budget: int, only: Optional[list] = None) -> tuple[int, bool]:
+         """Pull our resting quotes `mine` on `ex` (a subset of `oo`, the venue's open orders there): one exchange-scoped
+         cancel-all when every order the venue lists there is ours and no other sleeve placed an order there since the list
+@@ -472,13 +479,20 @@ class MarketMaker:
+         newer = self.store.one("SELECT 1 FROM orders WHERE exchange_id=? AND purpose NOT IN ('mm', 'inside') AND placed_at>=? LIMIT 1",
+                                (str(ex), since))
+         ours = {str(o.get("id")) for o in mine}
+-        if all(str(o.get("id")) in ours for o in oo) and newer is None:
++
++        def listed_ours(o):                      # ours whatever the status: an id of ours we cancelled earlier is no stranger
++            if str(o.get("id")) in ours:
++                return True
++            meta = self.store.order_meta(o.get("id")) if o.get("id") is not None else None
++            return meta is not None and meta["purpose"] in ("mm", "inside")
++        if all(listed_ours(o) for o in oo) and newer is None:
+             if self.dry_run:
+                 log.info("[DRY] pull: cancel-all exchange %s (%d orders)", ex, len(mine))
+                 return 1, True
+             try:
+                 self.api.cancel_all(exchange_id=ex)
+                 self.store.mark_orders([o["id"] for o in mine], "cancelled")
++                self.mark_ours_cancelled(ex)
+                 return 1, True
+             except Exception as e:               # a network error (not every one is an ApiError) must not abort the cycle
+                 log.warning("pull cancel-all %s failed: %s", ex, e)
+@@ -495,8 +509,14 @@ class MarketMaker:
+                     self.api.cancel_order(o["id"])
+                     self.store.mark_orders([o["id"]], "cancelled")
+                 except Exception as e:
+-                    log.warning("pull cancel %s on %s failed: %s", o.get("id"), ex, e)
+-                    clean = False
++                    if getattr(e, "status", None) in (404, 409, 410):
++                        # the venue has no open order by that id (filled, expired or cancelled since): nothing rests, so
++                        # mark it; otherwise it would be retried on every pass until the next open-orders read (review 2)
++                        self.store.mark_orders([o["id"]], "cancelled")
++                        log.info("pull cancel %s on %s: gone (%s)", o.get("id"), ex, e)
++                    else:
++                        log.warning("pull cancel %s on %s failed: %s", o.get("id"), ex, e)
++                        clean = False
+             writes += 1
+         return writes, clean
+ 
+@@ -665,6 +685,7 @@ class MarketMaker:
+                     try:
+                         self.api.cancel_all(exchange_id=ex)
+                         self.store.mark_orders([o["id"] for o in oo], "cancelled")
++                        self.mark_ours_cancelled(ex)     # also this cycle's quotes the list lacks (review 2, finding 1)
+                     except ApiError as e:
+                         log.warning("cancel-all %s failed: %s", ex, e)
+                         continue
+diff --git a/tests/test_guards.py b/tests/test_guards.py
+index 89ff610..9c51a69 100644
+--- a/tests/test_guards.py
++++ b/tests/test_guards.py
+@@ -4303,6 +4303,46 @@ check("mm gate-sweep: with another sleeve's order placed on the leg since the re
+       and _s18["writes"] == len(_m11.api.cancels) >= 1 and all(_st18[i] == "cancelled" for i in _m11.api.cancels)
+       and all(_st18[i] == "open" for i, sd in _sides11.items() if sd == "no") and _st18[50] == "open"
+       and _s18b["requoted"] == [] and not _s18b.get("pulled") and _m11.state["872"].last_gate == (False, True), f"{_s18} {_st18} {_s18b} {_m11.api.cancels}")
++# review 2 (Opus), findings 1, 2 and note 4. (1) a requote's cancel-all marks every order of ours on the leg, listed or not, so a later
++# pull spends no cancels on phantoms; (2) the cycle's list holding the previous ladder's ids (ours, cancelled) does not stop the one
++# cancel-all; (4) a cancel answered 409 / 404 (the order is not open any more) marks the order gone and counts as clean
++_m12 = _gmm(fair=0.2375)
++_m12.open_orders_ts = time.time() - 1
++_MM.quote_cycle(_m12, _gbook, {}, {}, {"872": []}, {}, 50000.0, 30, 10)               # ladder A
++_ids_a = sorted(_gstat(_m12))
++_m12.force_cancel = True
++_s19 = _MM.quote_cycle(_m12, _gbook, {}, {}, {"872": []}, {}, 50000.0, 30, 10)        # a fast requote on an empty cache: ladder B
++_m12.force_cancel = False
++_st19 = dict(_gstat(_m12))
++_ids_b = sorted(i for i in _st19 if i not in _ids_a)
++check("mm review 2 (1): a requote's cancel-all marks this cycle's earlier quotes cancelled too, listed or not",
++      _s19["requoted"] == ["872"] and _m12.api.cancel_alls == ["872"] and _ids_b and all(_st19[i] == "cancelled" for i in _ids_a)
++      and all(_st19[i] == "open" for i in _ids_b), f"{_s19} {_st19}")
++_gfair(_m12, 0.213)                                                                    # the poll closes the bid side
++_m12.store.record_order(9, "872", "183", "yes", "buy", 0.2, 50, "mm")               # an old quote of ours the list lacks (expired, say)
++_m12.store.exec("UPDATE orders SET placed_at=? WHERE order_id=9", (time.time() - 7200,))
++_s20 = _m12.pull_closed(_gbook, {"872": [{"id": i, "side": "yes"} for i in _ids_a]}, 8)   # the cycle's list: ladder A's ids
++_st20 = dict(_gstat(_m12))
++check("mm review 2 (2): a sweep on a leg requoted this cycle (the list holds the old ladder's ids, ours) is one cancel-all, not order by "
++      "order; ladder B and every older open row of ours on the leg are marked cancelled",
++      _s20["pulled"] == ["872"] and _s20["writes"] == 1 and _m12.api.cancel_alls == ["872", "872"] and _m12.api.cancels == []
++      and all(_st20[i] == "cancelled" for i in _ids_b) and _st20[9] == "cancelled" and _m12.state["872"].last_gate == (False, True), f"{_s20} {_st20}")
++_m13 = _gmm(blocked={"D"}, fair=0.213)
++for _i in (11, 12, 13):
++    _m13.store.record_order(_i, "872", "183", "yes", "buy", 0.235, 100, "mm")
++_m13.store.record_order(40, "872", "183", "no", "buy", 0.76, 100, "exit")
++_m13.api.cancel_order = lambda oid: (_ for _ in ()).throw(_ApiErr(409, "NOT_OPEN", "not open")) if oid == 12 else _m13.api.cancels.append(oid)
++_s21 = _MM.quote_cycle(_m13, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}, {"id": 12, "side": "yes"}, {"id": 13, "side": "yes"}, {"id": 40, "side": "no"}]},
++                       {}, 50000.0, 31, 10)
++_m14 = _gmm(blocked={"D"}, fair=0.213)
++_m14.store.record_order(11, "872", "183", "yes", "buy", 0.235, 100, "mm")
++_m14.store.record_order(40, "872", "183", "no", "buy", 0.76, 100, "exit")
++_m14.api.cancel_order = lambda oid: (_ for _ in ()).throw(_ApiErr(500, "ERR", "boom"))
++_s22 = _MM.quote_cycle(_m14, _gbook, {}, {}, {"872": [{"id": 11, "side": "yes"}, {"id": 40, "side": "no"}]}, {}, 50000.0, 32, 10)
++check("mm review 2 (4): a cancel answered 409 (the order is gone) is marked cancelled and the pull is clean (gate recorded); a 500 is not",
++      _s21.get("pulled") == ["872"] and _m13.api.cancels == [11, 13] and _gstat(_m13) == {11: "cancelled", 12: "cancelled", 13: "cancelled", 40: "open"}
++      and getattr(_m13.state.get("872"), "last_gate", None) == (False, True) and _s22.get("pulled") == ["872"] and _gstat(_m14) == {11: "open", 40: "open"}
++      and "872" not in _m14.state, f"{_s21} {_gstat(_m13)} {_s22} {_gstat(_m14)}")
+ # Bot.mm_gate_sweep wiring on a stub: pull_closed under the trade lock with the given budget; nothing to do -> {}
+ _swcalls = []
+ 

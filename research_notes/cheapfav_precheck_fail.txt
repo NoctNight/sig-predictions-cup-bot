@@ -1,0 +1,62 @@
+ok   calm            120 cycles   1.0 h sim   23.0 s wall | P&L    -51.4 (spread paid    57.8) cash    83762 | fills   106 arb 0/0 unwinds 0 | violations 0 
+ok   sweep6          120 cycles   1.0 h sim   25.7 s wall | P&L   +640.4 (spread paid   407.8) cash    15476 | fills   233 arb 38/38 unwinds 0 | violations 0 
+ok   outside_move    150 cycles   1.2 h sim   21.7 s wall | P&L    -37.8 (spread paid    60.7) cash    82915 | fills   152 arb 0/0 unwinds 0 | violations 0 
+FAIL catchup         320 cycles   2.7 h sim   47.0 s wall | P&L    -48.8 (spread paid    62.1) cash    82696 | fills   214 arb 0/0 unwinds 0 | violations 2 {'mm_filled_on_gated_side': 1, 'catchup_none': 1}
+ok   cheapfav        240 cycles   2.0 h sim   37.0 s wall | P&L    -17.8 (spread paid    28.7) cash    91764 | fills   153 arb 0/0 unwinds 0 | violations 0 
+ok   churn           200 cycles   1.7 h sim   34.2 s wall | P&L    +17.1 (spread paid   119.9) cash    82637 | fills   183 arb 3/3 unwinds 1 | violations 0 
+      summary: {'entries': 3, 'exits': 1, 'realised': 90.6}
+ok   churn_widen     420 cycles   3.5 h sim   48.0 s wall | P&L   -490.4 (spread paid   244.5) cash    81974 | fills   205 arb 9/9 unwinds 3 | violations 0 
+      note: kill switch fired 2x, first: 14:30:30 KILL SWITCH: drawdown 452, markout30 None (n=0); cancelling MM/tilt quotes for 1800s
+      summary: {'entries': 9, 'rejected': 0, 'exits': 3, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 11997, 'max_concurrent': 11879, 'max_race': 3960, 'realised': -397.2, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 376, 'state_file_lots': 0, 'venue_pnl': -490.4}
+ok   churn_reject    120 cycles   1.0 h sim   14.7 s wall | P&L    -50.1 (spread paid    58.6) cash    83065 | fills   122 arb 0/30 unwinds 0 | violations 0 
+      summary: {'entries': 0, 'rejected': 30, 'exits': 0, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 0, 'max_concurrent': 0, 'max_race': 0, 'realised': 29.8, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': -50.1}
+ok   churn_restart   120 cycles   1.0 h sim   15.5 s wall | P&L    +11.4 (spread paid   119.8) cash    83518 | fills   141 arb 3/3 unwinds 1 | violations 0 
+      summary: {'entries': 3, 'rejected': 0, 'exits': 1, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 3999, 'max_concurrent': 3999, 'max_race': 3999, 'realised': 90.6, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': 11.4}
+ok   churn_free_first    90 cycles   0.8 h sim   10.9 s wall | P&L    +10.6 (spread paid   119.7) cash    83695 | fills   133 arb 3/3 unwinds 2 | violations 0 
+      summary: {'entries': 3, 'rejected': 0, 'exits': 1, 'recycle_buys': 0, 'scanner_unwinds': 1, 'turnover': 3999, 'max_concurrent': 3999, 'max_race': 3999, 'realised': 90.6, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': 10.6, 'sets_bought': 4081, 'sets_sold': 4081}
+ok   churn_interleave    90 cycles   0.8 h sim   10.6 s wall | P&L     +8.3 (spread paid   119.6) cash    83937 | fills   119 arb 3/3 unwinds 2 | violations 0 
+      summary: {'entries': 3, 'rejected': 0, 'exits': 1, 'recycle_buys': 0, 'scanner_unwinds': 1, 'turnover': 3999, 'max_concurrent': 3999, 'max_race': 3999, 'realised': 90.6, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': 8.3, 'sets_bought': 4081, 'sets_sold': 4081}
+ok   churn_stale_fill    40 cycles   0.3 h sim    4.4 s wall | P&L    -14.8 (spread paid    77.2) cash    84289 | fills    89 arb 1/1 unwinds 1 | violations 0 
+      summary: {'entries': 1, 'rejected': 0, 'exits': 1, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 1960, 'max_concurrent': 1960, 'max_race': 1960, 'realised': 69.8, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': -14.8, 'hit': True, 'pos_end': {'1008': 0.0, '1007': -300.0}, 'ledger': []}
+ok   churn_blowout   200 cycles   1.7 h sim   28.9 s wall | P&L   -219.7 (spread paid   313.7) cash    81317 | fills   206 arb 14/14 unwinds 12 | violations 0 
+      summary: {'entries': 14, 'rejected': 0, 'exits': 12, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 22067, 'max_concurrent': 11951, 'max_race': 3880, 'realised': -94.2, 'killed': False, 'vol_paused': True, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': -219.7, 'pause_after_min': 16, 'vol_last': 2.48}
+ok   churn_many       60 cycles   0.5 h sim    6.3 s wall | P&L   -120.4 (spread paid   124.9) cash    71414 | fills    99 arb 7/7 unwinds 0 | violations 0 
+      summary: {'entries': 7, 'rejected': 0, 'exits': 0, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 11998, 'max_concurrent': 11913, 'max_race': 1970, 'realised': 29.8, 'killed': False, 'vol_paused': False, 'lots_left': 7, 'venue_sets_left': 12234, 'state_file_lots': 7, 'venue_pnl': -120.4, 'min_cash_after_entry': 77175}
+ok   churn_many_lowcash    60 cycles   0.5 h sim    6.1 s wall | P&L    -50.1 (spread paid    52.4) cash      990 | fills    71 arb 1/1 unwinds 0 | violations 0 
+      summary: {'entries': 1, 'rejected': 0, 'exits': 0, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 873, 'max_concurrent': 873, 'max_race': 873, 'realised': 29.8, 'killed': False, 'vol_paused': False, 'lots_left': 1, 'venue_sets_left': 891, 'state_file_lots': 1, 'venue_pnl': -50.1, 'min_cash_after_entry': 3000}
+ok   recycle          80 cycles   0.7 h sim   12.8 s wall | P&L   -227.6 (spread paid   230.5) cash     6826 | fills   168 arb 18/18 unwinds 8 | violations 0 
+ok   recycle_tail     30 cycles   0.2 h sim    5.0 s wall | P&L    -70.3 (spread paid    72.6) cash     6733 | fills   111 arb 6/6 unwinds 6 | violations 0 
+ok   recycle_stale_fill    30 cycles   0.2 h sim    4.4 s wall | P&L    -66.1 (spread paid    68.1) cash     7164 | fills   119 arb 6/6 unwinds 6 | violations 0 
+ok   recycle_race     30 cycles   0.2 h sim    5.4 s wall | P&L   -101.4 (spread paid   103.5) cash     6573 | fills   161 arb 16/16 unwinds 16 | violations 0 
+      note: unwind *: 16 in 600s exceeds the deploy watcher's alarm (12); 16 in the run
+ok   recycle_oversize    40 cycles   0.3 h sim    4.7 s wall | P&L    -33.9 (spread paid    34.5) cash      927 | fills    62 arb 3/3 unwinds 2 | violations 0 
+ok   recycle_cash     60 cycles   0.5 h sim    8.9 s wall | P&L   -181.9 (spread paid   186.6) cash    44029 | fills   152 arb 13/13 unwinds 7 | violations 0 
+ok   recycle_cash_gone    60 cycles   0.5 h sim    8.2 s wall | P&L    -63.6 (spread paid    68.0) cash    46033 | fills   112 arb 0/60 unwinds 1 | violations 0 
+ok   own_bid          40 cycles   0.3 h sim    4.2 s wall | P&L    -57.1 (spread paid    59.8) cash    84429 | fills    82 arb 0/0 unwinds 0 | violations 0 
+ok   exits            80 cycles   0.7 h sim   13.0 s wall | P&L    -59.9 (spread paid    65.9) cash    83271 | fills   122 arb 0/0 unwinds 0 | violations 0 
+ok   offload          60 cycles   0.5 h sim    8.8 s wall | P&L    -53.6 (spread paid    57.7) cash    83786 | fills   101 arb 0/0 unwinds 0 | violations 0 
+      note: offload exit path was not reached
+ok   slow_writes      40 cycles   0.9 h sim    7.4 s wall | P&L    -53.8 (spread paid    57.6) cash    84085 | fills    96 arb 0/0 unwinds 0 | violations 0 
+ok   feed_silent      90 cycles   0.8 h sim   15.5 s wall | P&L    -49.9 (spread paid    58.0) cash    83924 | fills   126 arb 0/0 unwinds 0 | violations 0 
+ok   aon_reject       60 cycles   0.5 h sim    8.8 s wall | P&L   -461.5 (spread paid   464.8) cash     6929 | fills   184 arb 43/51 unwinds 0 | violations 0 
+FAIL inside_on        40 cycles   0.3 h sim    9.9 s wall | P&L    -44.3 (spread paid    61.5) cash    83395 | fills   114 arb 0/0 unwinds 0 | violations 1 {'adds_to_blocked_direction': 1}
+
+29 scenario(s) in 464 s, 3 violation(s)
+
+[catchup] mm_filled_on_gated_side x1 - first at cycle 176 (t+88.0 min): bat-119-2 1066 MM ask filled x461 @0.3 (placed 2026-10-23T15:09:30.000Z) while the outside fair 0.726 is +4.7 ticks from mid 0.7025: the xv gate blocks that side
+      14:44:00 bat-107-2 buy no x454 @0.3 pos 141 -> 141 traded 0
+      15:09:30 cancel-all 1066 (1)
+      15:09:30 bat-119-2 buy no x461 @0.3 pos 141 -> 141 traded 0
+      15:28:00 bat-131-12 buy yes x315 @0.695 pos -320 -> -320 traded 0
+      15:28:00 bat-131-13 buy yes x150 @0.69 pos -320 -> -320 traded 0
+      15:28:00 exit-135 buy yes x320 @0.7 pos -320 -> -320 traded 0
+
+[catchup] catchup_none x1 - first at scan 319.5 (t+160.0 min): no catch-up entry although Polymarket+Kalshi moved 3 pts and SIG lagged
+
+[inside_on] adds_to_blocked_direction x1 - first at cycle 32 (t+16.0 min): cf-182 906 buy yes x183 adds D while ['D'] is blocked
+      14:16:00 I sigbot: CHEAPFAV enter Oklahoma Governor R (1063 yes) x217 @0.850: fair 0.905, edge 5.5c
+      14:16:00 I sigbot: CHEAPFAV enter Florida Senate R (1044 yes) x199 @0.825: fair 0.884, edge 5.9c
+      14:16:00 I sigbot: CHEAPFAV enter IA-03 House race D (906 yes) x183 @0.810: fair 0.870, edge 6.0c
+      14:16:00 I sigbot: ZERO-EV EXIT 1010 no x91: venue 0.7/0.71 vs fair 0.758
+      14:16:00 I sigbot: ZERO-EV EXIT 887 yes x46: venue 0.205/0.215 vs fair 0.150
+      14:16:00 I sigbot: cycle 33 done in 0.0s cash=84051 pos_value=15409 total=99459 netD=+5010 arb={'passes': 192, 'candidates': 0, 'executed': 0, 'errors': 0, 'last_pass': 1792764960.0, 'fast_requotes': 48} mm={'requoted': 4, 'orders': 8, 'wr

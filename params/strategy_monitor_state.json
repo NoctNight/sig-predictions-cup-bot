@@ -1,0 +1,168 @@
+{
+ "test_start": {
+  "gap": 1793276239.019636,
+  "arb": 1793392665.820868,
+  "hf_arb": 1793392665.820868
+ },
+ "paused_seen": {
+  "cheapfav": {
+   "ts": 1793549479.746567,
+   "utc": "2026-11-01T16:11:19",
+   "reason": "P&L -600 since armed 2026-10-25T00:16:42 <= -500",
+   "by": "strategy_stops",
+   "rule": "stop",
+   "pnl": -599.5,
+   "held_since": 1793549419.7459662
+  },
+  "direction": {
+   "ts": 1793551043.623119,
+   "utc": "2026-11-01T16:37:23",
+   "reason": "P&L -318 since armed 2026-10-25T00:16:42 <= -300",
+   "by": "strategy_stops",
+   "rule": "stop",
+   "pnl": -317.8,
+   "held_since": 1793550954.441232
+  },
+  "mm": {
+   "ts": 1793587970.7460868,
+   "utc": "2026-11-02T02:52:50",
+   "reason": "30-min markout -1.04 ticks on 23 fills < -1.0",
+   "by": "strategy_stops",
+   "rule": "markout"
+  },
+  "arb": {
+   "ts": 1793633778.244116,
+   "utc": "2026-11-02T15:36:18",
+   "reason": "untagged fills lost 220 since 2026-10-31T23:36:31 (>= 200, 3 evaluations); it traded the legs where it sits (1002, 1009, 1024, 1038, 1060, 873, 908, 931, 944, 960, 988, 989)",
+   "by": "strategy_stops",
+   "rule": "unattributed"
+  },
+  "hf_arb": {
+   "ts": 1793633778.244116,
+   "utc": "2026-11-02T15:36:18",
+   "reason": "untagged fills lost 220 since 2026-10-31T23:36:31 (>= 200, 3 evaluations); it traded the legs where it sits (1002, 1009, 1024, 1038, 1060, 873, 908, 931, 944, 960, 988, 989)",
+   "by": "strategy_stops",
+   "rule": "unattributed"
+  }
+ },
+ "last": {
+  "ts": 1793829946.454498,
+  "utc": "2026-11-04T22:05:46",
+  "results": {
+   "mm": {
+    "label": "market making",
+    "unit": "ticks per fill (30-min markout)",
+    "n": 941,
+    "mean": 0.424,
+    "sd": 1.529,
+    "stat": 1652760362796.16,
+    "verdict": "kill",
+    "reason": "paused since 2026-11-02T02:52:50: 30-min markout -1.04 ticks on 23 fills < -1.0 (only a human re-enables: delete the entry in params/strategy_kill.json)",
+    "test_start": null
+   },
+   "catchup": {
+    "label": "catch-up sweep",
+    "unit": "ticks per share per closed trade",
+    "n": 18,
+    "mean": 1.669,
+    "sd": 4.398,
+    "stat": 1.38,
+    "verdict": "ok",
+    "reason": "n=18 < 30: not tested yet",
+    "test_start": null,
+    "open_positions": 0,
+    "open_pnl": 0.0
+   },
+   "hf_arb": {
+    "label": "high-frequency arb",
+    "unit": "ticks per set per round trip or open lot",
+    "n": 8,
+    "mean": 0.856,
+    "sd": 1.824,
+    "stat": 1.04,
+    "verdict": "kill",
+    "reason": "paused since 2026-11-02T15:36:18: untagged fills lost 220 since 2026-10-31T23:36:31 (>= 200, 3 evaluations); it traded the legs where it sits (1002, 1009, 1024, 1038, 1060, 873, 908, 931, 944, 960, 988, 989) (only a human re-enables: delete the entry in params/strategy_kill.json)",
+    "test_start": "2026-10-30T20:37:45",
+    "round_trips": 8,
+    "open_lots": 0,
+    "young_lots": 0,
+    "unpriced_lots": 0,
+    "realised": 29.0,
+    "open_value": 0.0,
+    "ledger_realised": 29.140000000001557
+   },
+   "recycle": {
+    "label": "recycles",
+    "unit": "% of freed capital per recycle",
+    "n": 84,
+    "mean": 0.919,
+    "sd": 1.525,
+    "stat": 29.61,
+    "verdict": "ok",
+    "reason": "mean +0.92 >= 0",
+    "test_start": null,
+    "unwinds_by_kind": {
+     "recycle": 134,
+     "churn": 11,
+     "offload": 36,
+     "free": 24,
+     "unknown": 38
+    },
+    "recycle_unwinds": 134
+   },
+   "cheapfav": {
+    "label": "cheap favourites",
+    "unit": "ticks per share vs outside fair per leg",
+    "n": 7,
+    "mean": -14.016,
+    "sd": 24.617,
+    "stat": 1.0,
+    "verdict": "kill",
+    "reason": "paused since 2026-11-01T16:11:19: P&L -600 since armed 2026-10-25T00:16:42 <= -500 (only a human re-enables: delete the entry in params/strategy_kill.json)",
+    "test_start": null,
+    "open_legs": 2,
+    "closed_legs": 5,
+    "unpriced_legs": 36,
+    "mark_pnl": -156.7
+   }
+  }
+ },
+ "reenabled": [
+  {
+   "strategy": "gap",
+   "ts": 1793276239.019636,
+   "utc": "2026-10-29T12:17:19",
+   "was": {
+    "ts": 1793273567.88132,
+    "utc": "2026-10-29T11:32:47",
+    "reason": "by hand (main session): live process runs gap_budget 900, approved 150; held until the 150 config deploys",
+    "by": "hand",
+    "rule": "manual"
+   }
+  },
+  {
+   "strategy": "arb",
+   "ts": 1793392665.820868,
+   "utc": "2026-10-30T20:37:45",
+   "was": {
+    "ts": 1793073452.700737,
+    "utc": "2026-10-27T03:57:32",
+    "reason": "Montana Senate bought and unwound alternately 4 times in the last hour (2 unwinds): a recycle loop",
+    "by": "strategy_stops",
+    "rule": "pingpong"
+   }
+  },
+  {
+   "strategy": "hf_arb",
+   "ts": 1793392665.820868,
+   "utc": "2026-10-30T20:37:45",
+   "was": {
+    "ts": 1793073452.700737,
+    "utc": "2026-10-27T03:57:32",
+    "reason": "Montana Senate bought and unwound alternately 4 times in the last hour (2 unwinds): a recycle loop",
+    "by": "strategy_stops",
+    "rule": "pingpong"
+   }
+  }
+ ]
+}

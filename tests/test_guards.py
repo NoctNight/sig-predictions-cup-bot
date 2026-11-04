@@ -5093,6 +5093,22 @@ _q5, _ = WD.floor_clip("buy_set", _ys, ["a", "b"], 1000, 100, 0.97)
 _q6, _ = WD.floor_clip("buy_set", _ys, ["a", "b"], 1000, 100, 0.96)
 check("ri floor: a YES set's worst price is the sum of the bids it reaches (MN-05): 400 at 0.90+0.07 clears 0.965; 1,000 sets reach 0.965 so a 0.97 floor halves to 500; 0.96 takes 1,000",
       _q4 == 400 and abs(WD.worst_set_price("buy_set", _w4, ["a", "b"]) - 0.97) < 1e-9 and _q5 == 500 and _q6 == 1000, f"{_q4} {_q5} {_q6}")
+# MN-05 floor 0.89 (Sizhe 3 Nov) on the 3 Nov 01:50 UTC book: the R leg has 4 shares above 0.025, so no clip ever prices under 0.89
+_mn = {"1028": {"bids": [{"price": 0.045, "quantity": 2}, {"price": 0.04, "quantity": 2}, {"price": 0.025, "quantity": 192673}]},
+       "1027": {"bids": [{"price": 0.885, "quantity": 2126}, {"price": 0.88, "quantity": 2013}, {"price": 0.875, "quantity": 4886},
+                         {"price": 0.86, "quantity": 9000}]}}
+_mq, _mw = WD.floor_clip("buy_set", _mn, ["1028", "1027"], 3000, 100, 0.89)
+_mq2, _mw2 = WD.floor_clip("buy_set", _mn, ["1028", "1027"], 3000, 100, 0.91)
+_mlo = WD.floor_clip("buy_set", {"1028": _mn["1028"], "1027": {"bids": [{"price": 0.86, "quantity": 9000}]}}, ["1028", "1027"], 3000, 100, 0.89)
+check("mn-05 floor 0.89: a 3,000 clip sells with its worst set at >= 0.89; 0.91 halves the clip; a 0.86 bid sells nothing",
+      _mq == 3000 and WD.worst_set_price("buy_set", _mw, ["1028", "1027"]) >= 0.89 - 1e-9
+      and 0 < _mq2 < 3000 and WD.worst_set_price("buy_set", _mw2, ["1028", "1027"]) >= 0.91 - 1e-9 and _mlo == (0, None),
+      f"{_mq} {_mq2} {_mlo}")
+check("mn-05 floor: judged on the worst level, not the average (3,000 sets: worst 0.905, average 0.909): a 0.907 floor halves to 1,500",
+      WD.floor_clip("buy_set", _mn, ["1028", "1027"], 3000, 100, 0.907)[0] == 1500)
+_cfg_floor = _json.load(open(os.path.join(ROOT, "config.json")))["wind_down_set_floor"]
+check("mn-05 floor: the live config holds 0.89 for MN-05 and 1.905 for Rhode Island",
+      _cfg_floor.get("MN-05 House race") == 0.89 and _cfg_floor.get("Rhode Island Governor") == 1.905, _cfg_floor)
 _cl = CF.CheapFavourites.rotation_exit
 _bk = {"bids": [{"price": 0.895, "quantity": 5000}], "asks": [{"price": 0.09, "quantity": 2000}]}
 check("rotation exit: a YES lot sells at the bid, as a NO buy, inside the clip, 80% of the touch and the lot; under cost less the floor it waits; a NO lot sells at the ask as a YES buy",
@@ -5169,6 +5185,24 @@ _cs = dict(_ct, win_party="R")
 check("cheapfav punt room: an R add is not held back by the punt view; a touch that left the band sends nothing",
       len(_cb.entries([_cs], {}, 0.0, 5000.0, 0.0, {"x": (0.91, 5000)}, {"z": 1.0}, 2300.0, cap=5000.0, own=(0.0, 0.0, 0.0), net_d_ex=4900.0)) == 1
       and _cb.entries([_cs], {}, 0.0, 5000.0, 0.0, {"x": (0.93, 5000)}, {"z": 1.0}, 2300.0, cap=5000.0, own=(0.0, 0.0, 0.0)) == [])
+
+# ---------------------------------------------------------------- old bot-wide kill switch deleted (Sizhe 3 Nov)
+_ksc = []
+def _ks_raise(*a):
+    raise RuntimeError("stops broken")
+_ks = types.SimpleNamespace(_stops_cycle=_ks_raise, killed_until=0.0, dry_run=False, stops=object(),
+                            api=types.SimpleNamespace(cancel_all=lambda **k: _ksc.append(k)))
+for _ in range(5):
+    R.Bot.stops_cycle(_ks, 1000.0, {}, {}, {}, {}, set())
+check("kill switch deleted: stops failing 5 cycles in a row cancel nothing and turn nothing on",
+      _ks.stops_failures == 5 and _ks.killed_until == 0.0 and _ksc == [] and not hasattr(_ks, "stops_fallback"), _ksc)
+_ks._stops_cycle = lambda *a: None
+R.Bot.stops_cycle(_ks, 1000.0, {}, {}, {}, {}, set())
+check("kill switch deleted: a working stops cycle resets the failure count", _ks.stops_failures == 0)
+_rs3 = open(os.path.join(ROOT, "sigbot", "run.py")).read()
+check("kill switch deleted: nothing in the bot can set killed_until past its start value of 0",
+      _rs3.count("self.killed_until = ") == 1 and "self.killed_until = 0.0" in _rs3 and "b.killed_until =" not in _rs3
+      and "KILL SWITCH:" not in _rs3 and "stops_fallback" not in _rs3)
 
 print(f"\n{'ALL PASS' if not FAILS else str(len(FAILS)) + ' FAILED: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

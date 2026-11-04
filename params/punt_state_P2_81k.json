@@ -1,0 +1,410 @@
+{
+ "plan_id": "P2",
+ "sha": "156f733923a073924e29b2360c642c3e08d329461364d95fbf0d60bb9248616b",
+ "steps": {
+  "s1": {
+   "status": "done",
+   "base": -355.0,
+   "n": 22,
+   "orders": [
+    {
+     "id": 79433840,
+     "key": "punt-P2-s1-0-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 25641,
+     "price": 0.195,
+     "t": 1793745038.0852952,
+     "exp": 1793745067.055681,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79435283,
+     "key": "punt-P2-s1-1-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745079.066293,
+     "exp": 1793745107.9812071,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79436627,
+     "key": "punt-P2-s1-2-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 28571,
+     "price": 0.175,
+     "t": 1793745118.7700028,
+     "exp": 1793745148.365695,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79437697,
+     "key": "punt-P2-s1-3-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 27027,
+     "price": 0.185,
+     "t": 1793745158.755726,
+     "exp": 1793745188.193233,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79438742,
+     "key": "punt-P2-s1-4-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 25641,
+     "price": 0.195,
+     "t": 1793745199.161993,
+     "exp": 1793745228.774563,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79439457,
+     "key": "punt-P2-s1-5-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745238.9030058,
+     "exp": 1793745268.358112,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79441519,
+     "key": "punt-P2-s1-6-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745309.201416,
+     "exp": 1793745337.3359108,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79442488,
+     "key": "punt-P2-s1-7-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745348.975053,
+     "exp": 1793745378.399384,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79443775,
+     "key": "punt-P2-s1-8-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745389.8353379,
+     "exp": 1793745419.292588,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79445486,
+     "key": "punt-P2-s1-9-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745437.834522,
+     "exp": 1793745467.3478148,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79446478,
+     "key": "punt-P2-s1-10-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745480.51778,
+     "exp": 1793745509.99314,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79447823,
+     "key": "punt-P2-s1-11-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745527.8705761,
+     "exp": 1793745557.502102,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79448731,
+     "key": "punt-P2-s1-12-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793745569.291313,
+     "exp": 1793745598.592224,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79449905,
+     "key": "punt-P2-s1-13-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 12007,
+     "price": 0.17,
+     "t": 1793745618.087979,
+     "exp": 1793745647.6713338,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79450695,
+     "key": "punt-P2-s1-14-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 9674,
+     "price": 0.205,
+     "t": 1793745660.709846,
+     "exp": 1793745690.172384,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79527648,
+     "key": "punt-P2-s1-15-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 8781,
+     "price": 0.205,
+     "t": 1793748675.0758421,
+     "exp": 1793748704.15619,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79528606,
+     "key": "punt-P2-s1-16-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 25000,
+     "price": 0.2,
+     "t": 1793748715.807439,
+     "exp": 1793748745.3874502,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79529528,
+     "key": "punt-P2-s1-17-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 24390,
+     "price": 0.205,
+     "t": 1793748761.0269172,
+     "exp": 1793748785.968064,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79531628,
+     "key": "punt-P2-s1-18-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 28571,
+     "price": 0.175,
+     "t": 1793748828.435694,
+     "exp": 1793748856.1483278,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79532620,
+     "key": "punt-P2-s1-19-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 28571,
+     "price": 0.175,
+     "t": 1793748869.128093,
+     "exp": 1793748896.087712,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79537206,
+     "key": "punt-P2-s1-20-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 26315,
+     "price": 0.19,
+     "t": 1793749034.744968,
+     "exp": 1793749064.3344839,
+     "purpose": "punt",
+     "closed": true
+    },
+    {
+     "id": 79538914,
+     "key": "punt-P2-s1-21-156f7339",
+     "ex": "875",
+     "side": "yes",
+     "qty": 5032,
+     "price": 0.205,
+     "t": 1793749094.766402,
+     "exp": 1793749124.266165,
+     "purpose": "punt",
+     "closed": true
+    }
+   ],
+   "last": 1793749094.766402,
+   "errors": 0,
+   "committed": 80999.915,
+   "polls": 0,
+   "chosen": null,
+   "filled": 411236.0,
+   "cleared": [
+    "875"
+   ],
+   "pending": null,
+   "short_noted": true
+  },
+  "s1_sell": {
+   "status": "pending",
+   "base": null,
+   "n": 0,
+   "orders": [],
+   "last": 0.0,
+   "errors": 0,
+   "committed": 0.0,
+   "polls": 0,
+   "chosen": null
+  },
+  "s2": {
+   "status": "pending",
+   "base": null,
+   "n": 0,
+   "orders": [],
+   "last": 0.0,
+   "errors": 0,
+   "committed": 0.0,
+   "polls": 0,
+   "chosen": null
+  }
+ },
+ "aborted": null,
+ "log": [
+  [
+   1793745038.086078,
+   "s1: BUY 875 yes x25641 limit 0.195 (key punt-P2-s1-0-156f7339)"
+  ],
+  [
+   1793745079.066612,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-1-156f7339)"
+  ],
+  [
+   1793745118.7707462,
+   "s1: BUY 875 yes x28571 limit 0.175 (key punt-P2-s1-2-156f7339)"
+  ],
+  [
+   1793745158.755994,
+   "s1: BUY 875 yes x27027 limit 0.185 (key punt-P2-s1-3-156f7339)"
+  ],
+  [
+   1793745199.1624808,
+   "s1: BUY 875 yes x25641 limit 0.195 (key punt-P2-s1-4-156f7339)"
+  ],
+  [
+   1793745238.903458,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-5-156f7339)"
+  ],
+  [
+   1793745309.20255,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-6-156f7339)"
+  ],
+  [
+   1793745348.97545,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-7-156f7339)"
+  ],
+  [
+   1793745389.8358998,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-8-156f7339)"
+  ],
+  [
+   1793745437.8349051,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-9-156f7339)"
+  ],
+  [
+   1793745480.51844,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-10-156f7339)"
+  ],
+  [
+   1793745527.8710191,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-11-156f7339)"
+  ],
+  [
+   1793745569.291606,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-12-156f7339)"
+  ],
+  [
+   1793745618.0882828,
+   "s1: BUY 875 yes x12007 limit 0.17 (key punt-P2-s1-13-156f7339)"
+  ],
+  [
+   1793745660.710454,
+   "s1: BUY 875 yes x9674 limit 0.205 (key punt-P2-s1-14-156f7339)"
+  ],
+  [
+   1793745699.662074,
+   "s1: waiting for cash: only 0 can be spent"
+  ],
+  [
+   1793748675.076242,
+   "s1: BUY 875 yes x8781 limit 0.205 (key punt-P2-s1-15-156f7339)"
+  ],
+  [
+   1793748715.807733,
+   "s1: BUY 875 yes x25000 limit 0.2 (key punt-P2-s1-16-156f7339)"
+  ],
+  [
+   1793748761.027412,
+   "s1: BUY 875 yes x24390 limit 0.205 (key punt-P2-s1-17-156f7339)"
+  ],
+  [
+   1793748828.4358468,
+   "s1: BUY 875 yes x28571 limit 0.175 (key punt-P2-s1-18-156f7339)"
+  ],
+  [
+   1793748869.12945,
+   "s1: BUY 875 yes x28571 limit 0.175 (key punt-P2-s1-19-156f7339)"
+  ],
+  [
+   1793749034.745815,
+   "s1: BUY 875 yes x26315 limit 0.19 (key punt-P2-s1-20-156f7339)"
+  ],
+  [
+   1793749094.7672389,
+   "s1: BUY 875 yes x5032 limit 0.205 (key punt-P2-s1-21-156f7339)"
+  ],
+  [
+   1793749142.81434,
+   "s1: complete: 411236 shares for ~81000"
+  ]
+ ],
+ "timed_until": null
+}

@@ -1,0 +1,82 @@
+ok   calm            120 cycles   1.0 h sim    6.2 s wall | P&L    -39.9 (spread paid    48.5) cash    86030 | fills   120 arb 0/0 unwinds 0 | violations 0 
+ok   sweep6          120 cycles   1.0 h sim    7.3 s wall | P&L   +639.3 (spread paid   391.7) cash    18796 | fills   231 arb 38/38 unwinds 0 | violations 0 
+ok   outside_move    150 cycles   1.2 h sim    8.7 s wall | P&L    -39.6 (spread paid    48.8) cash    85297 | fills   130 arb 0/0 unwinds 0 | violations 0 
+ok   catchup         320 cycles   2.7 h sim   21.2 s wall | P&L     +8.7 (spread paid    66.8) cash    84988 | fills   215 arb 0/0 unwinds 0 | violations 0 
+ok   cheapfav        240 cycles   2.0 h sim   14.6 s wall | P&L    -14.5 (spread paid    28.4) cash    91240 | fills   138 arb 0/0 unwinds 0 | violations 0 
+ok   churn           200 cycles   1.7 h sim   11.1 s wall | P&L    +24.0 (spread paid   110.0) cash    85156 | fills   151 arb 3/3 unwinds 1 | violations 0 
+      summary: {'entries': 3, 'exits': 1, 'realised': 90.6}
+ok   churn_widen     420 cycles   3.5 h sim   17.8 s wall | P&L   -725.9 (spread paid   235.5) cash    83555 | fills   200 arb 9/9 unwinds 3 | violations 0 
+      note: kill switch fired 2x, first: 14:50:30 KILL SWITCH: drawdown 619, markout30 0.7800000000000025 (n=25); cancelling MM/tilt quotes 
+      summary: {'entries': 9, 'rejected': 0, 'exits': 3, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 11999, 'max_concurrent': 11879, 'max_race': 3960, 'realised': -642.5, 'killed': True, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 654, 'state_file_lots': 0, 'venue_pnl': -725.9}
+ok   churn_reject    120 cycles   1.0 h sim    4.8 s wall | P&L    -42.2 (spread paid    49.2) cash    85931 | fills   114 arb 0/30 unwinds 0 | violations 0 
+      summary: {'entries': 0, 'rejected': 30, 'exits': 0, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 0, 'max_concurrent': 0, 'max_race': 0, 'realised': 29.8, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': -42.2}
+ok   churn_restart   120 cycles   1.0 h sim    4.5 s wall | P&L    +20.5 (spread paid   110.1) cash    86099 | fills   118 arb 3/3 unwinds 1 | violations 0 
+      summary: {'entries': 3, 'rejected': 0, 'exits': 1, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 3999, 'max_concurrent': 3999, 'max_race': 3999, 'realised': 90.6, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': 20.5}
+ok   churn_free_first    90 cycles   0.8 h sim    3.3 s wall | P&L    +20.2 (spread paid   110.0) cash    86087 | fills   101 arb 3/3 unwinds 2 | violations 0 
+      summary: {'entries': 3, 'rejected': 0, 'exits': 1, 'recycle_buys': 0, 'scanner_unwinds': 1, 'turnover': 3999, 'max_concurrent': 3999, 'max_race': 3999, 'realised': 90.6, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': 20.2, 'sets_bought': 4081, 'sets_sold': 4081}
+ok   churn_interleave    90 cycles   0.8 h sim    3.2 s wall | P&L    +18.5 (spread paid   110.1) cash    86262 | fills   114 arb 3/3 unwinds 2 | violations 0 
+      summary: {'entries': 3, 'rejected': 0, 'exits': 1, 'recycle_buys': 0, 'scanner_unwinds': 1, 'turnover': 3999, 'max_concurrent': 3999, 'max_race': 3999, 'realised': 90.6, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': 18.5, 'sets_bought': 4081, 'sets_sold': 4081}
+ok   churn_stale_fill    40 cycles   0.3 h sim    1.3 s wall | P&L     -5.7 (spread paid    67.7) cash    86842 | fills    75 arb 1/1 unwinds 1 | violations 0 
+      summary: {'entries': 1, 'rejected': 0, 'exits': 1, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 1960, 'max_concurrent': 1960, 'max_race': 1960, 'realised': 69.8, 'killed': False, 'vol_paused': False, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': -5.7, 'hit': True, 'pos_end': {'1008': 0.0, '1007': -300.0}, 'ledger': []}
+ok   churn_blowout   200 cycles   1.7 h sim   13.8 s wall | P&L   -101.6 (spread paid   253.3) cash    82547 | fills   227 arb 11/11 unwinds 12 | violations 0 
+      summary: {'entries': 11, 'rejected': 0, 'exits': 12, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 17883, 'max_concurrent': 11958, 'max_race': 2521, 'realised': 73.1, 'killed': False, 'vol_paused': True, 'lots_left': 0, 'venue_sets_left': 0, 'state_file_lots': 0, 'venue_pnl': -101.6, 'pause_after_min': 16, 'vol_last': 2.48}
+ok   churn_many       60 cycles   0.5 h sim    3.1 s wall | P&L   -107.9 (spread paid   114.0) cash    73440 | fills   100 arb 7/7 unwinds 0 | violations 0 
+      summary: {'entries': 7, 'rejected': 0, 'exits': 0, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 11998, 'max_concurrent': 11942, 'max_race': 1970, 'realised': 29.8, 'killed': False, 'vol_paused': False, 'lots_left': 7, 'venue_sets_left': 12234, 'state_file_lots': 7, 'venue_pnl': -107.9, 'min_cash_after_entry': 77200}
+ok   churn_many_lowcash    60 cycles   0.5 h sim    3.2 s wall | P&L    -53.2 (spread paid    55.5) cash      982 | fills    72 arb 1/1 unwinds 0 | violations 0 
+      summary: {'entries': 1, 'rejected': 0, 'exits': 0, 'recycle_buys': 0, 'scanner_unwinds': 0, 'turnover': 902, 'max_concurrent': 873, 'max_race': 873, 'realised': 29.8, 'killed': False, 'vol_paused': False, 'lots_left': 1, 'venue_sets_left': 921, 'state_file_lots': 1, 'venue_pnl': -53.2, 'min_cash_after_entry': 3031}
+ok   cash_raise       80 cycles   0.7 h sim    4.4 s wall | P&L    -74.3 (spread paid    76.5) cash     2798 | fills    76 arb 5/5 unwinds 1 | violations 0 
+FAIL cash_raise_sets   200 cycles   1.7 h sim   13.0 s wall | P&L    -90.3 (spread paid    93.9) cash     2863 | fills   168 arb 8/8 unwinds 3 | violations 5 {'raise_set_early': 1, 'raise_without_need': 1, 'raise_over_need': 1, 'raise_set_excluded': 1, 'raise_set_on_burst': 1}
+ok   cash_raise_cheapfav   240 cycles   2.0 h sim   18.8 s wall | P&L    -43.4 (spread paid    44.1) cash      955 | fills   161 arb 0/0 unwinds 0 | violations 0 
+ok   shock_reserve   240 cycles   2.0 h sim   19.4 s wall | P&L    -92.4 (spread paid    97.2) cash    15117 | fills   168 arb 0/0 unwinds 0 | violations 0 
+ok   recycle          80 cycles   0.7 h sim    5.9 s wall | P&L   -219.4 (spread paid   221.4) cash     9302 | fills   153 arb 18/18 unwinds 8 | violations 0 
+ok   recycle_tail     30 cycles   0.2 h sim    2.5 s wall | P&L    -65.1 (spread paid    66.7) cash     8121 | fills   100 arb 6/6 unwinds 6 | violations 0 
+ok   recycle_stale_fill    30 cycles   0.2 h sim    2.3 s wall | P&L    -61.4 (spread paid    62.4) cash     8536 | fills   108 arb 7/7 unwinds 7 | violations 0 
+ok   recycle_race     30 cycles   0.2 h sim    3.0 s wall | P&L    -94.1 (spread paid    95.8) cash     8284 | fills   162 arb 16/16 unwinds 16 | violations 0 
+      note: unwind *: 16 in 600s exceeds the deploy watcher's alarm (12); 16 in the run
+ok   recycle_oversize    40 cycles   0.3 h sim    2.4 s wall | P&L    -34.0 (spread paid    34.4) cash      903 | fills    50 arb 3/3 unwinds 2 | violations 0 
+ok   recycle_cash     60 cycles   0.5 h sim    4.8 s wall | P&L   -173.1 (spread paid   177.4) cash    46420 | fills   136 arb 13/13 unwinds 7 | violations 0 
+ok   recycle_cash_gone    60 cycles   0.5 h sim    3.6 s wall | P&L    -52.9 (spread paid    58.4) cash    48323 | fills   104 arb 0/60 unwinds 1 | violations 0 
+ok   own_bid          40 cycles   0.3 h sim    2.3 s wall | P&L    -46.4 (spread paid    48.6) cash    87060 | fills    73 arb 0/0 unwinds 0 | violations 0 
+ok   exits            80 cycles   0.7 h sim    4.6 s wall | P&L    -50.8 (spread paid    56.2) cash    85851 | fills   107 arb 0/0 unwinds 0 | violations 0 
+ok   offload          60 cycles   0.5 h sim    2.9 s wall | P&L    -44.6 (spread paid    48.4) cash    86377 | fills    88 arb 0/0 unwinds 0 | violations 0 
+      note: offload exit path was not reached
+ok   slow_writes      40 cycles   0.8 h sim    2.2 s wall | P&L    -52.0 (spread paid    55.1) cash    85623 | fills    79 arb 0/0 unwinds 0 | violations 0 
+ok   feed_silent      90 cycles   0.8 h sim    5.3 s wall | P&L    -41.3 (spread paid    48.9) cash    85997 | fills   112 arb 0/0 unwinds 0 | violations 0 
+ok   aon_reject       60 cycles   0.5 h sim    3.8 s wall | P&L   -454.3 (spread paid   457.2) cash     9272 | fills   171 arb 43/51 unwinds 0 | violations 0 
+ok   inside_on        40 cycles   0.3 h sim    2.2 s wall | P&L    -36.9 (spread paid    54.1) cash    85891 | fills   106 arb 0/0 unwinds 0 | violations 0 
+
+33 scenario(s) in 235 s, 5 violation(s)
+
+[cash_raise_sets] raise_set_early x1 - first at cycle 0 (t+0.0 min): cycle 0: set unwound with cash skips in only 0 half-hours of the last 6 h
+      14:00:00 I sigbot: CHURN exit MT-01 House race x1500 of 1500 at 0.9300/set (loss >= 9 ticks per set): -90.0, realised so far -100.2
+      14:00:00 I sigbot: STRATEGY MONITOR: mm ok n=0 mean=None evidence=1.0; catchup ok n=0 mean=None evidence=1.0; hf_arb ok n=0 mean=None evidence=1.0; recycle ok n=0 mean=None evidence=1.0; cheapfav ok n=0 mean=None evidence=1.0
+      14:00:00 I sigbot.arb: FREE UNWIND Michigan Senate: 1500 sets at proceeds 1.0000/set >= payout 1 (locks profit now, frees 1500)
+      14:00:00 I sigbot.arb: FREE UNWIND MI-10 House race: 1500 sets at proceeds 1.0000/set >= payout 1 (locks profit now, frees 1500)
+      14:00:00 I sigbot: free unwinds: [{'race': 'Michigan Senate', 'qty': 1500, 'proceeds': 1.0}, {'race': 'MI-10 House race', 'qty': 1500, 'proceeds': 1.0}]
+      14:00:00 I sigbot: cycle 1 done in 0.0s cash=9000 pos_value=5914 total=14914 netD=+0 arb={'passes': 0, 'candidates': 0, 'executed': 0, 'errors': 0, 'last_pass': 0.0} mm={} tilt={} dir={'polled': True, 'priced': 237, 'signals': 13, 'dry': 2
+
+[cash_raise_sets] raise_without_need x1 - first at cycle 0 (t+0.0 min): cycle 0: set unwound with no posted need
+      14:00:00 I sigbot: CHURN exit MT-01 House race x1500 of 1500 at 0.9300/set (loss >= 9 ticks per set): -90.0, realised so far -100.2
+      14:00:00 I sigbot: STRATEGY MONITOR: mm ok n=0 mean=None evidence=1.0; catchup ok n=0 mean=None evidence=1.0; hf_arb ok n=0 mean=None evidence=1.0; recycle ok n=0 mean=None evidence=1.0; cheapfav ok n=0 mean=None evidence=1.0
+      14:00:00 I sigbot.arb: FREE UNWIND Michigan Senate: 1500 sets at proceeds 1.0000/set >= payout 1 (locks profit now, frees 1500)
+      14:00:00 I sigbot.arb: FREE UNWIND MI-10 House race: 1500 sets at proceeds 1.0000/set >= payout 1 (locks profit now, frees 1500)
+      14:00:00 I sigbot: free unwinds: [{'race': 'Michigan Senate', 'qty': 1500, 'proceeds': 1.0}, {'race': 'MI-10 House race', 'qty': 1500, 'proceeds': 1.0}]
+      14:00:00 I sigbot: cycle 1 done in 0.0s cash=9000 pos_value=5914 total=14914 netD=+0 arb={'passes': 0, 'candidates': 0, 'executed': 0, 'errors': 0, 'last_pass': 0.0} mm={} tilt={} dir={'polled': True, 'priced': 237, 'signals': 13, 'dry': 2
+
+[cash_raise_sets] raise_over_need x1 - first at cycle 0 (t+0.0 min): cycle 0: raised 1395 for needs {}
+      14:00:00 I sigbot: CHURN exit MT-01 House race x1500 of 1500 at 0.9300/set (loss >= 9 ticks per set): -90.0, realised so far -100.2
+      14:00:00 I sigbot: STRATEGY MONITOR: mm ok n=0 mean=None evidence=1.0; catchup ok n=0 mean=None evidence=1.0; hf_arb ok n=0 mean=None evidence=1.0; recycle ok n=0 mean=None evidence=1.0; cheapfav ok n=0 mean=None evidence=1.0
+      14:00:00 I sigbot.arb: FREE UNWIND Michigan Senate: 1500 sets at proceeds 1.0000/set >= payout 1 (locks profit now, frees 1500)
+      14:00:00 I sigbot.arb: FREE UNWIND MI-10 House race: 1500 sets at proceeds 1.0000/set >= payout 1 (locks profit now, frees 1500)
+      14:00:00 I sigbot: free unwinds: [{'race': 'Michigan Senate', 'qty': 1500, 'proceeds': 1.0}, {'race': 'MI-10 House race', 'qty': 1500, 'proceeds': 1.0}]
+      14:00:00 I sigbot: cycle 1 done in 0.0s cash=9000 pos_value=5914 total=14914 netD=+0 arb={'passes': 0, 'candidates': 0, 'executed': 0, 'errors': 0, 'last_pass': 0.0} mm={} tilt={} dir={'polled': True, 'priced': 237, 'signals': 13, 'dry': 2
+
+[cash_raise_sets] raise_set_excluded x1 - first at cycle 0 (t+0.0 min): unw-9 MT-01 House race: the expensive set or a race held through the call
+      14:00:00 I sigbot: CHURN exit MT-01 House race x1500 of 1500 at 0.9300/set (loss >= 9 ticks per set): -90.0, realised so far -100.2
+      14:00:00 I sigbot: STRATEGY MONITOR: mm ok n=0 mean=None evidence=1.0; catchup ok n=0 mean=None evidence=1.0; hf_arb ok n=0 mean=None evidence=1.0; recycle ok n=0 mean=None evidence=1.0; cheapfav ok n=0 mean=None evidence=1.0
+      14:00:00 I sigbot.arb: FREE UNWIND Michigan Senate: 1500 sets at proceeds 1.0000/set >= payout 1 (locks profit now, frees 1500)
+      14:00:00 I sigbot.arb: FREE UNWIND MI-10 House race: 1500 sets at proceeds 1.0000/set >= payout 1 (locks profit now, frees 1500)
+      14:00:00 I sigbot: free unwinds: [{'race': 'Michigan Senate', 'qty': 1500, 'proceeds': 1.0}, {'race': 'MI-10 House race', 'qty': 1500, 'proceeds': 1.0}]
+      14:00:00 I sigbot: cycle 1 done in 0.0s cash=9000 pos_value=5914 total=14914 netD=+0 arb={'passes': 0, 'candidates': 0, 'executed': 0, 'errors': 0, 'last_pass': 0.0} mm={} tilt={} dir={'polled': True, 'priced': 237, 'signals': 13, 'dry': 2
+
+[cash_raise_sets] raise_set_on_burst x1 - first at scan 199.0 (t+100.0 min): a set was unwound in the first cycle of the need
