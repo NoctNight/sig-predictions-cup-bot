@@ -159,10 +159,17 @@ the tracked files, including two fixtures under `data/`: `research_contract_rule
 map the cheap-favourites sleeve, the guard tests and the simulation read, and `books.json`, the 21 Oct book snapshot
 that seeds every fake-venue scenario.
 
-One known failure: with the end-of-tournament database, `tests/test_autotune.py` reports `group mm_ladder: ... cpu`
-above its 8 s budget plus 1 s. The tuner checks its CPU budget between parameters, so one parameter's replay on the
-dense election-week window can overrun it; the tuner then skips the remaining parameters as designed. It is a timing
-check on the real data, not a code error, and it also failed in the bot's own precheck on 3 Nov.
+Two known failures:
+
+* With the end-of-tournament database, `tests/test_autotune.py` reports `group mm_ladder: ... cpu` above its 8 s
+  budget plus 1 s. The tuner checks its CPU budget between parameters, so one parameter's replay on the dense
+  election-week window can overrun it; the tuner then skips the remaining parameters as designed. It is a timing check
+  on the real data, not a code error, and it also failed in the bot's own precheck on 3 Nov.
+* `python3 tests/sim_pipeline.py aon_reject` reports 2 `rate_arb_fail` violations: when the venue rejects the
+  all-or-none multi-leg order, the arb engine retries the AL-02 and AZ-01 House races 4 times in 60 s where the design
+  allows 2. The other 41 scenarios pass. The failure is deterministic and identical on the last commit of the
+  tournament, so it is a gap in the arb retry back-off that shipped, not something the post-tournament cleanup
+  introduced; it was left as found rather than changing trading logic after the event.
 
 ## Findings that shaped the parameters
 
