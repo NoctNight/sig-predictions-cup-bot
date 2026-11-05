@@ -422,7 +422,7 @@ def figure(cal, ab, legs, sw, pick, pnl_o, pnl_c, pnl_s, u_o, existing):
     xs = np.linspace(0.78, 1.0, 50)
     ax.plot(xs, xs, color="#555", lw=1.2, label="Price is exactly right (win rate = price)")
     ax.plot(xs, [calibrated(x, ab) for x in xs], color="#d62728", lw=2, ls="--",
-            label=f"Calibrated win chance fitted on past favourites (used as the 'calibrated' case)")
+            label="Calibrated win chance fitted on past favourites (used as the 'calibrated' case)")
     off = {13: -0.006, 7: -0.002, 3: 0.002, 1: 0.006}
     for r in cal:
         if r["source"] == "all" or r["band"] == "0.80-0.99" or r["n"] < 3:

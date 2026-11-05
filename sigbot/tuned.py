@@ -11,9 +11,8 @@ from __future__ import annotations
 import json
 import os
 import threading
-import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_PATH = os.path.join(ROOT, "params", "auto_applied.json")

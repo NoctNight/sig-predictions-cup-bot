@@ -1,8 +1,8 @@
 """Drill-down 11: the fast trigger surface. Both venues moved >= m in window W, SIG has copied < c of it. Grid over W, m, c, hold, office, then
 stability by neighbours (a cell is only as good as the cells around it), split by market type, direction, price, clock."""
-import sys, numpy as np, pandas as pd, itertools
+import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, H
+from lab import Lab
 L = Lab()
 mid, gap, P, fair = L.mid, L.gap, L.P, L.fair
 pd.set_option("display.width", 220, "display.max_rows", 300, "display.max_columns", 40)

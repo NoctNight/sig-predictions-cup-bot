@@ -3,7 +3,7 @@
 Run from the project root:  python3 research_notes/concentrated_risk_sizing.py
 Inputs: params/fair_explained.json, data/markets.json, data/sigbot.sqlite (opened mode=ro), data/leaderboard_snapshot.json.
 """
-import json, re, sqlite3, random, math, time, sys
+import json, re, sqlite3, random, math, time
 from statistics import NormalDist
 
 TICK = 0.005

@@ -5,8 +5,8 @@
     kalshi: Kalshi public trades in the 60 min before each strict signal (3 calls per 30 s)
     pm    : Polymarket public trades in the 60 min before each strict signal, by condition id
 """
-import json, os, re, sqlite3, ssl, sys, time, urllib.parse, urllib.request
-import numpy as np, pandas as pd
+import json, os, sqlite3, ssl, sys, time, urllib.parse, urllib.request
+import pandas as pd
 OUT = sys.argv[1]; WHAT = sys.argv[2:]
 UA = {"User-Agent": "Mozilla/5.0"}
 CTX = ssl.create_default_context(cafile="/etc/ssl/cert.pem")

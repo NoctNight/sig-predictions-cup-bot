@@ -1,5 +1,5 @@
 """Q2 by night and office: favourites at 85-95c at T-3 and T-10, how far they moved, so one night's swing cannot pass as a rule."""
-import numpy as np, pandas as pd, sys
+import numpy as np, pandas as pd
 L = pd.read_pickle("data/research_near_settlement/q2_legs_election.pkl")
 L = L[L.outcome.isin([0, 1])]
 L["nm"] = L.night.map({"2022-11-08": "2022", "2024-11-05": "2024", "2025-11-04": "2025"}).fillna("other")

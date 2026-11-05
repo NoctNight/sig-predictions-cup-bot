@@ -1,6 +1,6 @@
 """Drill-down 8: fast version, the actual high-frequency punt. Enter as soon as both venues have moved in a short window and SIG has not fully
 copied. Uses raw polls (about 81 s), not the 5-minute panel. Entry is the NEXT poll's touch. Exit at the touch after a fixed time."""
-import sqlite3, numpy as np, pandas as pd, sys
+import sqlite3, numpy as np, pandas as pd
 pd.set_option("display.width", 200, "display.max_rows", 300, "display.max_columns", 40)
 db = sqlite3.connect("file:data/sigbot.sqlite?mode=ro", uri=True)
 df = pd.read_sql_query("select ts,race,party,pm,kalshi,fair,sig_bid,sig_ask,exchange_id from venue_fair where exchange_id is not null and sig_bid>0 and sig_ask>sig_bid order by ts", db)
@@ -69,7 +69,7 @@ R = []
 for W in WINS:
     x = E[E.W == W]
     R.append(show(x, f"window {W//60} min"))
-    R.append(show(x[x.train], f"  training days")); R.append(show(x[~x.train], f"  test days"))
+    R.append(show(x[x.train], "  training days")); R.append(show(x[~x.train], "  test days"))
     for o in ("house", "governor", "senate"):
         R.append(show(x[x.office == o], f"  {o}"))
     R.append(show(x[x.gapleft >= .02], "  gap left >= 2c")); R.append(show(x[x.gapleft >= .03], "  gap left >= 3c")); R.append(show(x[x.dfv >= .03], "  outside move >= 3c"))

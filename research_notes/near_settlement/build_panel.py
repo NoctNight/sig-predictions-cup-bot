@@ -4,7 +4,7 @@ tau = days to T, where T is 23:00 UTC on election day (18:00 ET, before any resu
 `p` always means the race's eventual favourite-by-price at T-10 is not assumed: we keep YES and let the studies pick the side.
 Run after fetch_elections.py. Output data/research_near_settlement/panel.pkl, legs.pkl.
 """
-import glob, json, os, sys
+import json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np, pandas as pd
 import net

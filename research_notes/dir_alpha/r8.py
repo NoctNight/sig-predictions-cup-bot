@@ -4,7 +4,7 @@ import json, re, sys
 import numpy as np, pandas as pd
 from statistics import NormalDist
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, survivors, show, H
+from lab import Lab, survivors, show
 L = Lab()
 mid, gap, fair = L.mid, L.gap, L.fair
 meta = L.meta

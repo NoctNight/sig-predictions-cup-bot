@@ -1,6 +1,6 @@
 """Drill-down 7: capacity and portfolio. Ladder walk cost per leg from every saved book snapshot, then a simulation of the filtered signal at
 several sizes per trade, with walking the book on the way in and on the way out."""
-import sys, glob, json, os, numpy as np, pandas as pd
+import sys, glob, json, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
 from lab import Lab, H
 L = Lab()

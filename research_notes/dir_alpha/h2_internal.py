@@ -150,7 +150,6 @@ E["fwd_dir"] = np.where(E.dnat_s > .002, "nat helped", np.where(E.dnat_s < -.002
 print(E.groupby(["rule", "fwd_dir"]).net.agg(["size", lambda v: round(100 * v.mean(), 2)]).to_string())
 
 print("\n=== C: polls. Strict entries with a poll of that race created in the prior 24 h vs none")
-import re
 rm = json.load(open("data/race_map.json"))["races"]
 polls = []
 for pt, suffix in (("governor", " Governor"), ("us-senator", " Senate"), ("us-representative", " House race")):

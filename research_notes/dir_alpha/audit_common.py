@@ -1,6 +1,6 @@
 """Audit of the S48 lag rule: shared loaders and an independent rebuild of the signal. Does NOT import lab.py or extract.py.
 Reads data/sigbot.sqlite read-only; caches raw tables in AUDIT_CACHE (default: scratchpad given by env)."""
-import os, pickle, sqlite3
+import os, sqlite3
 import numpy as np, pandas as pd
 CACHE = os.environ.get("AUDIT_CACHE", "/tmp/audit_cache")
 BIN = 300

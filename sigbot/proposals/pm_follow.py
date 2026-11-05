@@ -15,7 +15,7 @@ Reported per trade: points per share net of both crossings, and the mid-to-mid m
 """
 from __future__ import annotations
 
-import argparse, bisect, collections, json, os, sqlite3, statistics, sys
+import argparse, bisect, collections, json, os, sqlite3, statistics
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TICK = 0.005

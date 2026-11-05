@@ -1,5 +1,5 @@
 """Decision plot: should 90-92c favourites be sold by 2 Nov or held to the result? Run after favourite_gap_exit_study.py."""
-import numpy as np, pandas as pd
+import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

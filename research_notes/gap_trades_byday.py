@@ -1,6 +1,6 @@
 """Gap trades by entry day (27 Oct): same rule as gap_trades_study.py (3c, PM/Kalshi within 4pts, 1 entry/leg/24h), no IS/OOS split
 (no fitted parameter). Net = exit at the SIG touch h later. Per entry day: mean net (c), n trades, n races; t clustered by race overall."""
-import sqlite3, math, sys, datetime
+import sqlite3, datetime
 from collections import defaultdict
 db = sqlite3.connect("file:data/sigbot.sqlite?mode=ro", uri=True)
 rows = db.execute("select ts,race,party,pm,kalshi,fair,sig_bid,sig_ask from venue_fair where fair is not null and sig_bid is not null "

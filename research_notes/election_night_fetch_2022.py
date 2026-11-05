@@ -14,7 +14,6 @@ Outputs (data/election_night/): paths_2022.csv, legs_2022.json.   Run: python3 r
 from __future__ import annotations
 
 import csv
-import glob
 import json
 import os
 import statistics

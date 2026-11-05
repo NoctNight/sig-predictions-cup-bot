@@ -17,6 +17,8 @@ reads so a cycle fits: 3 + 3 + ~n_candidates*2.5 + 1 + tape_poll_markets + n_mar
 """
 from __future__ import annotations
 
+from typing import Optional
+
 import argparse
 from zoneinfo import ZoneInfo
 import json

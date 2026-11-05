@@ -1,6 +1,6 @@
 """What the 90-92c favourites earn sold on 2 Nov, sold at noon on 3 Nov, or held, per share after spread and the walk down the bids.
 Now is T-3. 2 Nov 18:00 ET is 48 h away, 3 Nov 12:00 ET is 66 h. Closure rates are SIG's own; the speed-up is the ratio measured on Polymarket-Kalshi gaps."""
-import json, numpy as np, pandas as pd
+import json, pandas as pd
 OUT = "data/research_near_settlement"
 L = pd.read_pickle(f"{OUT}/live_book.pkl")
 B = L[(L.ask >= .899) & (L.ask <= .921) & (L.edge >= .039)].copy()

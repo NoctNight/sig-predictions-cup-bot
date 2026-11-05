@@ -2,7 +2,7 @@
 import sys, time
 import numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, survivors, show, H
+from lab import Lab, survivors, show
 
 L = Lab()
 print("panel", L.mid.shape, "split", pd.Timestamp(L.SPLIT, unit="s"), "last", pd.Timestamp(L.LAST, unit="s"), flush=True)

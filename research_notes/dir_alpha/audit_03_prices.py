@@ -1,5 +1,5 @@
 """Were entry and exit prices real? Compare touch with tape prints, own orders, recorded top-of-book size, book snapshots."""
-import sys, json, glob, re, os; sys.path.insert(0, "research_notes/dir_alpha")
+import sys, json, glob, re; sys.path.insert(0, "research_notes/dir_alpha")
 import numpy as np, pandas as pd
 import audit_common as c
 G = c.Grid(); sf = G.flow(); tp = G.tape

@@ -2,7 +2,12 @@
 """End-to-end checks of the scheduled shadow tuner + allocator with a fake bot, in a temporary root (never the live files)."""
 import json, os, shutil, sys, tempfile, time, types, logging
 
+if len(sys.argv) < 2:
+    sys.exit("usage: python3 tests/test_autotune.py <repo root>   (e.g. \"$PWD\" from the repo root)")
 REPO = sys.argv[1]
+if not os.path.exists(os.path.join(REPO, "data", "sigbot.sqlite")):
+    sys.exit("tests/test_autotune.py needs data/sigbot.sqlite, the bot's runtime log (not in the repo): "
+             "it is created by a live or --dry-run run, and the tuner is replayed on it read-only")
 sys.path.insert(0, REPO)
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 from sigbot import shadow, allocator, tuned
@@ -162,7 +167,7 @@ try:
     shadow.simulate_mm(md, t0_, fu_, dict(lp, level_ticks=[1, 2, 4, 6]))          # mismatched lengths: common levels only
 except Exception as e:
     ok = False; print("   error:", e)
-check(ok and len(shadow.grid_for("mm.level_ticks", lp["level_ticks"])) >= 3, f"2-level ladder grids and a ticks/mult mismatch replay without error")
+check(ok and len(shadow.grid_for("mm.level_ticks", lp["level_ticks"])) >= 3, "2-level ladder grids and a ticks/mult mismatch replay without error")
 r_cfg = shadow.simulate_mm(md, fu_, t1_, dict(lp))
 r_2 = shadow.simulate_mm(md, fu_, t1_, dict(lp, improve_ge=2))
 r_3 = shadow.simulate_mm(md, fu_, t1_, dict(lp, improve_ge=int(bm.cfg.mm.improve_when_spread_ticks_ge)))

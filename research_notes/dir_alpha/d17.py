@@ -6,7 +6,7 @@
  E big prints (H03), the one idea not yet run directly."""
 import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, survivors, show, H
+from lab import Lab, survivors, show
 L = Lab()
 pd.set_option("display.width", 200, "display.max_rows", 200, "display.max_columns", 30)
 Es = pd.read_pickle("data/research_diralpha/strict_slow.pkl"); Ef = pd.read_pickle("data/research_diralpha/strict_fast.pkl")

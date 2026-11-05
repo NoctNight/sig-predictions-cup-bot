@@ -16,7 +16,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ladder_exits_study import (OOS0, IS0, OUT, STEP, T, build, load, trailing_median, tstat, ts_iso)  # noqa: E402
+from ladder_exits_study import (OOS0, IS0, OUT, STEP, T, build, load, trailing_median, tstat)  # noqa: E402
 
 SLIP = 0.1 * 2                 # ticks per set, each way (2 legs)
 LOT = 2000

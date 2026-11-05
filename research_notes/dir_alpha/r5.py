@@ -1,7 +1,7 @@
 """Round 5: events. Sweeps across many legs, single-leg sweeps, repeated clips, news, and our own past signals."""
 import sys, sqlite3, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, survivors, show, H
+from lab import Lab, survivors, show
 L = Lab()
 mid, P = L.mid, L.P
 ds = L.dsign

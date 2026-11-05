@@ -681,7 +681,7 @@ def run():
         days_all = (iso("2026-10-21T18:00:00Z") - iso("2026-10-07T12:00:00Z")) / 86400 + days_pre + days_win
         res[f"catchup_pooled_{pts}"] = [summarize(pool, "tt4", f"pooled A+B, >= {pts} pt, taker +4 h", days_all),
                                         summarize([r for r in pool if r["race"] not in top], "tt4", f"pooled, without top 3 races {sorted(top)}", days_all),
-                                        summarize([r for r in pool if r["src"] != "A"], "tt4", f"B only (live quotes, 1.4 d)", days_pre + days_win)]
+                                        summarize([r for r in pool if r["src"] != "A"], "tt4", "B only (live quotes, 1.4 d)", days_pre + days_win)]
     for k in (6, 8, 12):
         for lab, a_, b_, days in (("window", W0, W1 - 4 * 3600, days_win - 4 / 24), ("pre", T_START + 1800, W0, days_pre)):
             rows = deep_ladder(a_, b_, k)

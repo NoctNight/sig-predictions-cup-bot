@@ -32,7 +32,6 @@ import random
 import re
 import sqlite3
 import statistics
-import sys
 import time
 from collections import defaultdict
 

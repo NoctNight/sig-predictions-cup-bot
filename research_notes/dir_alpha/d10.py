@@ -2,7 +2,7 @@
 Capital limit, one bet per race, best signals first, exits by the rule found in d5 (sell when the fresh gap has closed, or at 36 h)."""
 import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, H
+from lab import Lab
 L = Lab()
 pd.set_option("display.width", 200, "display.max_rows", 200, "display.max_columns", 40)
 mid, gap, P, fair = L.mid, L.gap, L.P, L.fair

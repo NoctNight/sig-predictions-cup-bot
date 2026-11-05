@@ -1,7 +1,7 @@
 """Round 6: the generated hypotheses that the panel can test now (A4, A7, A14, A23, A27, A34, A35, A37, A1, A5 and variants)."""
 import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, survivors, show, H
+from lab import Lab, survivors, show
 L = Lab()
 mid, gap, P, fair = L.mid, L.gap, L.P, L.fair
 meta = L.meta; cols = L.cols; ds = L.dsign

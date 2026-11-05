@@ -33,8 +33,6 @@ import json
 import math
 import os
 import statistics
-import sys
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional, Sequence
 

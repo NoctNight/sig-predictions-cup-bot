@@ -1,6 +1,6 @@
 """Truncation look-ahead test, poll-level fills, corrected pipeline, tape-priced P&L, book slippage, selection grid."""
-import sys, glob, json, re; sys.path.insert(0, "research_notes/dir_alpha")
-import numpy as np, pandas as pd, sqlite3
+import sys, glob, json; sys.path.insert(0, "research_notes/dir_alpha")
+import numpy as np, pandas as pd
 import audit_common as c
 pd.set_option("display.width", 220, "display.max_columns", 40, "display.max_rows", 200)
 G = c.Grid(); sf = G.flow(); tp = G.tape; M = G.masks(sf); d = G.trades(M["full"]); n = len(G.idx)

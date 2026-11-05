@@ -18,7 +18,7 @@ Paper only: `RefillFront.on_book(ex, prev_book, book, prints)` returns the order
 """
 from __future__ import annotations
 
-import argparse, bisect, collections, statistics, sys
+import argparse, bisect, collections, statistics
 
 TICK = 0.005
 

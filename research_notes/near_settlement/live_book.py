@@ -1,5 +1,5 @@
 """The favourites the sleeve can buy now: 90-92c at SIG's ask, fair 4c+ higher. Depth when we sell is taken from the last local book snapshot."""
-import sqlite3, json, time, numpy as np, pandas as pd
+import sqlite3, json, numpy as np, pandas as pd
 db = sqlite3.connect("file:data/sigbot.sqlite?mode=ro", uri=True)
 t = db.execute("select max(ts) from venue_fair").fetchone()[0]
 v = pd.read_sql_query(f"select * from venue_fair where ts>{t-900} and exchange_id is not null and sig_bid is not null and sig_ask is not null and fair is not null order by ts", db)

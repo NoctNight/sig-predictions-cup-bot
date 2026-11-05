@@ -1,6 +1,6 @@
 """Round-2 follow-up on the FEC signal: is it just momentum or the D drift? Controls for the past 3-day outside move, removes the day mean, permutes races within a day,
 splits days and spending types, and overlays the strict lag trades. argv[1] = directory with fec_ie.csv."""
-import os, sys, warnings
+import sys, warnings
 import numpy as np, pandas as pd
 warnings.filterwarnings("ignore")
 sys.path.insert(0, "research_notes/dir_alpha")

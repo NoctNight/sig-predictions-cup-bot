@@ -15,7 +15,6 @@ Read-only: data/sigbot.sqlite opened mode=ro; no SIG venue calls.  Reproduce:
   python3 research_notes/sig_convergence_study.py           # analysis, tables, figure
 One tick = 0.005.
 """
-import bisect
 import collections
 import json
 import math

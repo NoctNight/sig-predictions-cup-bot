@@ -5,7 +5,7 @@
  B8 our own model against SIG (H30)                B9 gap source: outside-driven or SIG-driven """
 import sys, json, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, survivors, show, H
+from lab import Lab, survivors, show
 L = Lab()
 mid, gap, P, fair = L.mid, L.gap, L.P, L.fair
 pm, k_ = L.pm, L.k

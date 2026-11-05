@@ -1,8 +1,8 @@
 """Drill-down 13: combined book. Slow rule (24 h filtered signal, exit at gap overshoot or 36 h) plus fast rule (30 min trigger, 25-75, exit at 4 h).
 One open position per race, capital limit, real run costs both ways, optional cap on net D, edge haircut. Saves day-by-day numbers for the plot."""
-import sys, json, numpy as np, pandas as pd
+import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, H
+from lab import Lab
 L = Lab()
 mid, gap, P, fair = L.mid, L.gap, L.P, L.fair
 pd.set_option("display.width", 200, "display.max_rows", 200, "display.max_columns", 30)

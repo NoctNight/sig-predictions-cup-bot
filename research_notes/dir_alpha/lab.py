@@ -10,7 +10,7 @@ because that is the regime we would actually trade in. t statistics: by race (le
 (a national move hits every leg at once, so the race t alone overstates).
 A signal survives only if train and test agree in sign and the test net is positive on both t statistics (see survivors()).
 """
-import json, os, pickle, time
+import json, pickle
 import numpy as np, pandas as pd
 
 D = "data/research_diralpha/"

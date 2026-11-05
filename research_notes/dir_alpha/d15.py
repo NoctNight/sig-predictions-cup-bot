@@ -1,9 +1,9 @@
 """Drill-down 15: the honest version after the audit. Strict mechanics for BOTH rules: signal from real polls only (no forward fill in the history), fill at the next
 real poll, one bet per race, exit at the first real poll. Then the book with the cost curve from our own orders and a selection haircut.
 Cost per share each way: 0.02c per 1,000 shares (own orders: about 0 to 5k, 0.25c at 10k, about 0.75c at 37k)."""
-import sys, json, numpy as np, pandas as pd
+import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, H
+from lab import Lab
 L = Lab()
 P = L.P
 pd.set_option("display.width", 200, "display.max_rows", 200, "display.max_columns", 30)

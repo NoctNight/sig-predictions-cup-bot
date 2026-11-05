@@ -35,7 +35,6 @@ import hashlib
 import json
 import os
 import re
-import ssl
 import sys
 import time
 import urllib.error

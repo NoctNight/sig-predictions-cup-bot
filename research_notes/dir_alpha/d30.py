@@ -1,5 +1,5 @@
 """Drill-down 30: chamber legs in full. 12-hourly SIG against outside since the start, tape by day and who pushed, our position, the book."""
-import json, sqlite3, numpy as np, pandas as pd
+import json, sqlite3, pandas as pd
 pd.set_option("display.width", 220, "display.max_rows", 300, "display.max_columns", 30)
 db = sqlite3.connect("file:data/sigbot.sqlite?mode=ro", uri=True)
 v = pd.read_sql_query("select ts,race,party,exchange_id ex,pm,kalshi,fair,sig_bid,sig_ask from venue_fair where race in ('U.S. House','U.S. Senate')", db)

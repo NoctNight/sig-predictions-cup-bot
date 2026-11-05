@@ -1,7 +1,7 @@
 """Drill-down 2: map of the fresh-gap signal by threshold in cents, window, hold, office and price band. Fixed thresholds, so no look-ahead in the cut."""
-import sys, numpy as np, pandas as pd, json
+import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, H
+from lab import Lab
 L = Lab()
 mid, gap = L.mid, L.gap
 rows = []

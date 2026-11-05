@@ -45,12 +45,11 @@ import math
 import os
 import re
 import time
-import urllib.parse
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
 
-from .venues.http import Http, VenueError
-from .venues.states import NAME_TO_ABBR, STATES, parse_race
+from .venues.http import Http
+from .venues.states import parse_race
 
 log = logging.getLogger("sigbot.fairmodel")
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -1,5 +1,5 @@
 """Candidates right now, read-only: forward test status scored by rule and age, open lag signals with the conviction count and the 70c filter, chamber gaps."""
-import json, sqlite3, numpy as np, pandas as pd
+import json, sqlite3, pandas as pd
 pd.set_option("display.width", 200, "display.max_rows", 100, "display.max_columns", 30)
 st = json.load(open("data/research_diralpha/paper_status.json"))
 M = pd.DataFrame(st["marks"]); print("status", st["utc"], "entries", st["n"], "mean net now %.2fc" % st["mean_net_c"])

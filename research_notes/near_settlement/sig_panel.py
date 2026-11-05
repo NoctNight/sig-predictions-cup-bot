@@ -1,5 +1,5 @@
 """Q5 robustness: an unselected panel (all favourite sides, by outside fair) so that picking wide gaps cannot fake closure; our own fills; the current holdings."""
-import sqlite3, numpy as np, pandas as pd, json
+import sqlite3, numpy as np, pandas as pd
 db = sqlite3.connect("file:data/sigbot.sqlite?mode=ro", uri=True)
 v = pd.read_sql_query("select ts,exchange_id,race,party,sig_bid,sig_ask,pm,kalshi,fair from venue_fair where exchange_id is not null and sig_bid is not null and sig_ask is not null and fair is not null order by ts", db)
 v["mid"] = (v.sig_bid + v.sig_ask) / 2

@@ -1,7 +1,7 @@
 """Decision plots for the chamber trade.
  dir_alpha_chamber.png: is it real, does it close (x = date)
  dir_alpha_chamber_size.png: how big (x = shares)"""
-import sqlite3, numpy as np, pandas as pd
+import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt, matplotlib.dates as md

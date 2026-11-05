@@ -25,7 +25,7 @@ from typing import Optional
 from .http import Http, VenueError
 from .kalshi import COMBO_SERIES, HOUSE_SERIES, Kalshi
 from .polymarket import CHAMBER_EVENTS, Polymarket
-from .states import STATES, parse_race, slug
+from .states import parse_race, slug
 
 log = logging.getLogger("sigbot.venues.mapping")
 HERE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -1,5 +1,5 @@
 """Independent review of the line trade (lr_*). Read-only. Rebuilds both panels and a general version of the oos8 engine."""
-import pickle, sys, json, sqlite3, numpy as np, pandas as pd
+import pickle, sys, json, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
 from lab import Lab
 pd.set_option("display.width", 220, "display.max_rows", 200, "display.max_columns", 40)

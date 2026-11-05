@@ -22,7 +22,7 @@ import logging
 import os
 import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from .api import ApiError, SuperMarketClient

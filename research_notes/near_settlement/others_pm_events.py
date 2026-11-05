@@ -1,5 +1,5 @@
 """Fetch Gamma events (cached) for the comparison-group study. Usage: others_pm_events.py id1 id2 ..."""
-import os, sys, json, time
+import os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import net
 RAW = os.path.join(net.OUT, "others", "raw")

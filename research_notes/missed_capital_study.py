@@ -20,7 +20,7 @@ Parts
   3. hindsight scan: SIG touch >= 3c through the Polymarket/Kalshi fair with both venues within 4 pts, >= 10 min, same
      contract terms; P&L = later SIG touch exit minus entry touch; each episode labelled with what actually blocked it.
 """
-import json, os, re, sqlite3, sys, glob
+import json, os, re, sqlite3, sys
 from datetime import datetime, timezone
 import numpy as np
 import pandas as pd

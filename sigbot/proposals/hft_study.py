@@ -10,7 +10,7 @@ Times are the feed's asOf (engine time) for books and executedAt for trades; rx 
 """
 from __future__ import annotations
 
-import bisect, collections, json, math, os, sqlite3, statistics, sys
+import bisect, collections, json, os, sqlite3, statistics, sys
 from datetime import datetime
 
 from sigbot.universe import Universe

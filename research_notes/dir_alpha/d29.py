@@ -4,7 +4,7 @@
  C delayed entry on the slow rule: nothing happens in the first 6 h, so wait and only enter if the gap is still there
  D own-side price >= .70 filter: fresh check on trades it was not found on (loose events, catch-up replay)
  E fair weighted to the deeper venue."""
-import sys, sqlite3, numpy as np, pandas as pd
+import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
 from lab import Lab
 L = Lab(); P = L.P

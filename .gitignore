@@ -24,6 +24,8 @@ data/*
 !data/correlation_matrix.csv
 !data/race_map.json
 !data/leaderboard_snapshot.json
+!data/research_contract_rules/
+!data/books.json
 params/*.lock
 data/polymarket_history/raw/
 !data/daily/

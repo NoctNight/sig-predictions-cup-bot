@@ -5,8 +5,8 @@ so our 300 filled; (b) queue-aware: prints at exactly our price fill us only aft
 distance in the two 22 Oct full-book captures, no cancels ahead) is used up. Profit per share = passive markout vs the
 mid after 1 min / 5 min / 30 min / 2 h; also net of crossing the spread to get out. Train/test split as flow_patterns_study.py.
 Outputs data/research_flow_patterns/deep.json and research_notes/figures/flow_patterns_deep.png. No venue calls, no key."""
-import bisect, collections, json, math, os, sqlite3, statistics, sys
-from datetime import datetime, timezone
+import bisect, collections, json, math, os, sqlite3, statistics
+from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TICK = 0.005

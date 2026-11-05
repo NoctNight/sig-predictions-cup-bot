@@ -176,7 +176,7 @@ def f6():
       f"median window {((ev.t1 - ev.t0) / 60).median():.0f} min")
     P(f"prints inside windows {len(fr)}: with the move {int(fr.with_move.sum())} ({fr[fr.with_move].qty.sum():,.0f} sh), "
       f"against {int((~fr.with_move).sum())} ({fr[~fr.with_move].qty.sum():,.0f} sh)")
-    P(f"DMM spread at against-move prints: " + ", ".join(f"{k} tick {v}" for k, v in fr[~fr.with_move].spread.value_counts().sort_index().items()))
+    P("DMM spread at against-move prints: " + ", ".join(f"{k} tick {v}" for k, v in fr[~fr.with_move].spread.value_counts().sort_index().items()))
     res = {}
     for Q in (200, 500, 1000):
         for nm, d in (("train", fr[~fr.test]), ("test", fr[fr.test])):

@@ -1,7 +1,7 @@
 """Drill-down 1: the lag family (outside moved, SIG has not). Is it one event, one side, one party? Does it hold on every day?"""
 import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, show, H
+from lab import Lab, H
 L = Lab()
 mid, gap = L.mid, L.gap
 S = {"fresh48": gap - gap.rolling(576, min_periods=288).median(), "fresh24": gap - gap.rolling(288, min_periods=144).median(), "lag24": L.lag(L.fair, 288) - L.lag(mid, 288), "lag12": L.lag(L.fair, 144) - L.lag(mid, 144)}

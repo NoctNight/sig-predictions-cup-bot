@@ -27,9 +27,7 @@ import collections
 import json
 import math
 import os
-import sqlite3
 import sys
-import statistics
 from datetime import datetime, timezone
 
 import numpy as np

@@ -1,6 +1,6 @@
 """Drill-down 3: event table for the fresh-gap signal, then
  A what strengthens it, B the path after entry (hit rate and time to X% of the eventual move), C exit rule search, D walk-forward."""
-import sys, numpy as np, pandas as pd, pickle
+import sys, numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
 from lab import Lab, H
 L = Lab()

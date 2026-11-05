@@ -1,9 +1,9 @@
 """Round 10: remaining generated ideas. Book snapshots (A8, A9), touch depletion (A25), attention premium (A30), topical news (A29, A36, A40),
 fund-the-punt selling (A15 variant), plus second-order ideas on the lag family: gap accelerating, and the lag on the OTHER leg of the race."""
-import sys, glob, json, re, sqlite3
+import sys, glob, json, sqlite3
 import numpy as np, pandas as pd
 sys.path.insert(0, "research_notes/dir_alpha")
-from lab import Lab, survivors, show, H
+from lab import Lab, survivors, show
 L = Lab()
 mid, gap, P, fair = L.mid, L.gap, L.P, L.fair
 meta = L.meta

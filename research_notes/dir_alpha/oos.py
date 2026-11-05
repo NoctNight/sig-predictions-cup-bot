@@ -2,7 +2,7 @@
 SIG: 5-minute candle closes (last trade, no book). Polymarket: 5-minute prices. Kalshi: hourly bid/ask mid. Fair: mean of the two.
 Slow rule as frozen, minus the taker flow filter (no tape before 21 Oct). Fast rule on a 1 h window (Kalshi is hourly), the d15 fast1 variant.
 No bid or ask, so profit = mid-to-mid on last trades, less an assumed 0.75c round trip (typical spread on the strict trades). Needs a real trade within 1 h of entry and a real trade within 6 h after exit time."""
-import glob, json, pickle, sys, numpy as np, pandas as pd
+import glob, json, pickle, numpy as np, pandas as pd
 pd.set_option("display.width", 200, "display.max_rows", 200, "display.max_columns", 30)
 O = "data/research_diralpha/oos/"
 idx = json.load(open(O + "index.json")); meta = pd.read_pickle("data/research_diralpha/meta.pkl")

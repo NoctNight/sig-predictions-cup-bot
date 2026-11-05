@@ -32,7 +32,7 @@ import os
 import sqlite3
 import statistics
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 
 TICK = 0.005
 DMM_MIN = 1500.0

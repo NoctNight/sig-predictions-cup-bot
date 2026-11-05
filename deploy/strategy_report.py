@@ -16,7 +16,7 @@ import sqlite3
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

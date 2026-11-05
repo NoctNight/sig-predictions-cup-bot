@@ -1,6 +1,7 @@
 # sigbot — Susquehanna Predictions Cup bot
 
-Trades the Midterm Elections tournament on https://sig.thesuper.market (play-money SUSQies, ends 2026-11-04 12:00 ET).
+Traded the Midterm Elections tournament on https://sig.thesuper.market (play-money SUSQies; the tournament ran until
+2026-11-04 12:00 ET, and the bot is no longer live).
 Stdlib-only Python 3.10+; no packages to install.
 
 ```bash
@@ -135,6 +136,33 @@ write_budget, dry_run)`; live orders additionally need `"direction": {"allow_liv
 | `research_notes/` | literature notes: 5 deep-research tracks, a 6-query Sonnet arXiv sweep (`arxiv_sweep/SUMMARY.md`), public alpha |
 | `reports/` | the sizing report |
 | `params/` | `x.json` (third-party rates), `mm_overrides.json` (written by analytics) |
+
+## Tests
+
+Stdlib only; each script prints a `PASS` / `FAIL` line per check and exits non-zero on any failure.
+
+```bash
+python3 tests/test_guards.py                 # guard regression tests, about a minute
+python3 tests/test_gap_failure_paths.py      # gap pilot failure paths
+python3 tests/test_offload.py                # offload executor
+python3 tests/test_strategy_monitor.py       # strategy monitor
+python3 tests/test_strategy_stops.py         # strategy stops
+python3 tests/test_autotune.py "$PWD"        # shadow tuner + allocator, about 3 min; needs data/sigbot.sqlite (below)
+python3 tests/sim_pipeline.py --list         # fake-venue scenarios; `python3 tests/sim_pipeline.py <name ...>` runs them
+deploy/precheck.sh                           # all of the above, then one dry cycle against the venue (needs the API key)
+```
+
+What a fresh clone does not have: `data/sigbot.sqlite`, the bot's runtime log (SQLite, about 1 GB by the end of the
+tournament, gitignored with the rest of `data/`'s runtime files). `tests/test_autotune.py` replays it read-only and
+stops with a message when it is missing; a live or `--dry-run` run of the bot creates it. Everything else runs from
+the tracked files, including two fixtures under `data/`: `research_contract_rules/tc_mapping.json`, the contract-terms
+map the cheap-favourites sleeve, the guard tests and the simulation read, and `books.json`, the 21 Oct book snapshot
+that seeds every fake-venue scenario.
+
+One known failure: with the end-of-tournament database, `tests/test_autotune.py` reports `group mm_ladder: ... cpu`
+above its 8 s budget plus 1 s. The tuner checks its CPU budget between parameters, so one parameter's replay on the
+dense election-week window can overrun it; the tuner then skips the remaining parameters as designed. It is a timing
+check on the real data, not a code error, and it also failed in the bot's own precheck on 3 Nov.
 
 ## Findings that shaped the parameters
 

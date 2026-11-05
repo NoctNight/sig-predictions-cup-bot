@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Fetch 1-min election-night 2024 price paths from Polymarket and Kalshi (cached raw JSON)."""
-import csv, json, os, ssl, sys, time, urllib.request, urllib.error
+import csv, json, os, ssl, time, urllib.request, urllib.error
 from concurrent.futures import ThreadPoolExecutor
 import certifi
 
-R = "/Users/sizhework/Library/Application Support/Claude/scratch-workspaces/62f47635-ebde-4c1d-bfe7-883a5dbae4be/3a53c166-2070-4578-aee2-0aaccd642218/scratch-2026-10-21-e81342"
+R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # repo root
 OUT = R + "/data/election_night"
 START, END = 1730840400, 1730955600
 T_POLLS, T_END = 1730847600, 1730955600

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import copy
 import json
-import math
 import os
 import random
 import statistics
@@ -255,7 +254,6 @@ if __name__ == "__main__":
 # ================================================================================================= empirical slices
 def _series(con, t0=0.0):
     """Per-exchange snapshot series from our quotes table (all quoted markets) and SIG mids from venue_quotes (all legs)."""
-    import bisect as _b
     q = {}
     for r in con.execute("SELECT ts, exchange_id, best_bid, best_ask, bid_qty, ask_qty, mid, microprice, fair, pressure FROM quotes "
                          "WHERE mid IS NOT NULL AND ts>=? ORDER BY ts", (t0,)):

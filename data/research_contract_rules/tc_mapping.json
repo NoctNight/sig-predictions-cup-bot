@@ -1,0 +1,6117 @@
+{
+ "_universal": {
+  "sig": "Election Outcome contract, resolutionType Party Winner, raceStage General, automatic data feed (raceId/stageId), checked every 4h; pending until feed has a valid result; runoffs and the 4 chamber markets settled manually by admin; N/A -> refund; admin can correct after settlement. settlementDate 2026-11-04T17:00Z is the trading close, not a deadline for the result.",
+  "pm": "statewide: nominee of party, independents not D/R, AP+Fox+NBC all call else certification, runoffs included; House: party by ballot label, independents by caucus intent, credible-reporting consensus else FEC.",
+  "kalshi": "SENATEPARTY/HOUSEPARTY/GOVPARTY: party of person sworn in/inaugurated (vacancy -> replacement), early on 4 of 8 media calls (NYT AP DDHQ CNN Fox NBC CBS ABC), party as of election day.",
+  "universal_tail_codes": [
+   "src_feed_vs_media_call",
+   "kalshi_sworn_in_vs_elected"
+  ]
+ },
+ "_generated": "2026-10-23",
+ "1077": {
+  "market_id": "388",
+  "title": "Will the Republican Party win the Rhode Island Senate?",
+  "race": "Rhode Island Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "rhode-island-senate-election-winner",
+   "markets": [
+    "630912"
+   ],
+   "titles": [
+    "Raymond McKay (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATERI-26",
+   "tickers": [
+    "SENATERI-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1076": {
+  "market_id": "387",
+  "title": "Will the Democratic Party win the Rhode Island Senate?",
+  "race": "Rhode Island Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "rhode-island-senate-election-winner",
+   "markets": [
+    "630911"
+   ],
+   "titles": [
+    "Jack Reed (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATERI-26",
+   "tickers": [
+    "SENATERI-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1075": {
+  "market_id": "386",
+  "title": "Will the Republican Party win the Delaware Senate?",
+  "race": "Delaware Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "delaware-senate-election-winner",
+   "markets": [
+    "630680"
+   ],
+   "titles": [
+    "Republican"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEDE-26",
+   "tickers": [
+    "SENATEDE-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1074": {
+  "market_id": "385",
+  "title": "Will the Republican Party win the Rhode Island Governor?",
+  "race": "Rhode Island Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "rhode-island-governor-winner-2026",
+   "markets": [
+    "629628"
+   ],
+   "titles": [
+    "Republican"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYRI-26",
+   "tickers": [
+    "GOVPARTYRI-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1073": {
+  "market_id": "384",
+  "title": "Will the Democratic Party win the Rhode Island Governor?",
+  "race": "Rhode Island Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "rhode-island-governor-winner-2026",
+   "markets": [
+    "629627"
+   ],
+   "titles": [
+    "Helena Foulkes (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYRI-26",
+   "tickers": [
+    "GOVPARTYRI-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1072": {
+  "market_id": "383",
+  "title": "Will the Democratic Party win the Oklahoma Senate?",
+  "race": "Oklahoma Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "oklahoma-senate-election-winner",
+   "markets": [
+    "631030"
+   ],
+   "titles": [
+    "N’Kiyla “Jasmine” Thomas (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEOK-26",
+   "tickers": [
+    "SENATEOK-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1071": {
+  "market_id": "382",
+  "title": "Will the Republican Party win the New Hampshire Senate?",
+  "race": "New Hampshire Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "new-hampshire-senate-election-winner",
+   "markets": [
+    "630845"
+   ],
+   "titles": [
+    "John E. Sununu (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENH-26",
+   "tickers": [
+    "SENATENH-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1070": {
+  "market_id": "381",
+  "title": "Will the Democratic Party win the New Hampshire Senate?",
+  "race": "New Hampshire Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "new-hampshire-senate-election-winner",
+   "markets": [
+    "630844"
+   ],
+   "titles": [
+    "Chris Pappas (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENH-26",
+   "tickers": [
+    "SENATENH-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1069": {
+  "market_id": "380",
+  "title": "Will the Republican Party win the Massachusetts Senate?",
+  "race": "Massachusetts Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "massachusetts-senate-election-winner",
+   "markets": [
+    "630791"
+   ],
+   "titles": [
+    "John Deaton (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMA-26",
+   "tickers": [
+    "SENATEMA-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1068": {
+  "market_id": "379",
+  "title": "Will the Democratic Party win the Massachusetts Senate?",
+  "race": "Massachusetts Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "massachusetts-senate-election-winner",
+   "markets": [
+    "630790"
+   ],
+   "titles": [
+    "Ed Markey (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMA-26",
+   "tickers": [
+    "SENATEMA-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1067": {
+  "market_id": "378",
+  "title": "Will the Republican Party win the Alaska Senate?",
+  "race": "Alaska Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "alaska-senate-election-winner",
+   "markets": [
+    "634974",
+    "634979"
+   ],
+   "titles": [
+    "Sen. Dan Sullivan",
+    "Daniel J. Sullivan Jr."
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEAK-26",
+   "tickers": [
+    "SENATEAK-26-R"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "pm_candidate_market_party_mapped",
+   "rcv_late_settle"
+  ],
+  "notes": "PM legs are per candidate (party attributed by bot); PM resolves \"Other\" if not confirmed by 31 Jul 2027. PM R legs include two Sullivan markets (Sen. Dan Sullivan, Daniel J. Sullivan Jr.); check for double count. Ranked-choice tabulation can delay the result ~2 weeks; same payoff, SIG pending until the feed has a result."
+ },
+ "1066": {
+  "market_id": "377",
+  "title": "Will the Democratic Party win the Alaska Senate?",
+  "race": "Alaska Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "alaska-senate-election-winner",
+   "markets": [
+    "634976"
+   ],
+   "titles": [
+    "Mary Peltola"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEAK-26",
+   "tickers": [
+    "SENATEAK-26-D"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "pm_candidate_market_party_mapped",
+   "rcv_late_settle"
+  ],
+  "notes": "PM legs are per candidate (party attributed by bot); PM resolves \"Other\" if not confirmed by 31 Jul 2027. PM R legs include two Sullivan markets (Sen. Dan Sullivan, Daniel J. Sullivan Jr.); check for double count. Ranked-choice tabulation can delay the result ~2 weeks; same payoff, SIG pending until the feed has a result."
+ },
+ "1065": {
+  "market_id": "376",
+  "title": "Will the Republican Party win the NH-01 House race?",
+  "race": "NH-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "nh-01-house-election-winner",
+   "markets": [
+    "942909"
+   ],
+   "titles": [
+    "Anthony DiLorenzo (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSENH1-26",
+   "tickers": [
+    "HOUSENH1-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1064": {
+  "market_id": "375",
+  "title": "Will the Democratic Party win the NH-01 House race?",
+  "race": "NH-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "nh-01-house-election-winner",
+   "markets": [
+    "942910"
+   ],
+   "titles": [
+    "Stefany Shaheen (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSENH1-26",
+   "tickers": [
+    "HOUSENH1-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1063": {
+  "market_id": "374",
+  "title": "Will the Republican Party win the Oklahoma Governor?",
+  "race": "Oklahoma Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "oklahoma-governor-winner-2026",
+   "markets": [
+    "629571"
+   ],
+   "titles": [
+    "Mike Mazzei (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYOK-26",
+   "tickers": [
+    "GOVPARTYOK-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1062": {
+  "market_id": "373",
+  "title": "Will the Republican Party win the New Hampshire Governor?",
+  "race": "New Hampshire Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "new-hampshire-governor-winner-2026",
+   "markets": [
+    "629519"
+   ],
+   "titles": [
+    "Kelly Ayotte (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNH-28",
+   "tickers": [
+    "GOVPARTYNH-28-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": "Kalshi event suffix -27/-28 and late close date, but rules are \"pursuant to the 2026 election\": same."
+ },
+ "1061": {
+  "market_id": "372",
+  "title": "Will the Democratic Party win the New Hampshire Governor?",
+  "race": "New Hampshire Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "new-hampshire-governor-winner-2026",
+   "markets": [
+    "629518"
+   ],
+   "titles": [
+    "Cinde Warmington (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNH-28",
+   "tickers": [
+    "GOVPARTYNH-28-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": "Kalshi event suffix -27/-28 and late close date, but rules are \"pursuant to the 2026 election\": same."
+ },
+ "1060": {
+  "market_id": "371",
+  "title": "Will the Republican Party win the Massachusetts Governor?",
+  "race": "Massachusetts Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "massachusetts-governor-winner-2026",
+   "markets": [
+    "629452"
+   ],
+   "titles": [
+    "Michael Minogue (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYMA-26",
+   "tickers": [
+    "GOVPARTYMA-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1059": {
+  "market_id": "370",
+  "title": "Will the Democratic Party win the Massachusetts Governor?",
+  "race": "Massachusetts Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "massachusetts-governor-winner-2026",
+   "markets": [
+    "629451"
+   ],
+   "titles": [
+    "Maura Healey (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYMA-26",
+   "tickers": [
+    "GOVPARTYMA-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1058": {
+  "market_id": "369",
+  "title": "Will the Republican Party win the Alaska Governor?",
+  "race": "Alaska Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "alaska-governor-election-winner",
+   "markets": [
+    "635003",
+    "635004",
+    "635005",
+    "635006",
+    "635009",
+    "635011",
+    "635012",
+    "635013"
+   ],
+   "titles": [
+    "Click Bishop",
+    "David Bronson",
+    "Adam Crum",
+    "Nancy Dahlstrom",
+    "Shelley Hughes",
+    "Treg Taylor",
+    "Bernadette Wilson",
+    "Lisa Murkowski"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXGOVAK-26",
+   "tickers": [
+    "KXGOVAK-26-LCMG",
+    "KXGOVAK-26-LMUR",
+    "KXGOVAK-26-SHUG",
+    "KXGOVAK-26-MHEI",
+    "KXGOVAK-26-DBRO",
+    "KXGOVAK-26-TTAY",
+    "KXGOVAK-26-NDAH",
+    "KXGOVAK-26-EDEV",
+    "KXGOVAK-26-CBIS",
+    "KXGOVAK-26-BWIL",
+    "KXGOVAK-26-ACRU"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg",
+   "pm_candidate_market_party_mapped",
+   "kalshi_candidate_named",
+   "rcv_late_settle"
+  ],
+  "notes": "Outside venues list an independent (Bill Walker (I) Kalshi leg); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements. PM legs are per candidate (party attributed by bot); PM resolves \"Other\" if not confirmed by 31 Jul 2027. Kalshi KXGOV* named-candidate contract (elected), not GOVPARTY. Ranked-choice tabulation can delay the result ~2 weeks; same payoff, SIG pending until the feed has a result."
+ },
+ "1057": {
+  "market_id": "368",
+  "title": "Will the Democratic Party win the Alaska Governor?",
+  "race": "Alaska Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "alaska-governor-election-winner",
+   "markets": [
+    "635014",
+    "635015",
+    "635016"
+   ],
+   "titles": [
+    "Tom Begich",
+    "Mary Peltola",
+    "Jonathan Kreiss-Tomkins"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXGOVAK-26",
+   "tickers": [
+    "KXGOVAK-26-JKRE",
+    "KXGOVAK-26-MCLA",
+    "KXGOVAK-26-MPEL",
+    "KXGOVAK-26-TBEG"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg",
+   "pm_candidate_market_party_mapped",
+   "kalshi_candidate_named",
+   "rcv_late_settle"
+  ],
+  "notes": "Outside venues list an independent (Bill Walker (I) Kalshi leg); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements. PM legs are per candidate (party attributed by bot); PM resolves \"Other\" if not confirmed by 31 Jul 2027. Kalshi KXGOV* named-candidate contract (elected), not GOVPARTY. Ranked-choice tabulation can delay the result ~2 weeks; same payoff, SIG pending until the feed has a result."
+ },
+ "1055": {
+  "market_id": "366",
+  "title": "Will the Republican Party win the Wyoming Senate?",
+  "race": "Wyoming Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "wyoming-senate-election-winner",
+   "markets": [
+    "631003"
+   ],
+   "titles": [
+    "Harriet Hageman (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEWY-26",
+   "tickers": [
+    "SENATEWY-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1054": {
+  "market_id": "365",
+  "title": "Will the Democratic Party win the Wyoming Senate?",
+  "race": "Wyoming Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "wyoming-senate-election-winner",
+   "markets": [
+    "631002"
+   ],
+   "titles": [
+    "James W. Byrd (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEWY-26",
+   "tickers": [
+    "SENATEWY-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1053": {
+  "market_id": "364",
+  "title": "Will the Republican Party win the Virginia Senate?",
+  "race": "Virginia Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "virginia-senate-election-winner",
+   "markets": [
+    "630977"
+   ],
+   "titles": [
+    "Bert Mizusawa (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEVA-26",
+   "tickers": [
+    "SENATEVA-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1052": {
+  "market_id": "363",
+  "title": "Will the Republican Party win the Tennessee Senate?",
+  "race": "Tennessee Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "tennessee-senate-election-winner",
+   "markets": [
+    "630951"
+   ],
+   "titles": [
+    "Bill Hagerty (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATETN-26",
+   "tickers": [
+    "SENATETN-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1051": {
+  "market_id": "362",
+  "title": "Will the Democratic Party win the Tennessee Senate?",
+  "race": "Tennessee Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "tennessee-senate-election-winner",
+   "markets": [
+    "630950"
+   ],
+   "titles": [
+    "Marquita Bradshaw (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATETN-26",
+   "tickers": [
+    "SENATETN-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1050": {
+  "market_id": "361",
+  "title": "Will the Republican Party win the Minnesota Senate?",
+  "race": "Minnesota Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "minnesota-senate-election-winner",
+   "markets": [
+    "630819"
+   ],
+   "titles": [
+    "Michele Tafoya (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMN-26",
+   "tickers": [
+    "SENATEMN-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "1049": {
+  "market_id": "360",
+  "title": "Will the Democratic Party win the Minnesota Senate?",
+  "race": "Minnesota Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "minnesota-senate-election-winner",
+   "markets": [
+    "630818"
+   ],
+   "titles": [
+    "Peggy Flanagan (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMN-26",
+   "tickers": [
+    "SENATEMN-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "1048": {
+  "market_id": "359",
+  "title": "Will the Republican Party win the Michigan Senate?",
+  "race": "Michigan Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "michigan-senate-election-winner",
+   "markets": [
+    "630806"
+   ],
+   "titles": [
+    "Mike Rogers (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMI-26",
+   "tickers": [
+    "SENATEMI-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1047": {
+  "market_id": "358",
+  "title": "Will the Democratic Party win the Michigan Senate?",
+  "race": "Michigan Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "michigan-senate-election-winner",
+   "markets": [
+    "630805"
+   ],
+   "titles": [
+    "Abdul El-Sayed (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMI-26",
+   "tickers": [
+    "SENATEMI-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1046": {
+  "market_id": "357",
+  "title": "Will the Republican Party win the Kansas Senate?",
+  "race": "Kansas Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "kansas-senate-election-winner",
+   "markets": [
+    "630747"
+   ],
+   "titles": [
+    "Roger Marshall (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEKS-26",
+   "tickers": [
+    "SENATEKS-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1045": {
+  "market_id": "356",
+  "title": "Will the Democratic Party win the Kansas Senate?",
+  "race": "Kansas Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "kansas-senate-election-winner",
+   "markets": [
+    "630746"
+   ],
+   "titles": [
+    "Adam Hamilton (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEKS-26",
+   "tickers": [
+    "SENATEKS-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1044": {
+  "market_id": "355",
+  "title": "Will the Republican Party win the Florida Senate?",
+  "race": "Florida Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "florida-senate-election-winner",
+   "markets": [
+    "631045"
+   ],
+   "titles": [
+    "Ashley Moody (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEFLS-26",
+   "tickers": [
+    "SENATEFLS-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": "Special election (Class III); all three venues price the special."
+ },
+ "1043": {
+  "market_id": "354",
+  "title": "Will the Democratic Party win the Florida Senate?",
+  "race": "Florida Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "florida-senate-election-winner",
+   "markets": [
+    "631044"
+   ],
+   "titles": [
+    "Angie Nixon (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEFLS-26",
+   "tickers": [
+    "SENATEFLS-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": "Special election (Class III); all three venues price the special."
+ },
+ "1042": {
+  "market_id": "353",
+  "title": "Will the Democratic Party win the Delaware Senate?",
+  "race": "Delaware Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "delaware-senate-election-winner",
+   "markets": [
+    "630679"
+   ],
+   "titles": [
+    "Democrat"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEDE-26",
+   "tickers": [
+    "SENATEDE-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1041": {
+  "market_id": "352",
+  "title": "Will the Republican Party win the WI-03 House race?",
+  "race": "WI-03 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "wi-03-house-election-winner",
+   "markets": [
+    "944341"
+   ],
+   "titles": [
+    "Derrick Van Orden (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEWI3-26",
+   "tickers": [
+    "HOUSEWI3-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1040": {
+  "market_id": "351",
+  "title": "Will the Democratic Party win the WI-03 House race?",
+  "race": "WI-03 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "wi-03-house-election-winner",
+   "markets": [
+    "944342"
+   ],
+   "titles": [
+    "Rebecca Cooke (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEWI3-26",
+   "tickers": [
+    "HOUSEWI3-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1039": {
+  "market_id": "350",
+  "title": "Will the Republican Party win the WI-01 House race?",
+  "race": "WI-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "wi-01-house-election-winner",
+   "markets": [
+    "944333"
+   ],
+   "titles": [
+    "Bryan Steil (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEWI1-26",
+   "tickers": [
+    "HOUSEWI1-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1038": {
+  "market_id": "349",
+  "title": "Will the Democratic Party win the WI-01 House race?",
+  "race": "WI-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "wi-01-house-election-winner",
+   "markets": [
+    "944334"
+   ],
+   "titles": [
+    "Mitchell Berman (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEWI1-26",
+   "tickers": [
+    "HOUSEWI1-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1037": {
+  "market_id": "348",
+  "title": "Will the Republican Party win the WA-03 House race?",
+  "race": "WA-03 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "wa-03-house-election-winner",
+   "markets": [
+    "944313"
+   ],
+   "titles": [
+    "John Braun (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEWA3-26",
+   "tickers": [
+    "HOUSEWA3-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "1036": {
+  "market_id": "347",
+  "title": "Will the Democratic Party win the WA-03 House race?",
+  "race": "WA-03 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "wa-03-house-election-winner",
+   "markets": [
+    "944314"
+   ],
+   "titles": [
+    "Marie Gluesenkamp Perez (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEWA3-26",
+   "tickers": [
+    "HOUSEWA3-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "1035": {
+  "market_id": "346",
+  "title": "Will the Republican Party win the VA-07 House race?",
+  "race": "VA-07 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "va-07-house-election-winner",
+   "markets": [
+    "944297"
+   ],
+   "titles": [
+    "Doug Ollivant (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEVA7-26",
+   "tickers": [
+    "HOUSEVA7-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1034": {
+  "market_id": "345",
+  "title": "Will the Republican Party win the VA-05 House race?",
+  "race": "VA-05 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "va-05-house-election-winner",
+   "markets": [
+    "1285079"
+   ],
+   "titles": [
+    "John McGuire (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-VA05-26",
+   "tickers": [
+    "KXHOUSERACE-VA05-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1033": {
+  "market_id": "344",
+  "title": "Will the Democratic Party win the VA-05 House race?",
+  "race": "VA-05 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "va-05-house-election-winner",
+   "markets": [
+    "1285080"
+   ],
+   "titles": [
+    "Tom Perriello (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-VA05-26",
+   "tickers": [
+    "KXHOUSERACE-VA05-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1032": {
+  "market_id": "343",
+  "title": "Will the Democratic Party win the VA-02 House race?",
+  "race": "VA-02 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "va-02-house-election-winner",
+   "markets": [
+    "944290"
+   ],
+   "titles": [
+    "Elaine Luria (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEVA2-26",
+   "tickers": [
+    "HOUSEVA2-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1031": {
+  "market_id": "342",
+  "title": "Will the Democratic Party win the VA-01 House race?",
+  "race": "VA-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "va-01-house-election-winner",
+   "markets": [
+    "944282"
+   ],
+   "titles": [
+    "Shannon Taylor (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEVA1-26",
+   "tickers": [
+    "HOUSEVA1-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1030": {
+  "market_id": "341",
+  "title": "Will the Republican Party win the TN-05 House race?",
+  "race": "TN-05 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "tn-05-house-election-winner",
+   "markets": [
+    "1284767"
+   ],
+   "titles": [
+    "Charlie Hatcher (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-TN05-26",
+   "tickers": [
+    "KXHOUSERACE-TN05-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1029": {
+  "market_id": "340",
+  "title": "Will the Democratic Party win the TN-05 House race?",
+  "race": "TN-05 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "tn-05-house-election-winner",
+   "markets": [
+    "1284768"
+   ],
+   "titles": [
+    "Chaz Molder (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-TN05-26",
+   "tickers": [
+    "KXHOUSERACE-TN05-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1028": {
+  "market_id": "339",
+  "title": "Will the Republican Party win the MN-05 House race?",
+  "race": "MN-05 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mn-05-house-election-winner",
+   "markets": [
+    "1283872"
+   ],
+   "titles": [
+    "John Nagel (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-MN05-26",
+   "tickers": [
+    "KXHOUSERACE-MN05-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "1027": {
+  "market_id": "338",
+  "title": "Will the Democratic Party win the MN-05 House race?",
+  "race": "MN-05 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mn-05-house-election-winner",
+   "markets": [
+    "1283873"
+   ],
+   "titles": [
+    "Ilhan Omar (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-MN05-26",
+   "tickers": [
+    "KXHOUSERACE-MN05-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "1026": {
+  "market_id": "337",
+  "title": "Will the Republican Party win the MN-02 House race?",
+  "race": "MN-02 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mn-02-house-election-winner",
+   "markets": [
+    "942819"
+   ],
+   "titles": [
+    "Eric Pratt (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEMN2-26",
+   "tickers": [
+    "HOUSEMN2-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "1025": {
+  "market_id": "336",
+  "title": "Will the Democratic Party win the MN-02 House race?",
+  "race": "MN-02 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mn-02-house-election-winner",
+   "markets": [
+    "942820"
+   ],
+   "titles": [
+    "Matt Little (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEMN2-26",
+   "tickers": [
+    "HOUSEMN2-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "1024": {
+  "market_id": "335",
+  "title": "Will the Republican Party win the MN-01 House race?",
+  "race": "MN-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mn-01-house-election-winner",
+   "markets": [
+    "1283848"
+   ],
+   "titles": [
+    "Brad Finstad (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-MN01-26",
+   "tickers": [
+    "KXHOUSERACE-MN01-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "1023": {
+  "market_id": "334",
+  "title": "Will the Democratic Party win the MN-01 House race?",
+  "race": "MN-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mn-01-house-election-winner",
+   "markets": [
+    "1283849"
+   ],
+   "titles": [
+    "Jake Johnson (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-MN01-26",
+   "tickers": [
+    "KXHOUSERACE-MN01-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "1022": {
+  "market_id": "333",
+  "title": "Will the Republican Party win the MI-10 House race?",
+  "race": "MI-10 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mi-10-house-election-winner",
+   "markets": [
+    "942774"
+   ],
+   "titles": [
+    "Mike Bouchard (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEMI10-26",
+   "tickers": [
+    "HOUSEMI10-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1021": {
+  "market_id": "332",
+  "title": "Will the Democratic Party win the MI-10 House race?",
+  "race": "MI-10 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mi-10-house-election-winner",
+   "markets": [
+    "942776"
+   ],
+   "titles": [
+    "Christina Hines (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEMI10-26",
+   "tickers": [
+    "HOUSEMI10-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1020": {
+  "market_id": "331",
+  "title": "Will the Republican Party win the MI-07 House race?",
+  "race": "MI-07 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mi-07-house-election-winner",
+   "markets": [
+    "942721"
+   ],
+   "titles": [
+    "Tom Barrett (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEMI7-26",
+   "tickers": [
+    "HOUSEMI7-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1019": {
+  "market_id": "330",
+  "title": "Will the Democratic Party win the MI-07 House race?",
+  "race": "MI-07 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mi-07-house-election-winner",
+   "markets": [
+    "942722"
+   ],
+   "titles": [
+    "William Lawrence (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEMI7-26",
+   "tickers": [
+    "HOUSEMI7-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1018": {
+  "market_id": "329",
+  "title": "Will the Republican Party win the FL-22 House race?",
+  "race": "FL-22 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-22-house-election-winner",
+   "markets": [
+    "1283112"
+   ],
+   "titles": [
+    "Casey Askar (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL22-26",
+   "tickers": [
+    "KXHOUSERACE-FL22-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1017": {
+  "market_id": "328",
+  "title": "Will the Democratic Party win the FL-22 House race?",
+  "race": "FL-22 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-22-house-election-winner",
+   "markets": [
+    "1283113"
+   ],
+   "titles": [
+    "Pia Dandiya (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL22-26",
+   "tickers": [
+    "KXHOUSERACE-FL22-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1016": {
+  "market_id": "327",
+  "title": "Will the Republican Party win the FL-20 House race?",
+  "race": "FL-20 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-20-house-election-winner",
+   "markets": [
+    "1283096"
+   ],
+   "titles": [
+    "Brent Andersen (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL20-26",
+   "tickers": [
+    "KXHOUSERACE-FL20-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1015": {
+  "market_id": "326",
+  "title": "Will the Democratic Party win the FL-20 House race?",
+  "race": "FL-20 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-20-house-election-winner",
+   "markets": [
+    "1283097"
+   ],
+   "titles": [
+    "Debbie Wasserman Schultz (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL20-26",
+   "tickers": [
+    "KXHOUSERACE-FL20-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1014": {
+  "market_id": "325",
+  "title": "Will the Republican Party win the FL-16 House race?",
+  "race": "FL-16 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-16-house-election-winner",
+   "markets": [
+    "1283064"
+   ],
+   "titles": [
+    "Sydney Gruters (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL16-26",
+   "tickers": [
+    "KXHOUSERACE-FL16-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1013": {
+  "market_id": "324",
+  "title": "Will the Democratic Party win the FL-16 House race?",
+  "race": "FL-16 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-16-house-election-winner",
+   "markets": [
+    "1283065"
+   ],
+   "titles": [
+    "Kelly Kirschner (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL16-26",
+   "tickers": [
+    "KXHOUSERACE-FL16-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1012": {
+  "market_id": "323",
+  "title": "Will the Democratic Party win the FL-13 House race?",
+  "race": "FL-13 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-13-house-election-winner",
+   "markets": [
+    "942401"
+   ],
+   "titles": [
+    "Leela Gray (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEFL13-26",
+   "tickers": [
+    "HOUSEFL13-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1011": {
+  "market_id": "322",
+  "title": "Will the Republican Party win the FL-09 House race?",
+  "race": "FL-09 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-09-house-election-winner",
+   "markets": [
+    "1283016"
+   ],
+   "titles": [
+    "Dan Green (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL09-26",
+   "tickers": [
+    "KXHOUSERACE-FL09-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1010": {
+  "market_id": "321",
+  "title": "Will the Republican Party win the FL-07 House race?",
+  "race": "FL-07 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-07-house-election-winner",
+   "markets": [
+    "1283000"
+   ],
+   "titles": [
+    "Ryan Elijah (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL07-26",
+   "tickers": [
+    "KXHOUSERACE-FL07-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1009": {
+  "market_id": "320",
+  "title": "Will the Democratic Party win the FL-07 House race?",
+  "race": "FL-07 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-07-house-election-winner",
+   "markets": [
+    "1283001"
+   ],
+   "titles": [
+    "Bale Dalton (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL07-26",
+   "tickers": [
+    "KXHOUSERACE-FL07-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1008": {
+  "market_id": "319",
+  "title": "Will the Republican Party win the AL-02 House race?",
+  "race": "AL-02 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "al-02-house-election-winner",
+   "markets": [
+    "1280800"
+   ],
+   "titles": [
+    "Rhett Marques (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-AL02-26",
+   "tickers": [
+    "KXHOUSERACE-AL02-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1007": {
+  "market_id": "318",
+  "title": "Will the Democratic Party win the AL-02 House race?",
+  "race": "AL-02 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "al-02-house-election-winner",
+   "markets": [
+    "1280801"
+   ],
+   "titles": [
+    "Shomari Figures (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-AL02-26",
+   "tickers": [
+    "KXHOUSERACE-AL02-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1006": {
+  "market_id": "317",
+  "title": "Will the Republican Party win the Wyoming Governor?",
+  "race": "Wyoming Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "wyoming-governor-winner-2026",
+   "markets": [
+    "629734"
+   ],
+   "titles": [
+    "Eric Barlow (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYWY-26",
+   "tickers": [
+    "GOVPARTYWY-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1005": {
+  "market_id": "316",
+  "title": "Will the Democratic Party win the Wyoming Governor?",
+  "race": "Wyoming Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "wyoming-governor-winner-2026",
+   "markets": [
+    "629733"
+   ],
+   "titles": [
+    "Kenneth Casner (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYWY-26",
+   "tickers": [
+    "GOVPARTYWY-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1004": {
+  "market_id": "315",
+  "title": "Will the Republican Party win the Wisconsin Governor?",
+  "race": "Wisconsin Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "wisconsin-governor-winner-2026",
+   "markets": [
+    "629721"
+   ],
+   "titles": [
+    "Tom Tiffany (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYWI-26",
+   "tickers": [
+    "GOVPARTYWI-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1003": {
+  "market_id": "314",
+  "title": "Will the Democratic Party win the Wisconsin Governor?",
+  "race": "Wisconsin Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "wisconsin-governor-winner-2026",
+   "markets": [
+    "629720"
+   ],
+   "titles": [
+    "David Crowley (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYWI-26",
+   "tickers": [
+    "GOVPARTYWI-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1002": {
+  "market_id": "313",
+  "title": "Will the Republican Party win the Vermont Governor?",
+  "race": "Vermont Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "vermont-governor-winner-2026",
+   "markets": [
+    "629708"
+   ],
+   "titles": [
+    "Phil Scott (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYVT-26",
+   "tickers": [
+    "GOVPARTYVT-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1001": {
+  "market_id": "312",
+  "title": "Will the Democratic Party win the Vermont Governor?",
+  "race": "Vermont Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "vermont-governor-winner-2026",
+   "markets": [
+    "629707"
+   ],
+   "titles": [
+    "Amanda Janoo (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYVT-26",
+   "tickers": [
+    "GOVPARTYVT-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "1000": {
+  "market_id": "311",
+  "title": "Will the Republican Party win the Tennessee Governor?",
+  "race": "Tennessee Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "tennessee-governor-winner-2026",
+   "markets": [
+    "629667"
+   ],
+   "titles": [
+    "Marsha Blackburn (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYTN-26",
+   "tickers": [
+    "GOVPARTYTN-26-R"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (David Hatley (I) Kalshi leg); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "999": {
+  "market_id": "310",
+  "title": "Will the Democratic Party win the Tennessee Governor?",
+  "race": "Tennessee Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "tennessee-governor-winner-2026",
+   "markets": [
+    "629666"
+   ],
+   "titles": [
+    "Jerri Green (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYTN-26",
+   "tickers": [
+    "GOVPARTYTN-26-D"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (David Hatley (I) Kalshi leg); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "998": {
+  "market_id": "309",
+  "title": "Will the Republican Party win the South Dakota Governor?",
+  "race": "South Dakota Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "south-dakota-governor-winner-2026",
+   "markets": [
+    "629654"
+   ],
+   "titles": [
+    "Larry Rhoden (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYSD-26",
+   "tickers": [
+    "GOVPARTYSD-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "997": {
+  "market_id": "308",
+  "title": "Will the Republican Party win the Minnesota Governor?",
+  "race": "Minnesota Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "minnesota-governor-winner-2026",
+   "markets": [
+    "629478"
+   ],
+   "titles": [
+    "Lisa Demuth (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYMN-26",
+   "tickers": [
+    "GOVPARTYMN-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "996": {
+  "market_id": "307",
+  "title": "Will the Democratic Party win the Minnesota Governor?",
+  "race": "Minnesota Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "minnesota-governor-winner-2026",
+   "markets": [
+    "629477"
+   ],
+   "titles": [
+    "Amy Klobuchar (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYMN-26",
+   "tickers": [
+    "GOVPARTYMN-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "dfl_label"
+  ],
+  "notes": "DFL = Democratic; Kalshi says so explicitly; SIG feed label assumed \"Democratic Party\"."
+ },
+ "995": {
+  "market_id": "306",
+  "title": "Will the Republican Party win the Michigan Governor?",
+  "race": "Michigan Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "michigan-governor-winner-2026",
+   "markets": [
+    "629465"
+   ],
+   "titles": [
+    "John James (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYMI-26",
+   "tickers": [
+    "GOVPARTYMI-26-R"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (Mike Duggan (I) PM/Kalshi leg, <1%); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "994": {
+  "market_id": "305",
+  "title": "Will the Democratic Party win the Michigan Governor?",
+  "race": "Michigan Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "michigan-governor-winner-2026",
+   "markets": [
+    "629464"
+   ],
+   "titles": [
+    "Jocelyn Benson (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYMI-26",
+   "tickers": [
+    "GOVPARTYMI-26-D"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (Mike Duggan (I) PM/Kalshi leg, <1%); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "993": {
+  "market_id": "304",
+  "title": "Will the Republican Party win the Kansas Governor?",
+  "race": "Kansas Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "kansas-governor-winner-2026",
+   "markets": [
+    "629413"
+   ],
+   "titles": [
+    "Ty Masterson (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYKS-27",
+   "tickers": [
+    "GOVPARTYKS-27-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": "Kalshi event suffix -27/-28 and late close date, but rules are \"pursuant to the 2026 election\": same."
+ },
+ "992": {
+  "market_id": "303",
+  "title": "Will the Democratic Party win the Kansas Governor?",
+  "race": "Kansas Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "kansas-governor-winner-2026",
+   "markets": [
+    "629412"
+   ],
+   "titles": [
+    "Cindy Holscher (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYKS-27",
+   "tickers": [
+    "GOVPARTYKS-27-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": "Kalshi event suffix -27/-28 and late close date, but rules are \"pursuant to the 2026 election\": same."
+ },
+ "991": {
+  "market_id": "302",
+  "title": "Will the Republican Party win the Hawaii Governor?",
+  "race": "Hawaii Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "hawaii-governor-winner-2026",
+   "markets": [
+    "629351"
+   ],
+   "titles": [
+    "Gary Cordery (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYHI-26",
+   "tickers": [
+    "GOVPARTYHI-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "990": {
+  "market_id": "301",
+  "title": "Will the Democratic Party win the Hawaii Governor?",
+  "race": "Hawaii Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "hawaii-governor-winner-2026",
+   "markets": [
+    "629350"
+   ],
+   "titles": [
+    "Josh Green (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYHI-26",
+   "tickers": [
+    "GOVPARTYHI-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "989": {
+  "market_id": "300",
+  "title": "Will the Republican Party win the Florida Governor?",
+  "race": "Florida Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "florida-governor-winner-2026",
+   "markets": [
+    "629325"
+   ],
+   "titles": [
+    "Byron Donalds (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYFL-26",
+   "tickers": [
+    "GOVPARTYFL-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "988": {
+  "market_id": "299",
+  "title": "Will the Democratic Party win the Florida Governor?",
+  "race": "Florida Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "florida-governor-winner-2026",
+   "markets": [
+    "629324"
+   ],
+   "titles": [
+    "David Jolly (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYFL-26",
+   "tickers": [
+    "GOVPARTYFL-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "987": {
+  "market_id": "298",
+  "title": "Will the Democratic Party win the Connecticut Governor?",
+  "race": "Connecticut Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "connecticut-governor-winner-2026",
+   "markets": [
+    "629311"
+   ],
+   "titles": [
+    "Ned Lamont (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYCT-26",
+   "tickers": [
+    "GOVPARTYCT-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "986": {
+  "market_id": "297",
+  "title": "Will the Republican Party win the West Virginia Senate?",
+  "race": "West Virginia Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "west-virginia-senate-election-winner",
+   "markets": [
+    "630990"
+   ],
+   "titles": [
+    "Shelley Moore Capito (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEWV-26",
+   "tickers": [
+    "SENATEWV-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "985": {
+  "market_id": "296",
+  "title": "Will the Democratic Party win the West Virginia Senate?",
+  "race": "West Virginia Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "west-virginia-senate-election-winner",
+   "markets": [
+    "630989"
+   ],
+   "titles": [
+    "Rachel Fetty Anderson (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEWV-26",
+   "tickers": [
+    "SENATEWV-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "984": {
+  "market_id": "295",
+  "title": "Will the Democratic Party win the Virginia Senate?",
+  "race": "Virginia Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "virginia-senate-election-winner",
+   "markets": [
+    "630976"
+   ],
+   "titles": [
+    "Mark Warner (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEVA-26",
+   "tickers": [
+    "SENATEVA-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "983": {
+  "market_id": "294",
+  "title": "Will the Republican Party win the Texas Senate?",
+  "race": "Texas Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "texas-senate-election-winner",
+   "markets": [
+    "630964"
+   ],
+   "titles": [
+    "Ken Paxton (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATETX-26",
+   "tickers": [
+    "SENATETX-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "982": {
+  "market_id": "293",
+  "title": "Will the Democratic Party win the Texas Senate?",
+  "race": "Texas Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "texas-senate-election-winner",
+   "markets": [
+    "630963"
+   ],
+   "titles": [
+    "James Talarico (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATETX-26",
+   "tickers": [
+    "SENATETX-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "981": {
+  "market_id": "292",
+  "title": "Will the Republican Party win the South Dakota Senate?",
+  "race": "South Dakota Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "south-dakota-senate-election-winner",
+   "markets": [
+    "630938"
+   ],
+   "titles": [
+    "Mike Rounds (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATESD-26",
+   "tickers": [
+    "SENATESD-26-R"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (Brian Bengs (I) PM 5%); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "980": {
+  "market_id": "291",
+  "title": "Will the Democratic Party win the South Dakota Senate?",
+  "race": "South Dakota Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "south-dakota-senate-election-winner",
+   "markets": [
+    "630937"
+   ],
+   "titles": [
+    "Democrat"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATESD-26",
+   "tickers": [
+    "SENATESD-26-D"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (Brian Bengs (I) PM 5%); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "979": {
+  "market_id": "290",
+  "title": "Will the Republican Party win the South Carolina Senate?",
+  "race": "South Carolina Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "south-carolina-senate-election-winner",
+   "markets": [
+    "630925"
+   ],
+   "titles": [
+    "Darline Graham Nordone (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATESC-26",
+   "tickers": [
+    "SENATESC-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "978": {
+  "market_id": "289",
+  "title": "Will the Democratic Party win the South Carolina Senate?",
+  "race": "South Carolina Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "south-carolina-senate-election-winner",
+   "markets": [
+    "630924"
+   ],
+   "titles": [
+    "Annie Andrews (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATESC-26",
+   "tickers": [
+    "SENATESC-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "977": {
+  "market_id": "288",
+  "title": "Will the Republican Party win the Oregon Senate?",
+  "race": "Oregon Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "oregon-senate-election-winner",
+   "markets": [
+    "630899"
+   ],
+   "titles": [
+    "David Brock Smith (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEOR-26",
+   "tickers": [
+    "SENATEOR-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "976": {
+  "market_id": "287",
+  "title": "Will the Democratic Party win the Oregon Senate?",
+  "race": "Oregon Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "oregon-senate-election-winner",
+   "markets": [
+    "630898"
+   ],
+   "titles": [
+    "Jeff Merkley (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEOR-26",
+   "tickers": [
+    "SENATEOR-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "975": {
+  "market_id": "286",
+  "title": "Will the Republican Party win the Oklahoma Senate?",
+  "race": "Oklahoma Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "oklahoma-senate-election-winner",
+   "markets": [
+    "631031"
+   ],
+   "titles": [
+    "Kevin Hern (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEOK-26",
+   "tickers": [
+    "SENATEOK-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "974": {
+  "market_id": "285",
+  "title": "Will the Republican Party win the New Mexico Senate?",
+  "race": "New Mexico Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "new-mexico-senate-election-winner",
+   "markets": [
+    "630871"
+   ],
+   "titles": [
+    "Larry Marker (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENM-26",
+   "tickers": [
+    "SENATENM-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "973": {
+  "market_id": "284",
+  "title": "Will the Democratic Party win the New Mexico Senate?",
+  "race": "New Mexico Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "new-mexico-senate-election-winner",
+   "markets": [
+    "630870"
+   ],
+   "titles": [
+    "Ben Ray Luján (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENM-26",
+   "tickers": [
+    "SENATENM-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "972": {
+  "market_id": "283",
+  "title": "Will the Republican Party win the New Jersey Senate?",
+  "race": "New Jersey Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "new-jersey-senate-election-winner",
+   "markets": [
+    "630858"
+   ],
+   "titles": [
+    "Justin Murphy (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENJ-26",
+   "tickers": [
+    "SENATENJ-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "971": {
+  "market_id": "282",
+  "title": "Will the Democratic Party win the New Jersey Senate?",
+  "race": "New Jersey Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "new-jersey-senate-election-winner",
+   "markets": [
+    "630857"
+   ],
+   "titles": [
+    "Cory Booker (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENJ-26",
+   "tickers": [
+    "SENATENJ-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "970": {
+  "market_id": "281",
+  "title": "Will the Republican Party win the Nebraska Senate?",
+  "race": "Nebraska Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "nebraska-senate-election-winner",
+   "markets": [
+    "634892"
+   ],
+   "titles": [
+    "Pete Ricketts (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENE-26",
+   "tickers": [
+    "SENATENE-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "969": {
+  "market_id": "280",
+  "title": "Will the Independent Party win the Nebraska Senate?",
+  "race": "Nebraska Senate",
+  "party": "I",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "nebraska-senate-election-winner",
+   "markets": [
+    "634893"
+   ],
+   "titles": [
+    "Independent"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENE-26",
+   "tickers": [
+    "SENATENE-26-DOSB"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "I_generic_vs_kalshi_named",
+   "sig_label_nonpartisan"
+  ],
+  "notes": "SIG I leg pays on winner party label (generic); Kalshi leg names one person; PM leg generic \"Independent\". SIG contract winnerName is \"Nonpartisan\" (not \"Independent\"): relies on feed labelling Osborn Nonpartisan; mislabel -> admin override."
+ },
+ "968": {
+  "market_id": "279",
+  "title": "Will the Democratic Party win the Nebraska Senate?",
+  "race": "Nebraska Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "nebraska-senate-election-winner",
+   "markets": [
+    "634891"
+   ],
+   "titles": [
+    "Democrat"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENE-26",
+   "tickers": [
+    "SENATENE-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "967": {
+  "market_id": "278",
+  "title": "Will the Republican Party win the North Carolina Senate?",
+  "race": "North Carolina Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "north-carolina-senate-election-winner",
+   "markets": [
+    "630884"
+   ],
+   "titles": [
+    "Michael Whatley (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENC-26",
+   "tickers": [
+    "SENATENC-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "966": {
+  "market_id": "277",
+  "title": "Will the Democratic Party win the North Carolina Senate?",
+  "race": "North Carolina Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "north-carolina-senate-election-winner",
+   "markets": [
+    "630883"
+   ],
+   "titles": [
+    "Roy Cooper (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATENC-26",
+   "tickers": [
+    "SENATENC-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "965": {
+  "market_id": "276",
+  "title": "Will the Independent Party win the Montana Senate?",
+  "race": "Montana Senate",
+  "party": "I",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "montana-senate-election-winner",
+   "markets": [
+    "630833"
+   ],
+   "titles": [
+    "Independent"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMT-26",
+   "tickers": [
+    "SENATEMT-26-IND"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "I_generic_vs_kalshi_named"
+  ],
+  "notes": "SIG I leg pays on winner party label (generic); Kalshi leg names one person; PM leg generic \"Independent\"."
+ },
+ "964": {
+  "market_id": "275",
+  "title": "Will the Republican Party win the Montana Senate?",
+  "race": "Montana Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "montana-senate-election-winner",
+   "markets": [
+    "630832"
+   ],
+   "titles": [
+    "Kurt Alme (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMT-26",
+   "tickers": [
+    "SENATEMT-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "963": {
+  "market_id": "274",
+  "title": "Will the Democratic Party win the Montana Senate?",
+  "race": "Montana Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "montana-senate-election-winner",
+   "markets": [
+    "630831"
+   ],
+   "titles": [
+    "Alani Bankhead (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMT-26",
+   "tickers": [
+    "SENATEMT-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "962": {
+  "market_id": "273",
+  "title": "Will the Republican Party win the Mississippi Senate?",
+  "race": "Mississippi Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "mississippi-senate-election-winner",
+   "markets": [
+    "631018"
+   ],
+   "titles": [
+    "Cindy Hyde-Smith (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMS-26",
+   "tickers": [
+    "SENATEMS-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "961": {
+  "market_id": "272",
+  "title": "Will the Democratic Party win the Mississippi Senate?",
+  "race": "Mississippi Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "mississippi-senate-election-winner",
+   "markets": [
+    "631017"
+   ],
+   "titles": [
+    "Scott Colom (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEMS-26",
+   "tickers": [
+    "SENATEMS-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "960": {
+  "market_id": "271",
+  "title": "Will the Republican Party win the Maine Senate?",
+  "race": "Maine Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "maine-senate-election-winner",
+   "markets": [
+    "630773"
+   ],
+   "titles": [
+    "Susan Collins (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEME-26",
+   "tickers": [
+    "SENATEME-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "rcv_late_settle"
+  ],
+  "notes": "Ranked-choice tabulation can delay the result ~2 weeks; same payoff, SIG pending until the feed has a result."
+ },
+ "959": {
+  "market_id": "270",
+  "title": "Will the Democratic Party win the Maine Senate?",
+  "race": "Maine Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "maine-senate-election-winner",
+   "markets": [
+    "630772"
+   ],
+   "titles": [
+    "Troy Jackson (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEME-26",
+   "tickers": [
+    "SENATEME-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "rcv_late_settle"
+  ],
+  "notes": "Ranked-choice tabulation can delay the result ~2 weeks; same payoff, SIG pending until the feed has a result."
+ },
+ "958": {
+  "market_id": "269",
+  "title": "Will the Republican Party win the Louisiana Senate?",
+  "race": "Louisiana Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "louisiana-senate-election-winner",
+   "markets": [
+    "634879"
+   ],
+   "titles": [
+    "Julia Letlow (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXSENATELA-26NOV",
+   "tickers": [
+    "KXSENATELA-26NOV-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "957": {
+  "market_id": "268",
+  "title": "Will the Democratic Party win the Louisiana Senate?",
+  "race": "Louisiana Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "louisiana-senate-election-winner",
+   "markets": [
+    "634878"
+   ],
+   "titles": [
+    "Jamie Davis (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXSENATELA-26NOV",
+   "tickers": [
+    "KXSENATELA-26NOV-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "956": {
+  "market_id": "267",
+  "title": "Will the Republican Party win the Kentucky Senate?",
+  "race": "Kentucky Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "kentucky-senate-election-winner",
+   "markets": [
+    "630760"
+   ],
+   "titles": [
+    "Andy Barr (R)"
+   ]
+  },
+  "kalshi_market": null,
+  "terms": "same",
+  "differences": [
+   "no_kalshi_match"
+  ],
+  "notes": ""
+ },
+ "955": {
+  "market_id": "266",
+  "title": "Will the Democratic Party win the Kentucky Senate?",
+  "race": "Kentucky Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "kentucky-senate-election-winner",
+   "markets": [
+    "630759"
+   ],
+   "titles": [
+    "Charles Booker (D)"
+   ]
+  },
+  "kalshi_market": null,
+  "terms": "same",
+  "differences": [
+   "no_kalshi_match"
+  ],
+  "notes": ""
+ },
+ "954": {
+  "market_id": "265",
+  "title": "Will the Republican Party win the Illinois Senate?",
+  "race": "Illinois Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "illinois-senate-election-winner",
+   "markets": [
+    "630721"
+   ],
+   "titles": [
+    "Don Tracy (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEIL-26",
+   "tickers": [
+    "SENATEIL-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "953": {
+  "market_id": "264",
+  "title": "Will the Democratic Party win the Illinois Senate?",
+  "race": "Illinois Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "illinois-senate-election-winner",
+   "markets": [
+    "630720"
+   ],
+   "titles": [
+    "Juliana Stratton (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEIL-26",
+   "tickers": [
+    "SENATEIL-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "952": {
+  "market_id": "263",
+  "title": "Will the Republican Party win the Idaho Senate?",
+  "race": "Idaho Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "idaho-senate-election-winner",
+   "markets": [
+    "630706"
+   ],
+   "titles": [
+    "Jim Risch (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEID-26",
+   "tickers": [
+    "SENATEID-26-R"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (Todd Achilles (I) PM 2.8%); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "951": {
+  "market_id": "262",
+  "title": "Will the Democratic Party win the Idaho Senate?",
+  "race": "Idaho Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "idaho-senate-election-winner",
+   "markets": [
+    "630705"
+   ],
+   "titles": [
+    "Democrat"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEID-26",
+   "tickers": [
+    "SENATEID-26-D"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (Todd Achilles (I) PM 2.8%); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "950": {
+  "market_id": "261",
+  "title": "Will the Republican Party win the Iowa Senate?",
+  "race": "Iowa Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "iowa-senate-election-winner",
+   "markets": [
+    "630734"
+   ],
+   "titles": [
+    "Ashley Hinson (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEIA-26",
+   "tickers": [
+    "SENATEIA-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "949": {
+  "market_id": "260",
+  "title": "Will the Democratic Party win the Iowa Senate?",
+  "race": "Iowa Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "iowa-senate-election-winner",
+   "markets": [
+    "630733"
+   ],
+   "titles": [
+    "Josh Turek (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEIA-26",
+   "tickers": [
+    "SENATEIA-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "948": {
+  "market_id": "259",
+  "title": "Will the Republican Party win the Georgia Senate?",
+  "race": "Georgia Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "georgia-senate-election-winner",
+   "markets": [
+    "630693"
+   ],
+   "titles": [
+    "Mike Collins (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEGA-26",
+   "tickers": [
+    "SENATEGA-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "runoff_late_settle"
+  ],
+  "notes": "GA general runoff (1 Dec) if no majority: SIG admin-settles when official; PM (runoffs included) and Kalshi (sworn-in) follow the runoff too. Same payoff, SIG cash locked."
+ },
+ "947": {
+  "market_id": "258",
+  "title": "Will the Democratic Party win the Georgia Senate?",
+  "race": "Georgia Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "georgia-senate-election-winner",
+   "markets": [
+    "630692"
+   ],
+   "titles": [
+    "Jon Ossoff (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEGA-26",
+   "tickers": [
+    "SENATEGA-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "runoff_late_settle"
+  ],
+  "notes": "GA general runoff (1 Dec) if no majority: SIG admin-settles when official; PM (runoffs included) and Kalshi (sworn-in) follow the runoff too. Same payoff, SIG cash locked."
+ },
+ "946": {
+  "market_id": "257",
+  "title": "Will the Republican Party win the Colorado Senate?",
+  "race": "Colorado Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "colorado-senate-election-winner",
+   "markets": [
+    "630667"
+   ],
+   "titles": [
+    "Mark Baisley (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATECO-26",
+   "tickers": [
+    "SENATECO-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "945": {
+  "market_id": "256",
+  "title": "Will the Democratic Party win the Colorado Senate?",
+  "race": "Colorado Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "colorado-senate-election-winner",
+   "markets": [
+    "630666"
+   ],
+   "titles": [
+    "John Hickenlooper (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATECO-26",
+   "tickers": [
+    "SENATECO-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "944": {
+  "market_id": "255",
+  "title": "Will the Republican Party win the Arkansas Senate?",
+  "race": "Arkansas Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "arkansas-senate-election-winner",
+   "markets": [
+    "630654"
+   ],
+   "titles": [
+    "Tom Cotton (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEAR-26",
+   "tickers": [
+    "SENATEAR-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "943": {
+  "market_id": "254",
+  "title": "Will the Democratic Party win the Arkansas Senate?",
+  "race": "Arkansas Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "arkansas-senate-election-winner",
+   "markets": [
+    "630653"
+   ],
+   "titles": [
+    "Hallie Shoffner (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEAR-26",
+   "tickers": [
+    "SENATEAR-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "942": {
+  "market_id": "253",
+  "title": "Will the Republican Party win the Alabama Senate?",
+  "race": "Alabama Senate",
+  "party": "R",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "alabama-senate-election-winner-154",
+   "markets": [
+    "630628"
+   ],
+   "titles": [
+    "Barry Moore (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEAL-26",
+   "tickers": [
+    "SENATEAL-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "941": {
+  "market_id": "252",
+  "title": "Will the Democratic Party win the Alabama Senate?",
+  "race": "Alabama Senate",
+  "party": "D",
+  "category": "senate_seat",
+  "pm_market": {
+   "event": "alabama-senate-election-winner-154",
+   "markets": [
+    "630627"
+   ],
+   "titles": [
+    "Everett Wess (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "SENATEAL-26",
+   "tickers": [
+    "SENATEAL-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "940": {
+  "market_id": "251",
+  "title": "Will the Democratic Party win the VA-07 House race?",
+  "race": "VA-07 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "va-07-house-election-winner",
+   "markets": [
+    "944298"
+   ],
+   "titles": [
+    "Eugene Vindman (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEVA7-26",
+   "tickers": [
+    "HOUSEVA7-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "939": {
+  "market_id": "250",
+  "title": "Will the Republican Party win the VA-02 House race?",
+  "race": "VA-02 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "va-02-house-election-winner",
+   "markets": [
+    "944289"
+   ],
+   "titles": [
+    "Jen Kiggans (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEVA2-26",
+   "tickers": [
+    "HOUSEVA2-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "938": {
+  "market_id": "249",
+  "title": "Will the Republican Party win the VA-01 House race?",
+  "race": "VA-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "va-01-house-election-winner",
+   "markets": [
+    "944281"
+   ],
+   "titles": [
+    "Rob Wittman (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEVA1-26",
+   "tickers": [
+    "HOUSEVA1-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "937": {
+  "market_id": "248",
+  "title": "Will the Republican Party win the TX-28 House race?",
+  "race": "TX-28 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "tx-28-house-election-winner",
+   "markets": [
+    "944221"
+   ],
+   "titles": [
+    "Tano Tijerina (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSETX28-26",
+   "tickers": [
+    "HOUSETX28-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "936": {
+  "market_id": "247",
+  "title": "Will the Democratic Party win the TX-28 House race?",
+  "race": "TX-28 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "tx-28-house-election-winner",
+   "markets": [
+    "944222"
+   ],
+   "titles": [
+    "Henry Cuellar (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSETX28-26",
+   "tickers": [
+    "HOUSETX28-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "935": {
+  "market_id": "246",
+  "title": "Will the Republican Party win the TX-23 House race?",
+  "race": "TX-23 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "tx-23-house-election-winner",
+   "markets": [
+    "1284959"
+   ],
+   "titles": [
+    "Brandon Herrera (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-TX23-26",
+   "tickers": [
+    "KXHOUSERACE-TX23-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "934": {
+  "market_id": "245",
+  "title": "Will the Democratic Party win the TX-23 House race?",
+  "race": "TX-23 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "tx-23-house-election-winner",
+   "markets": [
+    "1284960"
+   ],
+   "titles": [
+    "Katy Padilla Stout (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-TX23-26",
+   "tickers": [
+    "KXHOUSERACE-TX23-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "933": {
+  "market_id": "244",
+  "title": "Will the Republican Party win the TX-15 House race?",
+  "race": "TX-15 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "tx-15-house-election-winner",
+   "markets": [
+    "944199"
+   ],
+   "titles": [
+    "Monica De La Cruz (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSETX15-26",
+   "tickers": [
+    "HOUSETX15-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "932": {
+  "market_id": "243",
+  "title": "Will the Democratic Party win the TX-15 House race?",
+  "race": "TX-15 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "tx-15-house-election-winner",
+   "markets": [
+    "944201"
+   ],
+   "titles": [
+    "Bobby Pulido (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSETX15-26",
+   "tickers": [
+    "HOUSETX15-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "931": {
+  "market_id": "242",
+  "title": "Will the Republican Party win the SC-01 House race?",
+  "race": "SC-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "sc-01-house-election-winner",
+   "markets": [
+    "1284671"
+   ],
+   "titles": [
+    "Jenny Costa Honeycutt (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-SC01-26",
+   "tickers": [
+    "KXHOUSERACE-SC01-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "930": {
+  "market_id": "241",
+  "title": "Will the Democratic Party win the SC-01 House race?",
+  "race": "SC-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "sc-01-house-election-winner",
+   "markets": [
+    "1284672"
+   ],
+   "titles": [
+    "Nancy Lacore (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-SC01-26",
+   "tickers": [
+    "KXHOUSERACE-SC01-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "929": {
+  "market_id": "240",
+  "title": "Will the Republican Party win the PA-10 House race?",
+  "race": "PA-10 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "pa-10-house-election-winner",
+   "markets": [
+    "943954"
+   ],
+   "titles": [
+    "Scott Perry (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEPA10-26",
+   "tickers": [
+    "HOUSEPA10-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "928": {
+  "market_id": "239",
+  "title": "Will the Democratic Party win the PA-10 House race?",
+  "race": "PA-10 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "pa-10-house-election-winner",
+   "markets": [
+    "943955"
+   ],
+   "titles": [
+    "Janelle Stelson (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEPA10-26",
+   "tickers": [
+    "HOUSEPA10-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "927": {
+  "market_id": "238",
+  "title": "Will the Republican Party win the PA-08 House race?",
+  "race": "PA-08 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "pa-08-house-election-winner",
+   "markets": [
+    "943942"
+   ],
+   "titles": [
+    "Rob Bresnahan (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEPA8-26",
+   "tickers": [
+    "HOUSEPA8-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "926": {
+  "market_id": "237",
+  "title": "Will the Democratic Party win the PA-08 House race?",
+  "race": "PA-08 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "pa-08-house-election-winner",
+   "markets": [
+    "943943"
+   ],
+   "titles": [
+    "Paige Cognetti (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEPA8-26",
+   "tickers": [
+    "HOUSEPA8-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "925": {
+  "market_id": "236",
+  "title": "Will the Republican Party win the PA-07 House race?",
+  "race": "PA-07 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "pa-07-house-election-winner",
+   "markets": [
+    "943796"
+   ],
+   "titles": [
+    "Ryan Mackenzie (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEPA7-26",
+   "tickers": [
+    "HOUSEPA7-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "924": {
+  "market_id": "235",
+  "title": "Will the Democratic Party win the PA-07 House race?",
+  "race": "PA-07 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "pa-07-house-election-winner",
+   "markets": [
+    "943797"
+   ],
+   "titles": [
+    "Bob Brooks (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEPA7-26",
+   "tickers": [
+    "HOUSEPA7-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "923": {
+  "market_id": "234",
+  "title": "Will the Republican Party win the PA-01 House race?",
+  "race": "PA-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "pa-01-house-election-winner",
+   "markets": [
+    "943748"
+   ],
+   "titles": [
+    "Brian Fitzpatrick (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEPA1-26",
+   "tickers": [
+    "HOUSEPA1-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "922": {
+  "market_id": "233",
+  "title": "Will the Democratic Party win the PA-01 House race?",
+  "race": "PA-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "pa-01-house-election-winner",
+   "markets": [
+    "943749"
+   ],
+   "titles": [
+    "Bob Harvie (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEPA1-26",
+   "tickers": [
+    "HOUSEPA1-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "921": {
+  "market_id": "232",
+  "title": "Will the Republican Party win the NY-17 House race?",
+  "race": "NY-17 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ny-17-house-election-winner",
+   "markets": [
+    "943440"
+   ],
+   "titles": [
+    "Mike Lawler (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSENY17-26",
+   "tickers": [
+    "HOUSENY17-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "920": {
+  "market_id": "231",
+  "title": "Will the Democratic Party win the NY-17 House race?",
+  "race": "NY-17 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ny-17-house-election-winner",
+   "markets": [
+    "943441"
+   ],
+   "titles": [
+    "Cait Conley (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSENY17-26",
+   "tickers": [
+    "HOUSENY17-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "919": {
+  "market_id": "230",
+  "title": "Will the Republican Party win the NY-13 House race?",
+  "race": "NY-13 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ny-13-house-election-winner",
+   "markets": [
+    "1284298"
+   ],
+   "titles": [
+    "Jomo Williams (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-NY13-26",
+   "tickers": [
+    "KXHOUSERACE-NY13-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "918": {
+  "market_id": "229",
+  "title": "Will the Democratic Party win the NY-13 House race?",
+  "race": "NY-13 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ny-13-house-election-winner",
+   "markets": [
+    "1284299"
+   ],
+   "titles": [
+    "Darializa Avila Chevalier (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-NY13-26",
+   "tickers": [
+    "KXHOUSERACE-NY13-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "917": {
+  "market_id": "228",
+  "title": "Will the Republican Party win the NJ-07 House race?",
+  "race": "NJ-07 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "nj-07-house-election-winner",
+   "markets": [
+    "942978"
+   ],
+   "titles": [
+    "Thomas Kean Jr. (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSENJ7-26",
+   "tickers": [
+    "HOUSENJ7-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "916": {
+  "market_id": "227",
+  "title": "Will the Democratic Party win the NJ-07 House race?",
+  "race": "NJ-07 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "nj-07-house-election-winner",
+   "markets": [
+    "942979"
+   ],
+   "titles": [
+    "Rebecca Bennett (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSENJ7-26",
+   "tickers": [
+    "HOUSENJ7-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "915": {
+  "market_id": "226",
+  "title": "Will the Republican Party win the NE-02 House race?",
+  "race": "NE-02 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ne-02-house-election-winner",
+   "markets": [
+    "942877"
+   ],
+   "titles": [
+    "Brinker Harding (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSENE2-26",
+   "tickers": [
+    "HOUSENE2-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "914": {
+  "market_id": "225",
+  "title": "Will the Democratic Party win the NE-02 House race?",
+  "race": "NE-02 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ne-02-house-election-winner",
+   "markets": [
+    "942878"
+   ],
+   "titles": [
+    "Denise Powell (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSENE2-26",
+   "tickers": [
+    "HOUSENE2-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "913": {
+  "market_id": "224",
+  "title": "Will the Republican Party win the MT-01 House race?",
+  "race": "MT-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mt-01-house-election-winner",
+   "markets": [
+    "942841"
+   ],
+   "titles": [
+    "Aaron Flint (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEMT1-26",
+   "tickers": [
+    "HOUSEMT1-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "912": {
+  "market_id": "223",
+  "title": "Will the Democratic Party win the MT-01 House race?",
+  "race": "MT-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "mt-01-house-election-winner",
+   "markets": [
+    "942843"
+   ],
+   "titles": [
+    "Sam Forstag (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEMT1-26",
+   "tickers": [
+    "HOUSEMT1-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "911": {
+  "market_id": "222",
+  "title": "Will the Republican Party win the ME-02 House race?",
+  "race": "ME-02 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": null,
+  "kalshi_market": {
+   "event": "HOUSEME2-26",
+   "tickers": [
+    "HOUSEME2-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "no_pm_match",
+   "rcv_late_settle"
+  ],
+  "notes": "Ranked-choice tabulation can delay result ~2 weeks; same payoff, SIG pending (no trading) until feed result."
+ },
+ "910": {
+  "market_id": "221",
+  "title": "Will the Democratic Party win the ME-02 House race?",
+  "race": "ME-02 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": null,
+  "kalshi_market": {
+   "event": "HOUSEME2-26",
+   "tickers": [
+    "HOUSEME2-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "no_pm_match",
+   "rcv_late_settle"
+  ],
+  "notes": "Ranked-choice tabulation can delay result ~2 weeks; same payoff, SIG pending (no trading) until feed result."
+ },
+ "909": {
+  "market_id": "220",
+  "title": "Will the Republican Party win the KY-04 House race?",
+  "race": "KY-04 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ky-04-house-election-winner",
+   "markets": [
+    "1283568"
+   ],
+   "titles": [
+    "Ed Gallrein (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-KY04-26",
+   "tickers": [
+    "KXHOUSERACE-KY04-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "908": {
+  "market_id": "219",
+  "title": "Will the Democratic Party win the KY-04 House race?",
+  "race": "KY-04 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ky-04-house-election-winner",
+   "markets": [
+    "1283569"
+   ],
+   "titles": [
+    "Melissa Strange (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-KY04-26",
+   "tickers": [
+    "KXHOUSERACE-KY04-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "907": {
+  "market_id": "218",
+  "title": "Will the Republican Party win the IA-03 House race?",
+  "race": "IA-03 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ia-03-house-election-winner",
+   "markets": [
+    "942444"
+   ],
+   "titles": [
+    "Zach Nunn (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEIA3-26",
+   "tickers": [
+    "HOUSEIA3-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "906": {
+  "market_id": "217",
+  "title": "Will the Democratic Party win the IA-03 House race?",
+  "race": "IA-03 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ia-03-house-election-winner",
+   "markets": [
+    "942445"
+   ],
+   "titles": [
+    "Sarah Trone Garriott (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEIA3-26",
+   "tickers": [
+    "HOUSEIA3-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "905": {
+  "market_id": "216",
+  "title": "Will the Republican Party win the IA-02 House race?",
+  "race": "IA-02 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ia-02-house-election-winner",
+   "markets": [
+    "1283288"
+   ],
+   "titles": [
+    "Joe Mitchell (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-IA02-26",
+   "tickers": [
+    "KXHOUSERACE-IA02-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "904": {
+  "market_id": "215",
+  "title": "Will the Democratic Party win the IA-02 House race?",
+  "race": "IA-02 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ia-02-house-election-winner",
+   "markets": [
+    "1283289"
+   ],
+   "titles": [
+    "Lindsay James (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-IA02-26",
+   "tickers": [
+    "KXHOUSERACE-IA02-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "903": {
+  "market_id": "214",
+  "title": "Will the Republican Party win the IA-01 House race?",
+  "race": "IA-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ia-01-house-election-winner",
+   "markets": [
+    "942432"
+   ],
+   "titles": [
+    "Mariannette Miller-Meeks (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEIA1-26",
+   "tickers": [
+    "HOUSEIA1-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "902": {
+  "market_id": "213",
+  "title": "Will the Democratic Party win the IA-01 House race?",
+  "race": "IA-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ia-01-house-election-winner",
+   "markets": [
+    "942433"
+   ],
+   "titles": [
+    "Christina Bohannan (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEIA1-26",
+   "tickers": [
+    "HOUSEIA1-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "901": {
+  "market_id": "212",
+  "title": "Will the Republican Party win the FL-13 House race?",
+  "race": "FL-13 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-13-house-election-winner",
+   "markets": [
+    "942400"
+   ],
+   "titles": [
+    "Anna Paulina Luna (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEFL13-26",
+   "tickers": [
+    "HOUSEFL13-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "900": {
+  "market_id": "211",
+  "title": "Will the Democratic Party win the FL-09 House race?",
+  "race": "FL-09 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "fl-09-house-election-winner",
+   "markets": [
+    "1283017"
+   ],
+   "titles": [
+    "Darren Soto (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-FL09-26",
+   "tickers": [
+    "KXHOUSERACE-FL09-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "899": {
+  "market_id": "210",
+  "title": "Will the Republican Party win the CO-08 House race?",
+  "race": "CO-08 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "co-08-house-election-winner",
+   "markets": [
+    "942324"
+   ],
+   "titles": [
+    "Gabe Evans (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSECO8-26",
+   "tickers": [
+    "HOUSECO8-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "898": {
+  "market_id": "209",
+  "title": "Will the Democratic Party win the CO-08 House race?",
+  "race": "CO-08 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "co-08-house-election-winner",
+   "markets": [
+    "942325"
+   ],
+   "titles": [
+    "Manny Rutinel (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSECO8-26",
+   "tickers": [
+    "HOUSECO8-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "897": {
+  "market_id": "208",
+  "title": "Will the Republican Party win the CO-04 House race?",
+  "race": "CO-04 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "co-04-house-election-winner",
+   "markets": [
+    "1282880"
+   ],
+   "titles": [
+    "Lauren Boebert (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-CO04-26",
+   "tickers": [
+    "KXHOUSERACE-CO04-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "896": {
+  "market_id": "207",
+  "title": "Will the Democratic Party win the CO-04 House race?",
+  "race": "CO-04 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "co-04-house-election-winner",
+   "markets": [
+    "1282881"
+   ],
+   "titles": [
+    "Eileen Laubacher (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-CO04-26",
+   "tickers": [
+    "KXHOUSERACE-CO04-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "895": {
+  "market_id": "206",
+  "title": "Will the Republican Party win the CO-03 House race?",
+  "race": "CO-03 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "co-03-house-election-winner",
+   "markets": [
+    "942301"
+   ],
+   "titles": [
+    "Jeff Hurd (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSECO3-26",
+   "tickers": [
+    "HOUSECO3-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "894": {
+  "market_id": "205",
+  "title": "Will the Democratic Party win the CO-03 House race?",
+  "race": "CO-03 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "co-03-house-election-winner",
+   "markets": [
+    "942304"
+   ],
+   "titles": [
+    "Dwayne Romero (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSECO3-26",
+   "tickers": [
+    "HOUSECO3-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "893": {
+  "market_id": "204",
+  "title": "Will the Republican Party win the CA-48 House race?",
+  "race": "CA-48 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ca-48-house-election-winner",
+   "markets": [
+    "1282824"
+   ],
+   "titles": [
+    "Jim Desmond (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-CA48-26",
+   "tickers": [
+    "KXHOUSERACE-CA48-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "892": {
+  "market_id": "203",
+  "title": "Will the Democratic Party win the CA-48 House race?",
+  "race": "CA-48 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "ca-48-house-election-winner",
+   "markets": [
+    "1282825"
+   ],
+   "titles": [
+    "Marni von Wilpert (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXHOUSERACE-CA48-26",
+   "tickers": [
+    "KXHOUSERACE-CA48-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "891": {
+  "market_id": "202",
+  "title": "Will the Republican Party win the CA-22 House race?",
+  "race": "CA-22 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "which-party-will-win-the-house-race-for-the-ca-22-seat",
+   "markets": [
+    "703685"
+   ],
+   "titles": [
+    "David Valadao (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSECA22-26",
+   "tickers": [
+    "HOUSECA22-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "890": {
+  "market_id": "201",
+  "title": "Will the Democratic Party win the CA-22 House race?",
+  "race": "CA-22 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "which-party-will-win-the-house-race-for-the-ca-22-seat",
+   "markets": [
+    "703686"
+   ],
+   "titles": [
+    "Randy Villegas (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSECA22-26",
+   "tickers": [
+    "HOUSECA22-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "889": {
+  "market_id": "200",
+  "title": "Will the Republican Party win the AZ-06 House race?",
+  "race": "AZ-06 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "az-06-house-election-winner",
+   "markets": [
+    "942159"
+   ],
+   "titles": [
+    "Juan Ciscomani (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEAZ6-26",
+   "tickers": [
+    "HOUSEAZ6-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "888": {
+  "market_id": "199",
+  "title": "Will the Democratic Party win the AZ-06 House race?",
+  "race": "AZ-06 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "az-06-house-election-winner",
+   "markets": [
+    "942162"
+   ],
+   "titles": [
+    "JoAnna Mendoza (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEAZ6-26",
+   "tickers": [
+    "HOUSEAZ6-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "887": {
+  "market_id": "198",
+  "title": "Will the Republican Party win the AZ-01 House race?",
+  "race": "AZ-01 House race",
+  "party": "R",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "az-01-house-election-winner",
+   "markets": [
+    "942082"
+   ],
+   "titles": [
+    "Jay Feely (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEAZ1-26",
+   "tickers": [
+    "HOUSEAZ1-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "886": {
+  "market_id": "197",
+  "title": "Will the Democratic Party win the AZ-01 House race?",
+  "race": "AZ-01 House race",
+  "party": "D",
+  "category": "house_seat",
+  "pm_market": {
+   "event": "az-01-house-election-winner",
+   "markets": [
+    "942084"
+   ],
+   "titles": [
+    "Amish Shah (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "HOUSEAZ1-26",
+   "tickers": [
+    "HOUSEAZ1-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "885": {
+  "market_id": "196",
+  "title": "Will the Republican Party win the Texas Governor?",
+  "race": "Texas Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "texas-governor-winner-2026",
+   "markets": [
+    "629691"
+   ],
+   "titles": [
+    "Greg Abbott (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYTX-26",
+   "tickers": [
+    "GOVPARTYTX-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "884": {
+  "market_id": "195",
+  "title": "Will the Democratic Party win the Texas Governor?",
+  "race": "Texas Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "texas-governor-winner-2026",
+   "markets": [
+    "629690"
+   ],
+   "titles": [
+    "Gina Hinojosa (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYTX-26",
+   "tickers": [
+    "GOVPARTYTX-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "883": {
+  "market_id": "194",
+  "title": "Will the Democratic Party win the South Dakota Governor?",
+  "race": "South Dakota Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "south-dakota-governor-winner-2026",
+   "markets": [
+    "629653"
+   ],
+   "titles": [
+    "Dan Ahlers (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYSD-26",
+   "tickers": [
+    "GOVPARTYSD-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "882": {
+  "market_id": "193",
+  "title": "Will the Republican Party win the South Carolina Governor?",
+  "race": "South Carolina Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "south-carolina-governor-winner-2026",
+   "markets": [
+    "629641"
+   ],
+   "titles": [
+    "Alan Wilson (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYSC-26",
+   "tickers": [
+    "GOVPARTYSC-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "881": {
+  "market_id": "192",
+  "title": "Will the Democratic Party win the South Carolina Governor?",
+  "race": "South Carolina Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "south-carolina-governor-winner-2026",
+   "markets": [
+    "629640"
+   ],
+   "titles": [
+    "Jermaine Johnson (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYSC-26",
+   "tickers": [
+    "GOVPARTYSC-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "880": {
+  "market_id": "191",
+  "title": "Will the Independent Party win the Rhode Island Governor?",
+  "race": "Rhode Island Governor",
+  "party": "I",
+  "category": "governor",
+  "pm_market": {
+   "event": "rhode-island-governor-winner-2026",
+   "markets": [
+    "629629"
+   ],
+   "titles": [
+    "Independent"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYRI-26",
+   "tickers": [
+    "GOVPARTYRI-26-KBLO"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "I_generic_vs_kalshi_named"
+  ],
+  "notes": "SIG I leg pays on winner party label (generic); Kalshi leg names one person; PM leg generic \"Independent\"."
+ },
+ "879": {
+  "market_id": "190",
+  "title": "Will the Republican Party win the Pennsylvania Governor?",
+  "race": "Pennsylvania Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "pennsylvania-governor-winner-2026",
+   "markets": [
+    "629615"
+   ],
+   "titles": [
+    "Stacy Garrity (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYPA-26",
+   "tickers": [
+    "GOVPARTYPA-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "878": {
+  "market_id": "189",
+  "title": "Will the Democratic Party win the Pennsylvania Governor?",
+  "race": "Pennsylvania Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "pennsylvania-governor-winner-2026",
+   "markets": [
+    "629614"
+   ],
+   "titles": [
+    "Josh Shapiro (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYPA-26",
+   "tickers": [
+    "GOVPARTYPA-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "877": {
+  "market_id": "188",
+  "title": "Will the Republican Party win the Oregon Governor?",
+  "race": "Oregon Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "oregon-governor-winner-2026",
+   "markets": [
+    "629584"
+   ],
+   "titles": [
+    "Christine Drazan (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYOR-26",
+   "tickers": [
+    "GOVPARTYOR-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "876": {
+  "market_id": "187",
+  "title": "Will the Democratic Party win the Oregon Governor?",
+  "race": "Oregon Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "oregon-governor-winner-2026",
+   "markets": [
+    "629583"
+   ],
+   "titles": [
+    "Tina Kotek (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYOR-26",
+   "tickers": [
+    "GOVPARTYOR-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "875": {
+  "market_id": "186",
+  "title": "Will the Democratic Party win the Oklahoma Governor?",
+  "race": "Oklahoma Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "oklahoma-governor-winner-2026",
+   "markets": [
+    "629570"
+   ],
+   "titles": [
+    "Cyndi Munson (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYOK-26",
+   "tickers": [
+    "GOVPARTYOK-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "874": {
+  "market_id": "185",
+  "title": "Will the Republican Party win the New York Governor?",
+  "race": "New York Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "new-york-governor-winner-2026",
+   "markets": [
+    "629545"
+   ],
+   "titles": [
+    "Bruce Blakeman (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNY-26",
+   "tickers": [
+    "GOVPARTYNY-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "873": {
+  "market_id": "184",
+  "title": "Will the Democratic Party win the New York Governor?",
+  "race": "New York Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "new-york-governor-winner-2026",
+   "markets": [
+    "629544"
+   ],
+   "titles": [
+    "Kathy Hochul (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNY-26",
+   "tickers": [
+    "GOVPARTYNY-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "872": {
+  "market_id": "183",
+  "title": "Will the Republican Party win the Nevada Governor?",
+  "race": "Nevada Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "nevada-governor-winner-2026",
+   "markets": [
+    "629506"
+   ],
+   "titles": [
+    "Joe Lombardo (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNV-26",
+   "tickers": [
+    "GOVPARTYNV-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "871": {
+  "market_id": "182",
+  "title": "Will the Democratic Party win the Nevada Governor?",
+  "race": "Nevada Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "nevada-governor-winner-2026",
+   "markets": [
+    "629505"
+   ],
+   "titles": [
+    "Aaron Ford (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNV-26",
+   "tickers": [
+    "GOVPARTYNV-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "870": {
+  "market_id": "181",
+  "title": "Will the Republican Party win the New Mexico Governor?",
+  "race": "New Mexico Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "new-mexico-governor-winner-2026",
+   "markets": [
+    "629532"
+   ],
+   "titles": [
+    "Gregg Hull (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNM-26",
+   "tickers": [
+    "GOVPARTYNM-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "869": {
+  "market_id": "180",
+  "title": "Will the Democratic Party win the New Mexico Governor?",
+  "race": "New Mexico Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "new-mexico-governor-winner-2026",
+   "markets": [
+    "629531"
+   ],
+   "titles": [
+    "Deb Haaland (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNM-26",
+   "tickers": [
+    "GOVPARTYNM-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "868": {
+  "market_id": "179",
+  "title": "Will the Republican Party win the Nebraska Governor?",
+  "race": "Nebraska Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "nebraska-governor-winner-2026",
+   "markets": [
+    "629491"
+   ],
+   "titles": [
+    "Jim Pillen (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNE-26",
+   "tickers": [
+    "GOVPARTYNE-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "867": {
+  "market_id": "178",
+  "title": "Will the Democratic Party win the Nebraska Governor?",
+  "race": "Nebraska Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "nebraska-governor-winner-2026",
+   "markets": [
+    "629490"
+   ],
+   "titles": [
+    "Lynne Walz (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYNE-26",
+   "tickers": [
+    "GOVPARTYNE-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "866": {
+  "market_id": "177",
+  "title": "Will the Republican Party win the Maine Governor?",
+  "race": "Maine Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "maine-governor-winner-2026",
+   "markets": [
+    "629426"
+   ],
+   "titles": [
+    "Robert Charles (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYME-26",
+   "tickers": [
+    "GOVPARTYME-26-R"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (Rick Bennett (I) Kalshi leg); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "865": {
+  "market_id": "176",
+  "title": "Will the Democratic Party win the Maine Governor?",
+  "race": "Maine Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "maine-governor-winner-2026",
+   "markets": [
+    "629425"
+   ],
+   "titles": [
+    "Hannah Pingree (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYME-26",
+   "tickers": [
+    "GOVPARTYME-26-D"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "no_sig_I_leg"
+  ],
+  "notes": "Outside venues list an independent (Rick Bennett (I) Kalshi leg); SIG has only D/R legs, both settle NO if they win. Compare same-party legs, not complements."
+ },
+ "864": {
+  "market_id": "175",
+  "title": "Will the Republican Party win the Maryland Governor?",
+  "race": "Maryland Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "maryland-governor-winner-2026",
+   "markets": [
+    "629439"
+   ],
+   "titles": [
+    "Dan Cox (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYMD-26",
+   "tickers": [
+    "GOVPARTYMD-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "863": {
+  "market_id": "174",
+  "title": "Will the Democratic Party win the Maryland Governor?",
+  "race": "Maryland Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "maryland-governor-winner-2026",
+   "markets": [
+    "629438"
+   ],
+   "titles": [
+    "Wes Moore (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYMD-26",
+   "tickers": [
+    "GOVPARTYMD-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "862": {
+  "market_id": "173",
+  "title": "Will the Republican Party win the Illinois Governor?",
+  "race": "Illinois Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "illinois-governor-winner-2026",
+   "markets": [
+    "629377"
+   ],
+   "titles": [
+    "Darren Bailey (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYIL-26",
+   "tickers": [
+    "GOVPARTYIL-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "861": {
+  "market_id": "172",
+  "title": "Will the Democratic Party win the Illinois Governor?",
+  "race": "Illinois Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "illinois-governor-winner-2026",
+   "markets": [
+    "629376"
+   ],
+   "titles": [
+    "JB Pritzker (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYIL-26",
+   "tickers": [
+    "GOVPARTYIL-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "860": {
+  "market_id": "171",
+  "title": "Will the Republican Party win the Idaho Governor?",
+  "race": "Idaho Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "idaho-governor-winner-2026",
+   "markets": [
+    "629364"
+   ],
+   "titles": [
+    "Brad Little (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYID-26",
+   "tickers": [
+    "GOVPARTYID-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "859": {
+  "market_id": "170",
+  "title": "Will the Democratic Party win the Idaho Governor?",
+  "race": "Idaho Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "idaho-governor-winner-2026",
+   "markets": [
+    "629363"
+   ],
+   "titles": [
+    "Terri Pickens (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYID-26",
+   "tickers": [
+    "GOVPARTYID-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "858": {
+  "market_id": "169",
+  "title": "Will the Republican Party win the Iowa Governor?",
+  "race": "Iowa Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "iowa-governor-winner-2026",
+   "markets": [
+    "629398"
+   ],
+   "titles": [
+    "Zach Lahn (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYIA-26",
+   "tickers": [
+    "GOVPARTYIA-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "857": {
+  "market_id": "168",
+  "title": "Will the Democratic Party win the Iowa Governor?",
+  "race": "Iowa Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "iowa-governor-winner-2026",
+   "markets": [
+    "629397"
+   ],
+   "titles": [
+    "Rob Sand (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYIA-26",
+   "tickers": [
+    "GOVPARTYIA-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "856": {
+  "market_id": "167",
+  "title": "Will the Republican Party win the Georgia Governor?",
+  "race": "Georgia Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "georgia-governor-winner-2026",
+   "markets": [
+    "629338"
+   ],
+   "titles": [
+    "Rick Jackson (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYGA-26",
+   "tickers": [
+    "GOVPARTYGA-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "runoff_late_settle"
+  ],
+  "notes": "GA general runoff (1 Dec) if no majority: SIG admin-settles when official; PM (runoffs included) and Kalshi (sworn-in) follow the runoff too. Same payoff, SIG cash locked."
+ },
+ "855": {
+  "market_id": "166",
+  "title": "Will the Democratic Party win the Georgia Governor?",
+  "race": "Georgia Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "georgia-governor-winner-2026",
+   "markets": [
+    "629337"
+   ],
+   "titles": [
+    "Keisha Lance Bottoms (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYGA-26",
+   "tickers": [
+    "GOVPARTYGA-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "runoff_late_settle"
+  ],
+  "notes": "GA general runoff (1 Dec) if no majority: SIG admin-settles when official; PM (runoffs included) and Kalshi (sworn-in) follow the runoff too. Same payoff, SIG cash locked."
+ },
+ "854": {
+  "market_id": "165",
+  "title": "Will the Republican Party win the Connecticut Governor?",
+  "race": "Connecticut Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "connecticut-governor-winner-2026",
+   "markets": [
+    "629312"
+   ],
+   "titles": [
+    "Ryan Fazio (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYCT-26",
+   "tickers": [
+    "GOVPARTYCT-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "853": {
+  "market_id": "164",
+  "title": "Will the Republican Party win the Colorado Governor?",
+  "race": "Colorado Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "colorado-governor-winner-2026",
+   "markets": [
+    "629297"
+   ],
+   "titles": [
+    "Victor Marx (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYCO-26",
+   "tickers": [
+    "GOVPARTYCO-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "852": {
+  "market_id": "163",
+  "title": "Will the Democratic Party win the Colorado Governor?",
+  "race": "Colorado Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "colorado-governor-winner-2026",
+   "markets": [
+    "629296"
+   ],
+   "titles": [
+    "Phil Weiser (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYCO-26",
+   "tickers": [
+    "GOVPARTYCO-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "851": {
+  "market_id": "162",
+  "title": "Will the Republican Party win the California Governor?",
+  "race": "California Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "california-governor-election-2026",
+   "markets": [
+    "628940",
+    "628947"
+   ],
+   "titles": [
+    "Steve Hilton",
+    "Chad Bianco"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXGOVCA-26",
+   "tickers": [
+    "KXGOVCA-26-SHIL"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "pm_candidate_market_party_mapped",
+   "kalshi_candidate_named",
+   "slow_count_late_settle"
+  ],
+  "notes": "PM legs are per candidate (party attributed by bot); PM resolves \"Other\" if not confirmed by 31 Jul 2027. Kalshi KXGOV* named-candidate contract (elected), not GOVPARTY."
+ },
+ "850": {
+  "market_id": "161",
+  "title": "Will the Democratic Party win the California Governor?",
+  "race": "California Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "california-governor-election-2026",
+   "markets": [
+    "628936",
+    "628937",
+    "628938",
+    "628939",
+    "628941",
+    "628942",
+    "628944",
+    "628945",
+    "628950",
+    "628954",
+    "628955",
+    "628956"
+   ],
+   "titles": [
+    "Rick Caruso",
+    "Alex Padilla",
+    "Katie Porter",
+    "Antonio Villaraigosa",
+    "Xavier Becerra",
+    "Stephen Cloobeck",
+    "Betty Yee",
+    "Toni Atkins",
+    "Tony Thurmond",
+    "Eric Swalwell",
+    "Tom Steyer",
+    "Kamala Harris"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXGOVCA-26",
+   "tickers": [
+    "KXGOVCA-26-XBEC"
+   ]
+  },
+  "terms": "different",
+  "differences": [
+   "pm_candidate_market_party_mapped",
+   "kalshi_candidate_named",
+   "slow_count_late_settle"
+  ],
+  "notes": "PM legs are per candidate (party attributed by bot); PM resolves \"Other\" if not confirmed by 31 Jul 2027. Kalshi KXGOV* named-candidate contract (elected), not GOVPARTY."
+ },
+ "849": {
+  "market_id": "160",
+  "title": "Will the Republican Party win the Arizona Governor?",
+  "race": "Arizona Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "arizona-governor-winner-2026",
+   "markets": [
+    "629184"
+   ],
+   "titles": [
+    "Andy Biggs (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYAZ-26",
+   "tickers": [
+    "GOVPARTYAZ-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "848": {
+  "market_id": "159",
+  "title": "Will the Democratic Party win the Arizona Governor?",
+  "race": "Arizona Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "arizona-governor-winner-2026",
+   "markets": [
+    "629183"
+   ],
+   "titles": [
+    "Katie Hobbs (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYAZ-26",
+   "tickers": [
+    "GOVPARTYAZ-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "slow_count_late_settle"
+  ],
+  "notes": ""
+ },
+ "847": {
+  "market_id": "158",
+  "title": "Will the Republican Party win the Arkansas Governor?",
+  "race": "Arkansas Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "arkansas-governor-winner-2026",
+   "markets": [
+    "629284"
+   ],
+   "titles": [
+    "Sarah Huckabee Sanders (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYAR-26",
+   "tickers": [
+    "GOVPARTYAR-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "846": {
+  "market_id": "157",
+  "title": "Will the Democratic Party win the Arkansas Governor?",
+  "race": "Arkansas Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "arkansas-governor-winner-2026",
+   "markets": [
+    "629283"
+   ],
+   "titles": [
+    "Fredrick Love (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYAR-26",
+   "tickers": [
+    "GOVPARTYAR-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "845": {
+  "market_id": "156",
+  "title": "Will the Republican Party win the Alabama Governor?",
+  "race": "Alabama Governor",
+  "party": "R",
+  "category": "governor",
+  "pm_market": {
+   "event": "alabama-governor-winner-2026",
+   "markets": [
+    "629271"
+   ],
+   "titles": [
+    "Tommy Tuberville (R)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYAL-26",
+   "tickers": [
+    "GOVPARTYAL-26-R"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "844": {
+  "market_id": "155",
+  "title": "Will the Democratic Party win the Alabama Governor?",
+  "race": "Alabama Governor",
+  "party": "D",
+  "category": "governor",
+  "pm_market": {
+   "event": "alabama-governor-winner-2026",
+   "markets": [
+    "629270"
+   ],
+   "titles": [
+    "Doug Jones (D)"
+   ]
+  },
+  "kalshi_market": {
+   "event": "GOVPARTYAL-26",
+   "tickers": [
+    "GOVPARTYAL-26-D"
+   ]
+  },
+  "terms": "same",
+  "differences": [],
+  "notes": ""
+ },
+ "843": {
+  "market_id": "154",
+  "title": "Will the Republican Party win the U.S. Senate?",
+  "race": "U.S. Senate",
+  "party": "R",
+  "category": "chamber_control",
+  "pm_market": {
+   "event": "which-party-will-win-the-senate-in-2026",
+   "markets": [
+    "562794"
+   ],
+   "titles": [
+    "Republican Party"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXBALANCEPOWERCOMBO-27FEB",
+   "tickers": [
+    "KXBALANCEPOWERCOMBO-27FEB-RR",
+    "KXBALANCEPOWERCOMBO-27FEB-DR"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "chamber_fallback_kalshi_protem_feb1",
+   "kalshi_combo_derived",
+   "sig_indep_caucus_cutoff_election_day"
+  ],
+  "notes": "SIG text ~copy of PM (majority; 50+VP; caucusing independents count; Speaker/pro tem fallback). SIG: independents with undetermined caucus on election day count for nobody (PM waits to 4 Jan). Kalshi: 4/8 media consensus else party of Speaker/pro tem on 1 Feb 2027; bot derives from KXBALANCEPOWERCOMBO, direct CONTROLS-2026/CONTROLH-2026 exist. SIG settled manually by admin after media call of control; can wait on GA runoff."
+ },
+ "842": {
+  "market_id": "153",
+  "title": "Will the Democratic Party win the U.S. Senate?",
+  "race": "U.S. Senate",
+  "party": "D",
+  "category": "chamber_control",
+  "pm_market": {
+   "event": "which-party-will-win-the-senate-in-2026",
+   "markets": [
+    "562793"
+   ],
+   "titles": [
+    "Democratic Party"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXBALANCEPOWERCOMBO-27FEB",
+   "tickers": [
+    "KXBALANCEPOWERCOMBO-27FEB-DD",
+    "KXBALANCEPOWERCOMBO-27FEB-RD"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "chamber_fallback_kalshi_protem_feb1",
+   "kalshi_combo_derived",
+   "sig_indep_caucus_cutoff_election_day"
+  ],
+  "notes": "SIG text ~copy of PM (majority; 50+VP; caucusing independents count; Speaker/pro tem fallback). SIG: independents with undetermined caucus on election day count for nobody (PM waits to 4 Jan). Kalshi: 4/8 media consensus else party of Speaker/pro tem on 1 Feb 2027; bot derives from KXBALANCEPOWERCOMBO, direct CONTROLS-2026/CONTROLH-2026 exist. SIG settled manually by admin after media call of control; can wait on GA runoff."
+ },
+ "841": {
+  "market_id": "152",
+  "title": "Will the Republican Party win the U.S. House?",
+  "race": "U.S. House",
+  "party": "R",
+  "category": "chamber_control",
+  "pm_market": {
+   "event": "which-party-will-win-the-house-in-2026",
+   "markets": [
+    "562803"
+   ],
+   "titles": [
+    "Republican Party"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXBALANCEPOWERCOMBO-27FEB",
+   "tickers": [
+    "KXBALANCEPOWERCOMBO-27FEB-RR",
+    "KXBALANCEPOWERCOMBO-27FEB-RD"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "chamber_fallback_kalshi_protem_feb1",
+   "kalshi_combo_derived",
+   "sig_indep_caucus_cutoff_election_day"
+  ],
+  "notes": "SIG text ~copy of PM (majority; 50+VP; caucusing independents count; Speaker/pro tem fallback). SIG: independents with undetermined caucus on election day count for nobody (PM waits to 4 Jan). Kalshi: 4/8 media consensus else party of Speaker/pro tem on 1 Feb 2027; bot derives from KXBALANCEPOWERCOMBO, direct CONTROLS-2026/CONTROLH-2026 exist. SIG settled manually by admin after media call of control; can wait on GA runoff."
+ },
+ "840": {
+  "market_id": "151",
+  "title": "Will the Democratic Party win the U.S. House?",
+  "race": "U.S. House",
+  "party": "D",
+  "category": "chamber_control",
+  "pm_market": {
+   "event": "which-party-will-win-the-house-in-2026",
+   "markets": [
+    "562802"
+   ],
+   "titles": [
+    "Democratic Party"
+   ]
+  },
+  "kalshi_market": {
+   "event": "KXBALANCEPOWERCOMBO-27FEB",
+   "tickers": [
+    "KXBALANCEPOWERCOMBO-27FEB-DD",
+    "KXBALANCEPOWERCOMBO-27FEB-DR"
+   ]
+  },
+  "terms": "same",
+  "differences": [
+   "chamber_fallback_kalshi_protem_feb1",
+   "kalshi_combo_derived",
+   "sig_indep_caucus_cutoff_election_day"
+  ],
+  "notes": "SIG text ~copy of PM (majority; 50+VP; caucusing independents count; Speaker/pro tem fallback). SIG: independents with undetermined caucus on election day count for nobody (PM waits to 4 Jan). Kalshi: 4/8 media consensus else party of Speaker/pro tem on 1 Feb 2027; bot derives from KXBALANCEPOWERCOMBO, direct CONTROLS-2026/CONTROLH-2026 exist. SIG settled manually by admin after media call of control; can wait on GA runoff."
+ }
+}

@@ -22,8 +22,6 @@ import os
 import re
 import sqlite3
 import statistics
-import sys
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -276,9 +274,9 @@ def main(argv=None):
     else:
         print("(no Anthropic key: skipping the Claude explanation step)" if not args.no_llm else "(--no-llm)")
 
-    print_table(f"largest 5-minute moves, whole history", moves)
+    print_table("largest 5-minute moves, whole history", moves)
     if moves_cov:
-        print_table(f"largest 5-minute moves inside the news table's coverage", moves_cov)
+        print_table("largest 5-minute moves inside the news table's coverage", moves_cov)
     if usage:
         print(f"\nclaude usage: {usage['calls']} calls, {usage['input_tokens']} input / {usage['output_tokens']} output tokens, {usage['errors']} errors")
 

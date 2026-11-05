@@ -7,7 +7,6 @@
 Outputs: data/research_arb_ideas/*.json, research_notes/figures/arb_ideas_decision.png
 """
 import json, sqlite3, sys, itertools, math
-from collections import defaultdict
 import numpy as np
 import pandas as pd
 
